@@ -52,6 +52,11 @@ The card's README lists its options, including how to pick the rooms and the boi
 
 Requires Home Assistant 2026.10 or newer.
 
+[![Open your Home Assistant instance and open this repository.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=BarBaar44&repository=Cloudless-Multiroom-Thermostat&category=integration)
+[![Open your Home Assistant instance and start setting up Cloudless Multiroom Thermostat.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=cloudless_multiroom_thermostat)
+
+The first button opens the repository in your Home Assistant (the Marketplace on 2026.11 and newer, HACS on 2026.10), ready to install. After installing, the second button starts the setup. Or do it by hand:
+
 **Home Assistant 2026.11 and newer (Marketplace):**
 
 1. **Settings > Marketplace > Add from link**, enter `BarBaar44/Cloudless-Multiroom-Thermostat` and select **Add**. The Marketplace may ask you to connect GitHub first.
@@ -64,7 +69,7 @@ Updates appear under **Settings > Updates**. After installing one, restart Home 
 
 1. In HACS: **⋮ > Custom repositories**, add `https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat` with type **Integration**.
 2. Install **Cloudless Multiroom Thermostat** and restart Home Assistant.
-3. **Settings > Devices & services > Add integration > Cloudless Multiroom Thermostat.**
+3. **Settings > Devices & services > Add integration > Cloudless Multiroom Thermostat**, or use the second button above.
 
 ## Set up
 
@@ -140,7 +145,7 @@ A boiler has only **one** flow temperature, while every room wants its own. Two 
 
 ## Learning features (observe only)
 
-Optional features that learn how the house and boiler behave and, unless you opt in to applying the PID advice automatically, never change the heating: warm-up episodes with PID advice, a night cooldown model that predicts the morning, gas per degree-day with the hot water split off, and an evening report, kept in a sensor for a Markdown card, with a notification only when something happened (or a summary, or the whole report). Switch them on under **Configure > Enable learning features (observe only)**. What each one does, what it needs and how mature it is: **[docs/experimental.md](docs/experimental.md)**.
+Optional features that learn how the house and boiler behave and, unless you opt in to applying the PID advice automatically, never change the heating: warm-up episodes with PID advice, a night cooldown model that predicts the morning, gas per degree-day with the hot water split off, and an evening report, kept in a sensor for a Markdown card, with a notification only when something happened (or a summary, or the whole report). Switch them on under **Configure > Enable learning features (observe only)**. What each one does, what it needs and how mature it is: **[docs/experimental.md](docs/experimental.md)**. Their alpha and beta labels are about these optional features only; the heating control itself (rooms, TRVs, heat source) does not depend on them.
 
 ## Example setup
 
