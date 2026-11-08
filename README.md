@@ -6,6 +6,7 @@
   <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/actions/workflows/validate.yaml"><img src="https://img.shields.io/github/actions/workflow/status/BarBaar44/Cloudless-Multiroom-Thermostat/validate.yaml?branch=main&style=for-the-badge&label=validate" alt="Validate"></a>
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-orange?style=for-the-badge" alt="HACS custom"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.10+">
+  <a href="https://community.home-assistant.io/t/cloudless-multiroom-thermostat/1032363"><img src="https://img.shields.io/badge/community-forum-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white" alt="Community forum thread"></a>
 </p>
 
 # Cloudless Multiroom Thermostat
