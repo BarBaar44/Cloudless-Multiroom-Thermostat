@@ -1,5 +1,14 @@
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/custom_components/cloudless_multiroom_thermostat/brand/icon@2x.png" alt="Cloudless Multiroom Thermostat logo" width="160"></p>
 
+<p align="center">
+  <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/releases"><img src="https://img.shields.io/github/v/release/BarBaar44/Cloudless-Multiroom-Thermostat?style=for-the-badge&label=release" alt="Release"></a>
+  <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/actions/workflows/tests.yaml"><img src="https://img.shields.io/github/actions/workflow/status/BarBaar44/Cloudless-Multiroom-Thermostat/tests.yaml?branch=main&style=for-the-badge&label=tests" alt="Tests"></a>
+  <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/actions/workflows/validate.yaml"><img src="https://img.shields.io/github/actions/workflow/status/BarBaar44/Cloudless-Multiroom-Thermostat/validate.yaml?branch=main&style=for-the-badge&label=validate" alt="Validate"></a>
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-orange?style=for-the-badge" alt="HACS custom"></a>
+  <img src="https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.10+">
+  <a href="https://community.home-assistant.io/t/cloudless-multiroom-thermostat/1032363"><img src="https://img.shields.io/badge/community-forum-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white" alt="Community forum thread"></a>
+</p>
+
 # Cloudless Multiroom Thermostat
 
 A Home Assistant integration for multi-room central heating without a cloud. Any number of rooms, each with its own temperature sensor and radiator valves, share one heat source: the room that needs heat most drives the boiler, and every other room heats along through its own valves. Everything is set up from the UI and runs locally.
