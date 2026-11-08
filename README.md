@@ -6,7 +6,7 @@ A Home Assistant integration for multi-room central heating without a cloud. Any
 
 - **No cloud:** Home Assistant, your TRVs and your boiler thermostat, nothing else.
 - **Any number of rooms**, each with its own target, presets and window sensors.
-- **One heat source**, as an on/off relay, an OpenTherm thermostat (ESPHome, DIYLess) or an OpenTherm Gateway.
+- **One heat source**, as an on/off relay, an OpenTherm thermostat (ESPHome, DIYLess) or an OpenTherm Gateway. Full multi-room control needs a relay or an OpenTherm controller without its own room sensor, see [A virtual thermostat in every room](#a-virtual-thermostat-in-every-room).
 - **Presence aware:** rooms go off or to eco when everybody is away, and come back when someone is home.
 - **Open window detection** per room.
 
@@ -27,6 +27,7 @@ The card's README lists its options, including how to pick the rooms and the boi
 - [Set up](#set-up)
 - [What it creates](#what-it-creates)
 - [How it works](#how-it-works)
+  - [A virtual thermostat in every room](#a-virtual-thermostat-in-every-room)
 - [Learning features (observe only)](#learning-features-observe-only)
 - [Example setup](#example-setup)
 - [ESPHome OpenTherm thermostat (`thermostat.yaml`)](#esphome-opentherm-thermostat-thermostatyaml)
@@ -61,7 +62,7 @@ Updates appear under **Settings > Updates**. After installing one, restart Home 
    - **Climate entity**: an ESPHome or DIYLess OpenTherm thermostat, or any thermostat with a setpoint. It receives the target of the room that needs heat most.
    - **OpenTherm Gateway (OTGW)**: the OTGW climate entity, which receives that same target.
 
-   <a id="process-value"></a>**Which temperature the heat source regulates on.** The Climate and OTGW heat sources only receive the winning room's *target*. For real multi-room control the thermostat must also regulate on the winning room's *temperature*, the integration's **Winning room temperature** sensor. The ESPHome PID in [`thermostat.yaml`](#esphome-opentherm-thermostat-thermostatyaml) does. A thermostat that regulates on its own built-in sensor, and an OTGW (which regulates on the room temperature of the thermostat connected to it), compares the winner's target with the temperature where *it* hangs: it stops when that spot is warm, whichever room won, and keeps heating when that spot is cold although every room reached its target. The On/off switch has no such limit: the integration itself decides on and off from the room temperatures.
+   <a id="process-value"></a>**Which temperature the heat source regulates on** (background: [A virtual thermostat in every room](#a-virtual-thermostat-in-every-room)). The Climate and OTGW heat sources only receive the winning room's *target*. For real multi-room control the thermostat must also regulate on the winning room's *temperature*, the integration's **Winning room temperature** sensor. The ESPHome PID in [`thermostat.yaml`](#esphome-opentherm-thermostat-thermostatyaml) does. A thermostat that regulates on its own built-in sensor, and an OTGW (which regulates on the room temperature of the thermostat connected to it), compares the winner's target with the temperature where *it* hangs: it stops when that spot is warm, whichever room won, and keeps heating when that spot is cold although every room reached its target. The On/off switch has no such limit: the integration itself decides on and off from the room temperatures.
 2. The heat source entity and, optionally, a **central heating enable** switch that is on while any room is set to heat.
 3. Settings: the **off temperature** sent when nothing needs heat (default 10 °C), an optional **presence** entity with what happens when everybody is away (rooms off, or lowered to eco), and how often room temperatures are resent to TRV inputs.
 
@@ -84,6 +85,25 @@ Scheduling is left to you: an automation or a scheduler card that sets presets o
 - Services: `pause_room` and `resume_room` (hold a room off and release it), `set_all_off`.
 
 ## How it works
+
+### A virtual thermostat in every room
+
+A traditional setup has one physical thermostat in one room. Its built-in sensor decides when the boiler runs, so the whole house heats to what that one spot measures.
+
+This integration turns that around. Every room gets its own **virtual thermostat** (a climate entity with its own sensor and target), and the boiler is driven by a controller that has **no room sensor of its own**: it heats for whichever room needs it most, using that room's temperature. There is no physical room thermostat in charge anymore.
+
+That is the way forward, and it decides which heat source gives you real multi-room control:
+
+| Heat source | Who decides when the boiler runs | Multi-room |
+|---|---|---|
+| **On/off switch** (relay) | The integration, from the room temperatures | Full |
+| **Climate entity** with an ESPHome or DIYLess PID fed the [Winning room temperature](#process-value) (like [`thermostat.yaml`](#esphome-opentherm-thermostat-thermostatyaml)) | The controller, on the winning room's temperature | Full |
+| **Climate entity** of a thermostat with its own built-in sensor | That thermostat, on the temperature where it hangs | Target only |
+| **OpenTherm Gateway** with a room thermostat connected | That room thermostat, on its own sensor | Target only |
+
+With *target only*, the integration still runs every room's TRVs, but boiler demand follows the room where the physical thermostat hangs. If you have an OTGW or a smart room thermostat now, the recommended path is to replace the room thermostat with an OpenTherm controller (such as a DIYLess board running [`thermostat.yaml`](#esphome-opentherm-thermostat-thermostatyaml)) and let the virtual thermostats take over.
+
+### Two tiers
 
 A boiler has only **one** flow temperature, while every room wants its own. Two tiers solve that without any room coordination:
 
