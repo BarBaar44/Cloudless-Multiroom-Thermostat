@@ -7,6 +7,7 @@ are small and written atomically (temp file + rename).
 
 from __future__ import annotations
 
+import glob
 import json
 import logging
 import os
@@ -88,3 +89,17 @@ def read_state(path: str) -> dict[str, Any]:
         aside = "(could not be moved aside)"
     _LOGGER.warning("Unreadable %s (%s), starting over; old file: %s", path, reason, aside)
     return {}
+
+
+def moved_aside_since(directory: str, since: float) -> list[str]:
+    """Names of files read_state moved aside at or after since (epoch seconds)."""
+    names = []
+    for path in sorted(glob.glob(os.path.join(directory, "*.corrupt-*"))):
+        stamp = path.rsplit(".corrupt-", 1)[1]
+        try:
+            moved = time.mktime(time.strptime(stamp, "%Y%m%d-%H%M%S"))
+        except ValueError:
+            continue
+        if moved >= since:
+            names.append(os.path.basename(path))
+    return names

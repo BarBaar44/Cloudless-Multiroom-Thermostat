@@ -38,7 +38,7 @@ The [evening report](#evening-report) shows where each feature stands against th
 | [Gas per degree-day](#gas-per-degree-day) | **Beta**: running daily since October 2026, the figures are usable for comparing weeks | Gas meter, outdoor temperature. For the hot-water split also burner flame, hot water active, central heating active. Optional: people at home | `sensor.<system>_gas_per_degree_day` |
 | [Night cooldown model](#night-cooldown-model) | **Alpha**: still learning; first back-test was 0.2 to 0.8 °C off | Outdoor temperature, weather forecast, a room to follow | `sensor.<system>_night_prediction` |
 | [Warm-up episodes and PID advice](#warm-up-episodes-and-pid-advice) | **Alpha**: records reliably, advice not yet validated; applied only when you switch that on | Room to follow. Helpful: burner flame, outdoor temperature. For advice: Kp, Ki, Kd of a firmware PID (for example ESPHome) | `sensor.<system>_last_warm_up_overshoot`, `sensor.<system>_pid_advice` |
-| [Evening report](#evening-report) | **Beta**: a summary of the above | Any of the above | Persistent notification at 21:00 |
+| [Evening report](#evening-report) | **Beta**: a summary of the above | Any of the above | `sensor.<system>_learning_features_report` at 21:00, plus a notification as chosen |
 
 Maturity means:
 
@@ -257,18 +257,67 @@ Turning it on doesn't change the 21:00 report's other parts or any other feature
 
 ## Evening report
 
-Every evening at 21:00 a persistent notification lists today's warm-up episodes, the current PID values and advice, a line when the boiler's maximum flow temperature or hot water setpoint changed since the last report, the last night, tonight's prediction, gas per degree-day and the progress of each feature towards stable, with a link to this page. Call the service `cloudless_multiroom_thermostat.experimental_report` to get it on demand (it then shows the stored prediction instead of making a new one). "Since the last report" means since the last 21:00 report: a report on demand shows a boiler change but doesn't count as a report, so the evening report still shows it.
+Every evening at 21:00 the report is written to **`sensor.<system>_learning_features_report`**. It lists today's warm-up episodes, the current PID values and advice, a line when the boiler's maximum flow temperature or hot water setpoint changed since the last report, the last night, tonight's prediction, gas per degree-day and the progress of each feature towards stable, with a link to this page. Call the service `cloudless_multiroom_thermostat.experimental_report` to get it on demand as a notification (it then shows the stored prediction instead of making a new one). "Since the last report" means since the last 21:00 report: a report on demand shows a boiler change but doesn't count as a report, so the evening report still shows it.
+
+### The report sensor
+
+The state is the time of the last report. The attributes hold the report by section, so a dashboard can show all of it or only a part:
+
+| Attribute | Content |
+|---|---|
+| `text` | The whole report (Markdown) |
+| `summary` | Up to three short lines: warm-ups today, PID advice, night start and gas per degree-day |
+| `events` | What happened since the last evening report (see below); empty on a quiet day |
+| `warm_ups`, `pid`, `automatic_changes`, `night`, `progress` | Lines of each section |
+| `boiler`, `gas` | One line each (`boiler` is empty when nothing changed) |
+
+The sensor keeps its last report over a restart. It only holds the latest report; the history stays in the files below, and the trends in Home Assistant's long-term statistics of the gas per degree-day and last warm-up overshoot sensors (plot them with a statistics graph card).
+
+A Markdown card that shows the report (for a system called "Heating"):
+
+```yaml
+type: markdown
+title: Learning features
+content: >
+  {{ state_attr('sensor.heating_learning_features_report', 'text') }}
+
+  *{{ as_timestamp(states('sensor.heating_learning_features_report')) | timestamp_custom('%a %d %b %H:%M') }}*
+```
+
+Only the summary and events, for a smaller card:
+
+```yaml
+type: markdown
+content: >
+  {{ state_attr('sensor.heating_learning_features_report', 'summary') | join('\n\n') }}
+  {% set events = state_attr('sensor.heating_learning_features_report', 'events') %}
+  {% if events %}
+
+  **Today:**
+
+  {{ events | join('\n') }}
+  {% endif %}
+```
+
+### Evening notification
+
+The option **Evening notification** on the learning features page decides what the 21:00 report posts as a persistent notification:
+
+- **Events only** (default): only when something happened that day: an automatic PID change applied, kept, reverted, dropped, inconclusive or failed; a boiler setting changed; a feature became ready for stable or no longer is; an unreadable learning file was moved aside. A quiet day posts nothing.
+- **Short summary**: up to three lines every evening, plus the events.
+- **Full report**: the whole report every evening, as before 1.7.0.
+- **Off**: no notification. The sensor and the report on demand still work.
 
 The time is fixed at 21:00 because the night model measures the evening drop from 21:00.
 
-If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced. A restart of Home Assistant in between cancels the retries.
+If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
 
 ## Data and privacy
 
 Everything stays on your Home Assistant. Files are stored in `config/cloudless_multiroom_thermostat/<entry id>/`:
 
 - `episodes.jsonl`, `nights.jsonl`, `gas_days.jsonl`: append-only, one JSON record per line.
-- `state.json`, `night_state.json`, `episode_state.json`: small state files (`episode_state.json` holds the warm-up episode in progress).
+- `state.json`, `night_state.json`, `episode_state.json`, `report.json`: small state files (`episode_state.json` holds the warm-up episode in progress, `report.json` the last report and what the next evening compares against for events).
 
 Switching the features off stops all sampling; the files and your entity choices are kept, so switching back on continues where it left off. Delete the folder to start over.
 

@@ -146,6 +146,8 @@ EXPERIMENTAL_SENSORS: tuple[ExperimentalSensorDescription, ...] = (
         translation_key="exp_last_overshoot",
         # A difference, not a temperature: no temperature device class
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        # Long-term statistics keep the trend of every warm-up's overshoot
+        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:thermometer-chevron-up",
     ),
@@ -153,6 +155,14 @@ EXPERIMENTAL_SENSORS: tuple[ExperimentalSensorDescription, ...] = (
         key="recommendation",
         translation_key="exp_recommendation",
         icon="mdi:tune-variant",
+    ),
+    ExperimentalSensorDescription(
+        # State: when the report was made. Attributes: the report by section,
+        # plus the whole text for a Markdown card
+        key="report",
+        translation_key="exp_report",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clipboard-text-outline",
     ),
 )
 

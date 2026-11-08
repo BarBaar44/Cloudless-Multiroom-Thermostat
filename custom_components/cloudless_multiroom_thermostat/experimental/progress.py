@@ -152,10 +152,36 @@ def pid_progress(episodes, room_id=None, room_name=None):
     return {"done": good >= PID_BANDS, "text": text}
 
 
+FEATURES = (("gas", "Gas per degree-day"), ("night", "Night model"), ("pid", "PID advice"))
+
+
+def statuses(gas_summary, nights, episodes, room_id=None, room_name=None):
+    """{feature key: progress} for each feature; nights and episodes of the followed room."""
+    nights = night_core.for_room(nights, room_id) if room_id else nights
+    return {
+        "gas": gas_progress(gas_summary),
+        "night": night_progress(nights),
+        "pid": pid_progress(episodes, room_id, room_name),
+    }
+
+
+def lines_from(status):
+    """Report lines, one per feature, from statuses()."""
+    return [
+        "- " + status[key]["text"] + ("; ready to become stable" if status[key]["done"] else "")
+        for key, _name in FEATURES
+    ]
+
+
+def maturity_events(before, status):
+    """Lines for features whose ready-for-stable state changed since before ({key: done})."""
+    events = []
+    for key, name in FEATURES:
+        if key in (before or {}) and before[key] != status[key]["done"]:
+            events.append(f"- {name}: " + ("ready to become stable" if status[key]["done"] else "no longer ready for stable"))
+    return events
+
+
 def report_lines(gas_summary, nights, episodes, room_id=None, room_name=None):
     """Lines for the evening report, one per feature; nights and episodes of the followed room."""
-    lines = []
-    nights = night_core.for_room(nights, room_id) if room_id else nights
-    for p in (gas_progress(gas_summary), night_progress(nights), pid_progress(episodes, room_id, room_name)):
-        lines.append("- " + p["text"] + ("; ready to become stable" if p["done"] else ""))
-    return lines
+    return lines_from(statuses(gas_summary, nights, episodes, room_id, room_name))

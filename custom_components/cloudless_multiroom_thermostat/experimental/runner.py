@@ -10,7 +10,9 @@ the PID advice is written to the Kp/Ki numbers (autotune). It
   from the hourly forecast (night_core);
 * splits each day's gas into hot water and heating and reports heating gas
   per degree-day (gas_core);
-* posts a summary as a persistent notification every evening at 21:00.
+* writes a report every evening at 21:00 to the learning report sensor and,
+  depending on the notification option, posts events, a summary or the whole
+  report as a persistent notification.
 
 All files live in <config>/cloudless_multiroom_thermostat/<entry_id>/.
 See docs/experimental.md for what each part does and how mature it is.
@@ -59,6 +61,7 @@ from ..const import (
     CONF_EXP_KI,
     CONF_EXP_KP,
     CONF_EXP_MAX_CH,
+    CONF_EXP_NOTIFY,
     CONF_EXP_OUTDOOR,
     CONF_EXP_PEOPLE,
     CONF_EXP_RETURN,
@@ -68,9 +71,13 @@ from ..const import (
     DEFAULT_COMFORT_WEEKDAY,
     DEFAULT_COMFORT_WEEKEND,
     DEFAULT_DHW_RATE,
+    DEFAULT_NOTIFY,
     DOCS_EXPERIMENTAL_URL,
     DOMAIN,
     EXP_SUMMARY_HOUR,
+    NOTIFY_EVENTS,
+    NOTIFY_FULL,
+    NOTIFY_SUMMARY,
     PAUSE_WINDOW,
     WINNER_OFF,
     signal_update,
@@ -155,6 +162,7 @@ class ExperimentalRunner:
         self.f_night_state = f"{self.dir}/night_state.json"
         self.f_gas_days = f"{self.dir}/gas_days.jsonl"
         self.f_episode_state = f"{self.dir}/episode_state.json"
+        self.f_report = f"{self.dir}/report.json"
         self.signal = signal_experimental(entry_id)
         # Values for the experimental sensors: key -> (state, attributes)
         self.values: dict[str, tuple[Any, dict[str, Any]]] = {}
@@ -586,6 +594,9 @@ class ExperimentalRunner:
         prediction = (await self._io(store.read_state, self.f_night_state)).get("prediction")
         if prediction:
             self._publish_prediction(prediction)
+        report = await self._io(store.read_state, self.f_report)
+        if report.get("at") and report.get("attrs"):
+            self._set("report", datetime.fromisoformat(report["at"]), report["attrs"])
 
     # --------------------------------------------------------------- nights
     @callback
@@ -983,40 +994,116 @@ class ExperimentalRunner:
             night_lines.append(night_core.prediction_line(prediction))
         gas = await self._async_gas_summary()
 
-        message = "\n".join(lines)
+        pid_lines = []
         if all(v is not None for v in p.values()):
-            message += f"\n\nCurrent: Kp {p['kp']}, Ki {p['ki']}, Kd {p['kd']}"
+            pid_lines.append(f"Current: Kp {p['kp']}, Ki {p['ki']}, Kd {p['kd']}")
+        auto_lines: list[str] = []
+        changes_today: list[str] = []
         if self._auto_on:
             auto_state = tuner_state.get("auto")
-            message += f"\nAdvice (applied automatically): {self._rec_text(rec, auto_state)}"
-            auto_lines = autotune.log_lines(auto_state, today)
+            rec_text = self._rec_text(rec, auto_state)
+            pid_lines.append(f"Advice (applied automatically): {rec_text}")
+            changes_today = autotune.log_lines(auto_state, today)
+            auto_lines = list(changes_today)
             followed = self.room
             status = autotune.status_line(
                 auto_state, episodes, followed.room_id if followed else None, followed.name if followed else None
             )
             if status:
                 auto_lines.append(status)
-            if auto_lines:
-                message += "\n\nAutomatic PID changes:\n" + "\n".join(auto_lines)
         else:
-            message += f"\nWould change (observe mode, nothing applied): {self._rec_text(rec)}"
+            rec_text = self._rec_text(rec)
+            pid_lines.append(f"Would change (observe mode, nothing applied): {rec_text}")
+        room = self.room
+        night_title = f"Night, {room.name if room else 'no room'} (observe mode):"
+        gas_line = (
+            gas_core.summary_line(gas) if gas else "Gas per degree-day: set a gas meter and an outdoor sensor to enable"
+        )
+        status = progress.statuses(gas, nights, episodes, room.room_id if room else None, room.name if room else None)
+        progress_lines = progress.lines_from(status)
+
+        message = "\n".join(lines) + "\n\n" + "\n".join(pid_lines)
+        if auto_lines:
+            message += "\n\nAutomatic PID changes:\n" + "\n".join(auto_lines)
         if boiler_line:
             message += f"\n\n{boiler_line}"
-        room = self.room
-        message += f"\n\nNight, {room.name if room else 'no room'} (observe mode):\n" + "\n".join(night_lines)
-        if gas:
-            message += "\n\n" + gas_core.summary_line(gas)
-        else:
-            message += "\n\nGas per degree-day: set a gas meter and an outdoor sensor to enable"
-        message += "\n\nProgress to stable:\n" + "\n".join(
-            progress.report_lines(
-                gas, nights, episodes, room.room_id if room else None, room.name if room else None
-            )
-        )
+        message += f"\n\n{night_title}\n" + "\n".join(night_lines)
+        message += f"\n\n{gas_line}"
+        message += "\n\nProgress to stable:\n" + "\n".join(progress_lines)
         message += f"\n\n[What these mean]({DOCS_EXPERIMENTAL_URL})"
-        persistent_notification.async_create(
-            self.hass,
-            message,
-            title=f"{self.ctl.entry.title}: learning features report {today}",
-            notification_id=f"{DOMAIN}_{self.ctl.entry.entry_id}_report",
-        )
+
+        # Events since the last evening report; only the 21:00 report moves that baseline
+        saved = await self._io(store.read_state, self.f_report)
+        now = dt_util.now()
+        events = list(saved.get("events") or []) if repost else []
+        if predict:
+            events = [*changes_today]
+            if boiler_line:
+                events.append(f"- {boiler_line}")
+            events += progress.maturity_events(saved.get("done"), status)
+            since = saved.get("events_at")
+            since_ts = datetime.fromisoformat(since).timestamp() if since else (now - timedelta(days=1)).timestamp()
+            events += [
+                f"- Unreadable learning file moved aside: {name}"
+                for name in await self._io(store.moved_aside_since, self.dir, since_ts)
+            ]
+        summary = self._summary_lines(todays, rec_text)
+        attrs = {
+            "summary": summary,
+            "events": events,
+            "warm_ups": lines,
+            "pid": pid_lines,
+            "automatic_changes": auto_lines,
+            "boiler": boiler_line,
+            "night": [night_title, *night_lines],
+            "gas": gas_line,
+            "progress": progress_lines,
+            "text": message,
+            "docs": DOCS_EXPERIMENTAL_URL,
+        }
+        record = {**saved, "at": now.isoformat(), "attrs": attrs, "events": events}
+        if predict:
+            record["events_at"] = now.isoformat()
+            record["done"] = {key: st["done"] for key, st in status.items()}
+        await self._io(store.write_state, self.f_report, record)
+        self._set("report", now, attrs)
+
+        title = f"{self.ctl.entry.title}: learning features report {today}"
+        if not (predict or repost):
+            body = message  # asked for: always the whole report
+        else:
+            mode = self._s.get(CONF_EXP_NOTIFY) or DEFAULT_NOTIFY
+            body = None
+            if mode == NOTIFY_FULL:
+                body = message
+            elif mode == NOTIFY_SUMMARY:
+                body = "\n".join(summary)
+                if events:
+                    body += "\n\n" + "\n".join(events)
+            elif mode == NOTIFY_EVENTS and events and predict:
+                title = f"{self.ctl.entry.title}: learning features {today}"
+                body = "\n".join(events)
+            if body is not None and mode != NOTIFY_FULL:
+                body += "\n\nFull report: the Learning features report sensor."
+        if body is not None:
+            persistent_notification.async_create(
+                self.hass,
+                body,
+                title=title,
+                notification_id=f"{DOMAIN}_{self.ctl.entry.entry_id}_report",
+            )
+
+    def _summary_lines(self, todays: list[dict[str, Any]], rec_text: str) -> list[str]:
+        """At most three short lines for the summary notification."""
+        warm = f"Warm-ups today: {len(todays)}"
+        overshoot = self.values.get("last_overshoot", (None, {}))[0]
+        if todays and overshoot is not None:
+            warm += f", last overshoot {overshoot} degC"
+        third = []
+        start = self.values.get("night_prediction", (None, {}))[0]
+        if start is not None:
+            third.append(f"Night: start {start}" if start != "learning" else "Night: learning")
+        per_dd = self.values.get("gas_per_degree_day", (None, {}))[0]
+        if per_dd is not None:
+            third.append(f"Gas {per_dd} m³/°Cd")
+        return [warm, f"PID: {rec_text}", *([" · ".join(third)] if third else [])]

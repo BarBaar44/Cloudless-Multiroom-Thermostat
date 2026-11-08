@@ -34,6 +34,7 @@ from .const import (
     CONF_EXP_GAS_AFTER6,
     CONF_EXP_GAS_BEFORE6,
     CONF_EXP_AUTO_APPLY,
+    CONF_EXP_NOTIFY,
     CONF_EXP_INTEGRAL,
     CONF_EXP_KD,
     CONF_EXP_KI,
@@ -75,6 +76,7 @@ from .const import (
     DEFAULT_HYSTERESIS,
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
+    DEFAULT_NOTIFY,
     DEFAULT_OFF_TEMP,
     DEFAULT_SKIP_UNCHANGED,
     DEFAULT_STEP,
@@ -84,6 +86,7 @@ from .const import (
     DOCS_EXPERIMENTAL_URL,
     DOMAIN,
     EXP_ENTITY_KEYS,
+    NOTIFY_MODES,
     HEAT_SOURCE_CLIMATE,
     HEAT_SOURCE_OTGW,
     HEAT_SOURCE_SWITCH,
@@ -249,6 +252,12 @@ def experimental_schema(rooms: dict[str, str]) -> vol.Schema:
             vol.Optional(CONF_EXP_KD): _entities(["number", "input_number"]),
             vol.Optional(CONF_EXP_INTEGRAL): _entities("sensor"),
             vol.Required(CONF_EXP_AUTO_APPLY, default=False): selector.BooleanSelector(),
+            vol.Required(CONF_EXP_NOTIFY, default=DEFAULT_NOTIFY): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=NOTIFY_MODES, translation_key=CONF_EXP_NOTIFY,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
             vol.Optional(CONF_EXP_GAS_BEFORE6): _entities("sensor"),
             vol.Optional(CONF_EXP_GAS_AFTER6): _entities("sensor"),
         }
@@ -285,7 +294,7 @@ class SettingsOptionsFlow(OptionsFlow):
             # back on remembers them
             for key in (
                 CONF_EXP_ROOM, CONF_EXP_COMFORT_WEEKDAY, CONF_EXP_COMFORT_WEEKEND, CONF_EXP_DHW_RATE,
-                CONF_EXP_AUTO_APPLY, *EXP_ENTITY_KEYS,
+                CONF_EXP_AUTO_APPLY, CONF_EXP_NOTIFY, *EXP_ENTITY_KEYS,
             ):
                 if key in current:
                     options[key] = current[key]
