@@ -31,6 +31,7 @@ The card's README lists its options, including how to pick the rooms and the boi
 - [Example setup](#example-setup)
 - [ESPHome OpenTherm thermostat (`thermostat.yaml`)](#esphome-opentherm-thermostat-thermostatyaml)
 - [Boiler specific notes](#boiler-specific-notes)
+- [Coming in v2.0.0](#coming-in-v200)
 - [Development and test environment](#development-and-test-environment)
 
 ## Install
@@ -162,6 +163,17 @@ Found on an **Atag E325EC** combi boiler (2015) over OpenTherm. Other Atag model
 1. Check what the thermostat *writes* to the boiler. The ESPHome log shows every message (`WRITE_DATA; id: ...`); with `web_server:` enabled it can be followed at `http://<thermostat-ip>/events`.
 2. Disconnect the thermostat, reset the boiler and open a hot water tap. No fault means the boiler is fine and something the thermostat sends is the trigger; remove recently added writes first.
 3. Only if C1 51 also returns with nothing connected is it the fan, its wiring or the control board: a job for the installer.
+
+## Coming in v2.0.0
+
+In design, not built yet. Plans can still change.
+
+- **Schedules in the integration:** a week schedule per room, with switch points at 15 minute steps that set a preset. Heating follows it without a dashboard open, so no schedule automations are needed. Copy a day to other days or a week to other rooms, switch a room's schedule off, or suspend all schedules at once.
+- **Your own presets:** Eco and Warm plus presets you add (Sleep, for example), each with its own temperature per room. Change what "warm" means in one place.
+- **Manual changes that expire:** a target set by hand holds until the next switch point, for 1 or 3 hours, or until you go back to the schedule.
+- **Sun assist:** on a sunny morning, rooms that get sun hold a lower temperature and only warm up if a light sensor still reads dark at a check time. Set up in the integration options.
+- **Detailed learning reports:** trends of the learning features over weeks and winters in Home Assistant's long term statistics, history of warm-ups and nights on request, and a learning view in the Heating Control Card.
+- **Heating Control Card:** schedule line and today strip per room, a whole house timeline, a week view, and editors for schedules, presets and overrides (drag on desktop, a list on a phone).
 
 ## Development and test environment
 
