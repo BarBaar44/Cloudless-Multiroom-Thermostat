@@ -79,12 +79,18 @@ Updates appear under **Settings > Updates**. After installing one, restart Home 
 2. The heat source entity and, optionally, a **central heating enable** switch that is on while any room is set to heat.
 3. Settings: the **off temperature** sent when nothing needs heat (default 10 °C), an optional **presence** entity with what happens when everybody is away (rooms off, or lowered to eco), and how often room temperatures are resent to TRV inputs.
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/heating-system-settings.png" alt="Heating system settings: heat source, central heating enable switch, off temperature, presence and away behaviour" width="420"></p>
+
 **Rooms**: on the integration page, **Add room**, in two steps:
 
 1. Name, eco and warm temperature, the overshoot buffer (default 1.0 °C), whether the room **drives the heat source** (default on, see [Rooms that only heat along](#rooms-that-only-heat-along)) and the target range and step.
 2. The room temperature sensor, the TRVs (none is fine: the room then only adds heat demand), the TRVs' external temperature inputs (for example Sonoff TRVZB or Shelly BLU TRV), and window or door sensors with their open and close delays.
 
-Add as many rooms as you like; the pencil next to a room edits it. To put a room in an area, set the area on the room's device page. Settings of the heating system itself are under **Configure**.
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/add-room.png" alt="Add room, step 1: name, eco and warm temperature, overshoot buffer, drives the heat source, target range" width="420"></p>
+
+Add as many rooms as you like; the gear next to a room edits it. To put a room in an area, set the area on the room's device page. Settings of the heating system itself are under the gear next to it.
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/integration-page.png" alt="The integration page: the heating system with its rooms, Add hub and Add room" width="720"></p>
 
 Scheduling is left to you: an automation or a scheduler card that sets presets or temperatures on the room climates.
 
