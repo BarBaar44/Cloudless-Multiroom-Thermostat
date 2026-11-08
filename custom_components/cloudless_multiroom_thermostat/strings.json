@@ -92,6 +92,7 @@
           "exp_kd": "PID Kd",
           "exp_integral": "PID integral",
           "exp_auto_apply": "Apply PID advice automatically",
+          "exp_notify": "Evening notification",
           "exp_gas_price_before6": "Gas price tomorrow before 06:00",
           "exp_gas_price_after6": "Gas price tomorrow after 06:00"
         },
@@ -109,6 +110,7 @@
           "exp_kp": "Kp, Ki and Kd of a firmware PID (for example ESPHome). With all three set, warm-ups get tuning advice.",
           "exp_integral": "Optional PID integral sensor (ESPHome reports it x100).",
           "exp_auto_apply": "Off by default. On: after each warm-up the advice is written to the Kp or Ki number (one value, 10% at most, within the limits); after 2 more warm-ups in the same outdoor band the change stays only when the problem got smaller, otherwise it is reverted and never tried again. Every change shows in the evening report. Needs all three PID numbers.",
+          "exp_notify": "The 21:00 report always goes to the Learning features report sensor (show it with a Markdown card). Events only: a notification only when something happened that day (a PID change applied, kept or reverted, a boiler setting changed, a feature became ready for stable, an unreadable file moved aside). Summary: three lines every evening, plus events. Full report: the whole report, as before 1.7.0.",
           "exp_gas_price_before6": "Optional, shown next to the night prediction (for example Frank Energie)."
         }
       }
@@ -199,6 +201,14 @@
         "off": "Turn rooms off",
         "eco": "Lower rooms to eco"
       }
+    },
+    "exp_notify": {
+      "options": {
+        "off": "Off",
+        "events": "Events only",
+        "summary": "Short summary",
+        "full": "Full report"
+      }
     }
   },
   "entity": {
@@ -236,6 +246,9 @@
       },
       "exp_recommendation": {
         "name": "PID advice"
+      },
+      "exp_report": {
+        "name": "Learning features report"
       }
     },
     "binary_sensor": {

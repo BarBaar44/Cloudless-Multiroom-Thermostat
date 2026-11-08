@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Behaviour change:** the 21:00 report no longer posts the whole report as a notification every evening. By default it only posts when something happened. To keep the old notification, set **Evening notification** to **Full report** on the learning features page.
+
+- **Learning features report sensor:** `sensor.<system>_learning_features_report` holds the last evening report: the time as its state, the whole report (`text`) and each section as attributes, for a Markdown card. It keeps its value over a restart. Examples in [docs/experimental.md](docs/experimental.md#the-report-sensor).
+- **Evening notification option:** Events only (default), Short summary, Full report or Off. Events: an automatic PID change applied, kept, reverted, dropped, inconclusive or failed; a boiler setting changed; a feature became ready for stable or no longer is; an unreadable learning file was moved aside. The report on demand (`experimental_report`) still posts the whole report.
+- **Long-term statistics for the last warm-up overshoot:** the sensor now has a state class, so Home Assistant keeps its trend beyond the recorder's purge. Statistics start from the day you install this version.
+
 ## 1.6.1
 
 - **Fix (#72):** after a restart the PID advice sensor said "no PID numbers configured" while the numbers were configured but not yet available (an ESPHome device still connecting), and kept saying so until the next warm-up ended. It now says "PID numbers unavailable" in that case and shows the stored advice again as soon as the numbers have values. A warm-up that ends while the numbers are unavailable no longer throws away the stored advice. The advice sensor's `mode` attribute and the evening report follow the Apply PID advice automatically option itself, not whether the numbers have a value right now.

@@ -393,7 +393,7 @@ async def test_report_notification(hass: HomeAssistant) -> None:
 async def test_evening_prediction_uses_forecast(hass: HomeAssistant) -> None:
     from homeassistant.core import SupportsResponse
 
-    entry = await _setup(hass, {**EXP, "exp_weather": "weather.home"})
+    entry = await _setup(hass, {**EXP, "exp_weather": "weather.home", "exp_notify": "full"})
     runner = entry.runtime_data.experimental
     asked = []
 
@@ -425,7 +425,7 @@ async def _forecast_retry_setup(hass: HomeAssistant, fail_times: int, extra: dic
     from homeassistant.core import SupportsResponse
     from homeassistant.exceptions import ServiceValidationError
 
-    entry = await _setup(hass, {**EXP, "exp_weather": "weather.home", **(extra or {})})
+    entry = await _setup(hass, {**EXP, "exp_weather": "weather.home", "exp_notify": "full", **(extra or {})})
     asked = []
 
     async def get_forecasts(call):
@@ -786,7 +786,7 @@ async def test_gas_split_without_boiler_settings(hass: HomeAssistant) -> None:
 
 
 async def test_report_shows_boiler_setting_change(hass: HomeAssistant) -> None:
-    entry = await _setup(hass, {**EXP, **BOILER, "exp_gas": None})
+    entry = await _setup(hass, {**EXP, **BOILER, "exp_gas": None, "exp_notify": "full"})
     runner = entry.runtime_data.experimental
     hass.states.async_set("sensor.max_ch", "47.5")
     hass.states.async_set("sensor.dhw_set", "65")
@@ -1214,3 +1214,94 @@ async def test_episode_end_while_numbers_unavailable_keeps_the_stored_advice(has
     hass.states.async_set("number.ki", "0.003")
     await hass.async_block_till_done()
     assert hass.states.get("sensor.heating_pid_advice").state == "ki 0.003 -> 0.0027 (overshoot)"
+
+
+async def test_report_sensor_and_events_only(hass: HomeAssistant) -> None:
+    """Default: the report goes to the sensor; a notification only on an event."""
+    entry = await _setup(hass, {**EXP, **BOILER, "exp_gas": None})
+    runner = entry.runtime_data.experimental
+    hass.states.async_set("sensor.max_ch", "47.5")
+    created = []
+    with patch.object(
+        runner_mod.persistent_notification, "async_create", side_effect=lambda h, m, **kw: created.append((m, kw))
+    ):
+        await runner._async_scheduled_report()  # quiet evening
+        assert created == []
+        hass.states.async_set("sensor.max_ch", "40")
+        await runner._async_scheduled_report()
+    await hass.async_block_till_done()
+    assert len(created) == 1
+    message, kw = created[0]
+    assert "max flow 47.5 -> 40 degC" in message
+    assert "Progress to stable" not in message  # events only, not the report
+    assert "learning features report" not in kw["title"]
+    state = hass.states.get("sensor.heating_learning_features_report")
+    assert state.attributes["device_class"] == "timestamp"
+    assert "Progress to stable:" in state.attributes["text"]
+    assert state.attributes["events"] == [
+        "- Boiler settings changed since the last report: max flow 47.5 -> 40 degC"
+    ]
+    assert len(state.attributes["progress"]) == 3
+
+
+async def test_summary_notification(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, {**EXP, "exp_gas": None, "exp_notify": "summary"})
+    runner = entry.runtime_data.experimental
+    created = []
+    with patch.object(runner_mod.persistent_notification, "async_create", side_effect=lambda h, m, **kw: created.append(m)):
+        await runner._async_scheduled_report()
+    assert len(created) == 1
+    summary = created[0].split("\n\n")[0].splitlines()
+    assert 2 <= len(summary) <= 3
+    assert summary[0] == "Warm-ups today: 0" and summary[1].startswith("PID:")
+
+
+async def test_notify_off_but_manual_report_posts(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, {**EXP, "exp_gas": None, "exp_notify": "off"})
+    runner = entry.runtime_data.experimental
+    created = []
+    with patch.object(runner_mod.persistent_notification, "async_create", side_effect=lambda h, m, **kw: created.append(m)):
+        await runner._async_scheduled_report()
+        assert created == []
+        await hass.services.async_call(DOMAIN, "experimental_report", {}, blocking=True)
+    assert len(created) == 1 and "Progress to stable:" in created[0]
+
+
+async def test_report_sensor_restored_after_reload(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, {**EXP, "exp_gas": None})
+    await entry.runtime_data.experimental._async_scheduled_report()
+    before = hass.states.get("sensor.heating_learning_features_report")
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    after = hass.states.get("sensor.heating_learning_features_report")
+    assert after.state == before.state
+    assert after.attributes["text"] == before.attributes["text"]
+
+
+def test_maturity_events() -> None:
+    from custom_components.cloudless_multiroom_thermostat.experimental import progress
+
+    status = {
+        "gas": {"done": True, "text": ""},
+        "night": {"done": False, "text": ""},
+        "pid": {"done": False, "text": ""},
+    }
+    assert progress.maturity_events(None, status) == []  # first report: nothing to compare
+    assert progress.maturity_events({"gas": False, "night": True, "pid": False}, status) == [
+        "- Gas per degree-day: ready to become stable",
+        "- Night model: no longer ready for stable",
+    ]
+
+
+def test_moved_aside_since(tmp_path) -> None:
+    import time
+
+    from custom_components.cloudless_multiroom_thermostat.experimental import store
+
+    path = tmp_path / "state.json"
+    path.write_text("not json")
+    before = time.time() - 1
+    assert store.read_state(str(path)) == {}
+    names = store.moved_aside_since(str(tmp_path), before)
+    assert len(names) == 1 and names[0].startswith("state.json.corrupt-")
+    assert store.moved_aside_since(str(tmp_path), time.time() + 5) == []

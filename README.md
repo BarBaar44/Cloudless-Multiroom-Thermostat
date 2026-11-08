@@ -101,7 +101,7 @@ A boiler has only **one** flow temperature, while every room wants its own. Two 
 
 ## Learning features (observe only)
 
-Optional features that learn how the house and boiler behave and, unless you opt in to applying the PID advice automatically, never change the heating: warm-up episodes with PID advice, a night cooldown model that predicts the morning, gas per degree-day with the hot water split off, and an evening report. Switch them on under **Configure > Enable learning features (observe only)**. What each one does, what it needs and how mature it is: **[docs/experimental.md](docs/experimental.md)**.
+Optional features that learn how the house and boiler behave and, unless you opt in to applying the PID advice automatically, never change the heating: warm-up episodes with PID advice, a night cooldown model that predicts the morning, gas per degree-day with the hot water split off, and an evening report, kept in a sensor for a Markdown card, with a notification only when something happened (or a summary, or the whole report). Switch them on under **Configure > Enable learning features (observe only)**. What each one does, what it needs and how mature it is: **[docs/experimental.md](docs/experimental.md)**.
 
 ## Example setup
 
