@@ -15,7 +15,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     async_add_entities(
         [
             SimBoilerSignal(sim, "flame", "Sim boiler flame", lambda s: s.flame),
-            SimBoilerSignal(sim, "ch_active", "Sim central heating active", lambda s: s.firing),
+            SimBoilerSignal(sim, "ch_active", "Sim central heating active", lambda s: s.ch_active),
             SimBoilerSignal(sim, "hot_water", "Sim hot water active", lambda s: s.hot_water),
         ]
     )

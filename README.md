@@ -177,6 +177,6 @@ In design, not built yet. Plans can still change.
 
 ## Development and test environment
 
-- [`dev/`](dev/README.md): a simulated house (rooms that warm up and cool down, TRVs, a boiler, gas meter and weather) to try everything without hardware, as a Docker container or a VM for Virtual Machine Manager, with a script that sets it all up through the real forms.
+- [`dev/`](dev/README.md): a simulated house (rooms that warm up and cool down, TRVs, a thermostat with a PID like `thermostat.yaml`, a boiler that short cycles like a real one, gas meter and weather) to try everything without hardware, including the learning features, as a Docker container or a VM for Virtual Machine Manager, with a script that sets it all up through the real forms.
 - `tests/`: tests on a real Home Assistant core (`pip install -r requirements_test.txt`, then `pytest`). CI also runs ruff, shellcheck, hassfest and the HACS validation.
 - [CHANGELOG.md](CHANGELOG.md) lists what changed per release.

@@ -1,7 +1,8 @@
-"""Fake TRVs and a fake OpenTherm boiler thermostat."""
+"""Fake TRVs and a fake OpenTherm boiler thermostat with an ESPHome style PID."""
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -12,7 +13,8 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 
-from . import DOMAIN, HeatingSim, SimTrv
+from . import DOMAIN, HeatingSim
+from .model import SimTrv
 from .entity import SimEntity
 
 FEATURES = (
@@ -58,17 +60,17 @@ class SimTrvClimate(_SimClimate):
 
     @property
     def current_temperature(self) -> float:
-        return round(self._trv.measured, 1)
+        return round(self._trv.measured(time.monotonic()), 1)
 
     @property
     def hvac_action(self) -> HVACAction:
         if not self._trv.hvac_on:
             return HVACAction.OFF
-        return HVACAction.HEATING if self._trv.valve_open else HVACAction.IDLE
+        return HVACAction.HEATING if self._trv.valve_open(time.monotonic()) else HVACAction.IDLE
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"valve_open": self._trv.valve_open}
+        return {"valve_open": self._trv.valve_open(time.monotonic())}
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (mode := kwargs.get("hvac_mode")) is not None:
@@ -89,7 +91,11 @@ class SimTrvClimate(_SimClimate):
 
 
 class SimBoiler(_SimClimate):
-    """Stands in for the ESPHome / DIYLess / OTGW thermostat: receives the winner target."""
+    """Stands in for the ESPHome thermostat (thermostat.yaml): receives the winner target.
+
+    Its PID regulates on the winning room temperature (process_value in the
+    config) and asks the boiler for output x flow limit.
+    """
 
     _attr_name = "Sim boiler"
     _attr_unique_id = "heating_sim_boiler"
@@ -106,8 +112,18 @@ class SimBoiler(_SimClimate):
         return self._sim.boiler_target
 
     @property
+    def current_temperature(self) -> float | None:
+        return self._sim.process_value
+
+    @property
     def hvac_action(self) -> HVACAction:
-        return HVACAction.HEATING if self._sim.firing else HVACAction.IDLE
+        if not self._sim.boiler_on:
+            return HVACAction.OFF
+        return HVACAction.HEATING if self._sim.flame and self._sim.ch_active else HVACAction.IDLE
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"flow_request": self._sim.request, "pid_output": round(self._sim.pid.output, 3)}
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (mode := kwargs.get("hvac_mode")) is not None:
