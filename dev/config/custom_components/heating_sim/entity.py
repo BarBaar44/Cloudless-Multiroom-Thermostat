@@ -13,6 +13,7 @@ class SimEntity(Entity):
     _attr_should_poll = False
 
     async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
         self.async_on_remove(async_dispatcher_connect(self.hass, SIGNAL, self._tick))
 
     @callback

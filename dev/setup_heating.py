@@ -13,8 +13,15 @@ first, creating the owner account, and then use that login:
 
   python3 setup_heating.py --onboard --username test --password testtest
   python3 setup_heating.py --onboard --wait 900 ...   # wait for HA to come up
-  python3 setup_heating.py --token <token> --experimental  # also switch on the
-                                                           # experimental features
+
+Learning features, with every field on their page pointed at a sim entity:
+
+  python3 setup_heating.py --token <token> --learning               # observe only
+  python3 setup_heating.py --token <token> --learning --auto-apply  # also apply PID advice
+  python3 setup_heating.py --token <token> --learning --notify full # evening notification
+
+They time warm-ups in real minutes, so --learning sets the sim to real time
+(number.sim_speed 1) unless --speed says otherwise.
 """
 
 from __future__ import annotations
@@ -186,8 +193,39 @@ def create_heating(api: Api, source: str) -> str:
     return created
 
 
-def enable_experimental(api: Api, entry_id: str, source: str) -> None:
-    """Options flow: keep the settings, tick experimental, point it at the sim entities."""
+# Learning features page: every field, pointed at the sim entities
+LEARNING_FIELDS = {
+    "exp_comfort_weekday": "07:30:00",
+    "exp_comfort_weekend": "08:00:00",
+    "exp_outdoor": "sensor.sim_outdoor_temperature",
+    "exp_weather": "weather.sim_weather",
+    "exp_people": "zone.home",
+    "exp_gas": "sensor.sim_gas_meter",
+    "exp_flame": "binary_sensor.sim_boiler_flame",
+    "exp_dhw": "binary_sensor.sim_hot_water_active",
+    "exp_ch_active": "binary_sensor.sim_central_heating_active",
+    "exp_water": "sensor.sim_boiler_water_temperature",
+    "exp_return": "sensor.sim_boiler_return_water_temperature",
+    # The number that sets the limit, as with thermostat.yaml
+    "exp_max_ch": "number.sim_central_heating_max_flow_temperature",
+    # A sensor, never a writable number
+    "exp_dhw_setpoint": "sensor.sim_boiler_hot_water_setpoint",
+    "exp_kp": "number.sim_central_heating_kp",
+    "exp_ki": "number.sim_central_heating_ki",
+    "exp_kd": "number.sim_central_heating_kd",
+    "exp_integral": "sensor.sim_central_heating_pid_integral",
+    "exp_gas_price_before6": "sensor.sim_gas_price_tomorrow_before_6",
+    "exp_gas_price_after6": "sensor.sim_gas_price_tomorrow_after_6",
+}
+
+
+def set_speed(api: Api, speed: float) -> None:
+    api.call("POST", "/api/services/number/set_value", {"entity_id": "number.sim_speed", "value": speed})
+    print(f"  sim speed {speed:g} ({'real time' if speed == 1 else f'one hour in {60 / speed:g} min'})")
+
+
+def enable_learning(api: Api, entry_id: str, source: str, auto_apply: bool, notify: str) -> None:
+    """Options flow: keep the settings, switch the learning features on, fill their page."""
     flow = "/api/config/config_entries/options/flow"
     start = api.call("POST", flow, {"handler": entry_id})
     settings = {
@@ -210,20 +248,15 @@ def enable_experimental(api: Api, entry_id: str, source: str) -> None:
         start["flow_id"],
         {
             "exp_room": living,
-            "exp_comfort_weekday": "07:30:00",
-            "exp_comfort_weekend": "08:00:00",
-            "exp_outdoor": "sensor.sim_outdoor_temperature",
-            "exp_weather": "weather.sim_weather",
-            "exp_people": "zone.home",
-            "exp_gas": "sensor.sim_gas_meter",
-            "exp_flame": "binary_sensor.sim_boiler_flame",
-            "exp_dhw": "binary_sensor.sim_hot_water_active",
-            "exp_ch_active": "binary_sensor.sim_central_heating_active",
+            **LEARNING_FIELDS,
+            "exp_auto_apply": auto_apply,
+            "exp_notify": notify,
         },
     )
     if done.get("type") != "create_entry":
-        sys.exit(f"Experimental options did not finish: {done}")
-    print("  experimental features on (following Living Room)")
+        sys.exit(f"Learning features options did not finish: {done}")
+    mode = "applying PID advice" if auto_apply else "observe only"
+    print(f"  learning features on, following Living Room, {mode}, evening notification: {notify}")
 
 
 def main() -> None:
@@ -235,7 +268,19 @@ def main() -> None:
     parser.add_argument("--password", default="testtest")
     parser.add_argument("--wait", type=int, default=0, help="Seconds to wait for HA to come up")
     parser.add_argument("--source", choices=["climate", "switch"], default="climate")
-    parser.add_argument("--experimental", action="store_true", help="Enable the experimental features with the sim entities")
+    parser.add_argument(
+        "--learning", "--experimental", dest="learning", action="store_true",
+        help="Switch on the learning features with every field pointed at the sim",
+    )
+    parser.add_argument("--auto-apply", action="store_true", help="With --learning: apply PID advice automatically")
+    parser.add_argument(
+        "--notify", choices=["off", "events", "summary", "full"], default="events",
+        help="With --learning: evening notification (default events)",
+    )
+    parser.add_argument(
+        "--speed", type=float,
+        help="Sim seconds per real second, 1 to 600 (default: 1 with --learning, else unchanged)",
+    )
     args = parser.parse_args()
     if not args.token and not args.onboard:
         parser.error("give --token, or --onboard on a fresh Home Assistant")
@@ -246,8 +291,11 @@ def main() -> None:
     if args.onboard:
         onboard(api, args.username, args.password)
     entry_id = create_heating(api, args.source)
-    if args.experimental:
-        enable_experimental(api, entry_id, args.source)
+    if args.learning:
+        enable_learning(api, entry_id, args.source, args.auto_apply, args.notify)
+    speed = args.speed if args.speed is not None else (1 if args.learning else None)
+    if speed is not None:
+        set_speed(api, speed)
     print("Done. Set rooms to heat in the UI.")
 
 

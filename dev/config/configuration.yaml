@@ -35,15 +35,29 @@ input_boolean:
 
 heating_sim:
   outdoor_temperature: 8
-  speed: 30          # 30 sim seconds per real second: one hour in two minutes
+  # 30 sim seconds per real second: one hour in two minutes. Only the first
+  # start uses this; after that number.sim_speed (kept over restarts) sets it.
+  # The learning features time warm-ups in real minutes: use speed 1 for them.
+  speed: 30
   tick_seconds: 5
-  boiler_on_above: 12
   hot_water: input_boolean.sim_hot_water
+  # The thermostat's PID regulates on this (sensor.virtual_heating_temperature in a real house)
+  process_value: sensor.sim_heating_winning_room_temperature
+  # Modelled on an Atag E325EC: 6.1 kW minimum, so one room alone makes it cycle
+  boiler:
+    min_kw: 6.1
+    max_kw: 24
+    anti_cycle_minutes: 5
+    relay_flow_temperature: 55
+    hot_water_setpoint: 50
+  gas_price_before_6: 1.25
+  gas_price_after_6: 1.31
   rooms:
     - name: Living Room
       start_temperature: 17.5
       trvs: 3
       heat_rate: 1.5
+      radiator_kw: 3
       window: input_boolean.sim_living_room_garden_door
     - name: Office
       start_temperature: 16

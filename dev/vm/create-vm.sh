@@ -3,8 +3,10 @@
 # the dev test Home Assistant with the simulated house.
 #
 # Debian 13 cloud image + cloud-init: installs Docker, clones this repo,
-# starts dev/docker-compose.yaml and (unless --no-setup) does onboarding and
-# creates the heating system with all simulated rooms.
+# starts dev/docker-compose.yaml and (unless --no-setup) does onboarding,
+# creates the heating system with all simulated rooms and switches on the
+# learning features, with the sim in real time (they time warm-ups in real
+# minutes).
 #
 #   ./create-vm.sh                       # VM "cmt-test", branch of this checkout
 #   ./create-vm.sh --branch main --name cmt-main
@@ -23,6 +25,9 @@ USERNAME="test"
 PASSWORD="testtest"
 SSH_KEY=""
 SETUP=1
+SPEED=1
+AUTO_APPLY=0
+NOTIFY="events"
 DELETE=0
 CONNECT="qemu:///system"
 IMAGES="${CMT_IMAGES:-/var/lib/libvirt/images}"  # override with CMT_IMAGES
@@ -30,7 +35,7 @@ BASE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericc
 BASE_IMG="$IMAGES/debian-13-genericcloud-amd64.qcow2"
 
 usage() {
-  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
   cat <<EOF
 
 Options:
@@ -42,6 +47,9 @@ Options:
   --username NAME    HA owner and VM login user (default $USERNAME)
   --password PASS    HA owner and VM console password (default $PASSWORD)
   --ssh-key FILE     public key for the VM user (default ~/.ssh/id_ed25519.pub or id_rsa.pub)
+  --speed N          sim seconds per real second (default $SPEED, real time; 30 = an hour in 2 min)
+  --auto-apply       let the learning features apply PID advice automatically
+  --notify MODE      evening notification: off, events, summary or full (default $NOTIFY)
   --no-setup         only start HA, leave onboarding and the heating system to you
   --delete           delete VM NAME and its disk
 EOF
@@ -57,6 +65,9 @@ while [[ $# -gt 0 ]]; do
     --username) USERNAME="$2"; shift 2 ;;
     --password) PASSWORD="$2"; shift 2 ;;
     --ssh-key) SSH_KEY="$2"; shift 2 ;;
+    --speed) SPEED="$2"; shift 2 ;;
+    --auto-apply) AUTO_APPLY=1; shift ;;
+    --notify) NOTIFY="$2"; shift 2 ;;
     --no-setup) SETUP=0; shift ;;
     --delete) DELETE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -82,6 +93,12 @@ for cmd in virt-install virsh qemu-img curl; do
 done
 if [[ ! "$USERNAME" =~ ^[a-z][a-z0-9_-]*$ ]]; then
   echo "--username must be a lowercase login name" >&2; exit 2
+fi
+if [[ ! "$SPEED" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "--speed must be a number from 1 to 600" >&2; exit 2
+fi
+if [[ ! "$NOTIFY" =~ ^(off|events|summary|full)$ ]]; then
+  echo "--notify must be off, events, summary or full" >&2; exit 2
 fi
 if [[ ${#PASSWORD} -lt 6 ]]; then
   echo "--password needs at least 6 characters" >&2; exit 2
@@ -112,7 +129,8 @@ sudo qemu-img create -q -f qcow2 -F qcow2 -b "$BASE_IMG" "$DISK" "${DISK_GB}G"
 
 SETUP_CMD="echo 'Skipping heating setup (--no-setup)'"
 if [[ $SETUP -eq 1 ]]; then
-  SETUP_CMD="python3 /opt/thermostat/dev/setup_heating.py --onboard --wait 1200 --experimental --username '$USERNAME' --password '$PASSWORD'"
+  SETUP_CMD="python3 /opt/thermostat/dev/setup_heating.py --onboard --wait 1200 --learning --speed $SPEED --notify $NOTIFY --username '$USERNAME' --password '$PASSWORD'"
+  [[ $AUTO_APPLY -eq 1 ]] && SETUP_CMD="$SETUP_CMD --auto-apply"
 fi
 
 TMP=$(mktemp -d)

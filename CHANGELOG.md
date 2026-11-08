@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Test environment (`dev/`):** brought up to date with the learning features. The simulated thermostat now has a PID like `thermostat.yaml`, with its flow limit and Kp, Ki and Kd numbers, so warm-ups change when the values change and Apply PID advice automatically can be tried. The boiler has a minimum output and an anti-cycle time, so it starts and stops like a real one when one room heats alone. New sim entities for flow and return water temperature, the hot water temperature (read only), PID integral, gas prices and burner starts. `setup_heating.py --learning` fills every field on the learning features page and sets the sim to real time, which the learning features need; `--auto-apply`, `--notify` and `--speed` set the rest. The VM script has the same options. No change to the integration itself.
+
 ## 1.7.0
 
 **Behaviour change:** the 21:00 report no longer posts the whole report as a notification every evening. By default it only posts when something happened. To keep the old notification, set **Evening notification** to **Full report** on the learning features page.
