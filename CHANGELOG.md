@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.0
 
 **Behaviour change:** the 21:00 report no longer posts the whole report as a notification every evening. By default it only posts when something happened. To keep the old notification, set **Evening notification** to **Full report** on the learning features page.
 
