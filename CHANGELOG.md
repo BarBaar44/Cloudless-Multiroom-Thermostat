@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.1
 
 - **Marketplace readiness:** the manifest lists the category `climate.thermostats_heating`; the leftover `strings.json` is removed (custom integrations ship `translations/en.json`, which is unchanged); the HACS validation runs without ignored checks now that the brand icons are in the integration folder. The README has My links to open the repository in the Marketplace or HACS and to start the setup, and the docs say plainly that the alpha and beta labels apply only to the optional learning features.
 - **README:** the introduction explains the approach (a virtual thermostat in every room, served by an OpenTherm controller you run yourself) and what it takes.
