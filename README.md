@@ -4,6 +4,8 @@
 
 A Home Assistant integration for multi-room central heating without a cloud. Any number of rooms, each with its own temperature sensor and radiator valves, share one heat source: the room that needs heat most drives the boiler, and every other room heats along through its own valves. Everything is set up from the UI and runs locally.
 
+Other integrations put a smart controller on the boiler. This one puts a [virtual thermostat in every room](#a-virtual-thermostat-in-every-room) and lets the boiler serve them. The one requirement is an OpenTherm controller you run yourself, such as a DIYLess or a generic OpenTherm module with an ESP32: a few euros, two wires to the boiler, and ESPHome. In return each room gets its own control, the integration learns from how your house actually heats instead of a calibration run, and it is built for houses that heat several rooms independently.
+
 - **No cloud:** Home Assistant, your TRVs and your boiler thermostat, nothing else.
 - **Any number of rooms**, each with its own target, presets and window sensors.
 - **One heat source**, as an on/off relay, an OpenTherm thermostat (ESPHome, DIYLess) or an OpenTherm Gateway. Full multi-room control needs a relay or an OpenTherm controller without its own room sensor, see [A virtual thermostat in every room](#a-virtual-thermostat-in-every-room).
