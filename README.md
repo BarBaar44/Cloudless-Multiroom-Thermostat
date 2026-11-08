@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/custom_components/cloudless_multiroom_thermostat/brand/icon@2x.png" alt="Cloudless Multiroom Thermostat logo" width="160"></p>
+
 
 <p align="center">
   <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/releases"><img src="https://img.shields.io/github/v/release/BarBaar44/Cloudless-Multiroom-Thermostat?style=for-the-badge&label=release" alt="Release"></a>
@@ -8,6 +8,8 @@
   <img src="https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.10+">
   <a href="https://community.home-assistant.io/t/cloudless-multiroom-thermostat/1032363"><img src="https://img.shields.io/badge/community-forum-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white" alt="Community forum thread"></a>
 </p>
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/custom_components/cloudless_multiroom_thermostat/brand/icon@2x.png" alt="Cloudless Multiroom Thermostat logo" width="160"></p>
 
 # Cloudless Multiroom Thermostat
 
