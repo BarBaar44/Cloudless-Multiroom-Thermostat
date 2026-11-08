@@ -44,6 +44,8 @@ Maturity means:
 
 - **Alpha**: the data collection works, the conclusions are not trustworthy yet. Read them, don't act on them.
 - **Beta**: the numbers are useful; details may still change.
+
+These labels describe the learning features only. They are optional and off by default; the heating control itself (rooms, TRVs, winner, heat source) is stable and does not depend on them.
 - **Stable**: not used yet; nothing here is stable. See [When a feature becomes stable](#when-a-feature-becomes-stable).
 
 The analysis has run in one house (an Atag boiler on OpenTherm with an ESPHome PID) since October 2026; the maturity above describes that analysis. If something looks wrong, please [open an issue](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues).
