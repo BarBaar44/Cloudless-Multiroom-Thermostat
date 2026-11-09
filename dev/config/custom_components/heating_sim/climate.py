@@ -34,12 +34,32 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
 
 class _SimClimate(SimEntity, ClimateEntity):
+    # Both names, like the integration's RoomClimate: native_* for Home
+    # Assistant 2026.11 and later, the old ones for 2026.10 (#91). Home
+    # Assistant checks every class, so subclasses override the native ones.
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_supported_features = FEATURES
     _attr_target_temperature_step = 0.5
     _attr_min_temp = 5
     _attr_max_temp = 30
+
+    @property
+    def native_current_temperature(self) -> float | None:
+        return None
+
+    @property
+    def native_target_temperature(self) -> float | None:
+        return None
+
+    @property
+    def current_temperature(self) -> float | None:  # Home Assistant 2026.10
+        return self.native_current_temperature
+
+    @property
+    def target_temperature(self) -> float | None:  # Home Assistant 2026.10
+        return self.native_target_temperature
 
 
 class SimTrvClimate(_SimClimate):
@@ -55,11 +75,11 @@ class SimTrvClimate(_SimClimate):
         return HVACMode.HEAT if self._trv.hvac_on else HVACMode.OFF
 
     @property
-    def target_temperature(self) -> float:
+    def native_target_temperature(self) -> float:
         return self._trv.target
 
     @property
-    def current_temperature(self) -> float:
+    def native_current_temperature(self) -> float:
         return round(self._trv.measured(time.monotonic()), 1)
 
     @property
@@ -108,11 +128,11 @@ class SimBoiler(_SimClimate):
         return HVACMode.HEAT if self._sim.boiler_on else HVACMode.OFF
 
     @property
-    def target_temperature(self) -> float:
+    def native_target_temperature(self) -> float:
         return self._sim.boiler_target
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return self._sim.process_value
 
     @property

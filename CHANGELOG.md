@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fix (#91):** Home Assistant 2026.11 logged three deprecation warnings for every room thermostat at start (`temperature_unit`, `current_temperature`, `target_temperature`; they stop working in 2027.11). The room climate now provides the new `native_*` names as well, so 2026.11 and later use those and log nothing, while 2026.10 keeps working. Nothing changes in how rooms heat. The simulated TRVs and boiler in `dev/` got the same change.
+
 ## 1.7.1
 
 - **Marketplace readiness:** the manifest lists the category `climate.thermostats_heating`; the leftover `strings.json` is removed (custom integrations ship `translations/en.json`, which is unchanged); the HACS validation runs without ignored checks now that the brand icons are in the integration folder. The README has My links to open the repository in the Marketplace or HACS and to start the setup, and the docs say plainly that the alpha and beta labels apply only to the optional learning features.
