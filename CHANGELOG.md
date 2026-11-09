@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Heating Control Card ships with the integration.** The dashboard card (`custom:heating-control-card`) now lives in `custom_components/cloudless_multiroom_thermostat/www/`. The integration serves it at `/cloudless_multiroom_thermostat/heating-control-card.js` and adds it to the dashboard resources at startup, with its version in the URL so browsers load the new card after an update; with the last heating system removed, the resource goes too. Dashboards in YAML mode need the resource added by hand (the log shows the URL). Requested in the HACS catalog review: a card that only works with this integration belongs in it, so both install together and never drift apart. See [docs/card.md](docs/card.md).
+- **Moving over from the separate card:** remove Heating Control Card in HACS or the Marketplace and its dashboard resource. Dashboards keep working, the card type is the same. While both are installed the log warns, and the card registers only once.
+- **Card 1.0.0: the YAML setup is gone.** The card shows only the integration's rooms. `heating_area` (`sensor.delta_temperature`), the `climate.virtual_thermostat_*` fallback, a room's `paused` entity and the 0.2 `climate:` key are removed; the card ignores them and logs a warning in the browser console.
+- **README:** install starts with searching in the Marketplace or HACS, with the custom repository as the fallback while the listing is in review.
+
 ## 1.7.1
 
 - **Marketplace readiness:** the manifest lists the category `climate.thermostats_heating`; the leftover `strings.json` is removed (custom integrations ship `translations/en.json`, which is unchanged); the HACS validation runs without ignored checks now that the brand icons are in the integration folder. The README has My links to open the repository in the Marketplace or HACS and to start the setup, and the docs say plainly that the alpha and beta labels apply only to the optional learning features.

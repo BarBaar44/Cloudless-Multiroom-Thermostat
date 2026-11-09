@@ -19,6 +19,7 @@ from .const import (
     SERVICE_SET_ALL_OFF,
 )
 from .controller import HeatingController
+from .frontend import async_remove_frontend, async_setup_frontend
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +31,8 @@ type CMTConfigEntry = ConfigEntry[HeatingController]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register domain services."""
+    """Register domain services and the bundled dashboard card."""
+    await async_setup_frontend(hass)
 
     async def _set_all_off(call: ServiceCall) -> None:
         entry_ids = call.data.get("config_entry_id")
@@ -116,3 +118,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> bool
 async def _async_reload(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
     """Options changed or a room was added, edited or removed."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
+    """Remove the card's dashboard resource with the last heating system."""
+    if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
+        await async_remove_frontend(hass)
