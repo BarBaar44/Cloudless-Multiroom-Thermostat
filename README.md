@@ -27,6 +27,8 @@ The integration comes with its own dashboard card, **Heating Control Card**: no 
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card.png" alt="Heating Control Card" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-multi-room.png" alt="Heating Control Card with several rooms" width="412"></p>
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-examples.png" alt="Heating Control Card in six states: hot water, cold tap, idle, heating, all rooms, boiler fault" width="720"></p>
+
 Add a card of type `custom:heating-control-card` to a dashboard; it finds the rooms by itself. The integration adds the card to your dashboard resources at startup (reload the browser once). Options, YAML-mode dashboards and moving over from the separately installed card: **[docs/card.md](docs/card.md)**.
 
 ## Contents
