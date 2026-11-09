@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.8.0
+
+*A note from Bb: until the HACS reviewer pointed it out, I had no idea an integration could simply bring its own card. Two repositories, two release flows and a lot of keeping them in step later, it turns out they could have shared a suitcase all along. Lesson learned, luggage merged.*
 
 - **Heating Control Card ships with the integration.** The dashboard card (`custom:heating-control-card`) now lives in `custom_components/cloudless_multiroom_thermostat/www/`. The integration serves it at `/cloudless_multiroom_thermostat/heating-control-card.js` and adds it to the dashboard resources at startup, with its version in the URL so browsers load the new card after an update; with the last heating system removed, the resource goes too. Dashboards in YAML mode need the resource added by hand (the log shows the URL). Requested in the HACS catalog review: a card that only works with this integration belongs in it, so both install together and never drift apart. See [docs/card.md](docs/card.md).
 - **Moving over from the separate card:** remove Heating Control Card in HACS or the Marketplace and its dashboard resource. Dashboards keep working, the card type is the same. While both are installed the log warns, and the card registers only once.
