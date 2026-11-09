@@ -6,6 +6,7 @@
 - **Moving over from the separate card:** remove Heating Control Card in HACS or the Marketplace and its dashboard resource. Dashboards keep working, the card type is the same. While both are installed the log warns, and the card registers only once.
 - **Card 1.0.0: the YAML setup is gone.** The card shows only the integration's rooms. `heating_area` (`sensor.delta_temperature`), the `climate.virtual_thermostat_*` fallback, a room's `paused` entity and the 0.2 `climate:` key are removed; the card ignores them and logs a warning in the browser console.
 - **README:** install starts with searching in the Marketplace or HACS, with the custom repository as the fallback while the listing is in review.
+- **Fix (#91):** Home Assistant 2026.11 logged three deprecation warnings for every room thermostat at start (`temperature_unit`, `current_temperature`, `target_temperature`; they stop working in 2027.11). The room climate now provides the new `native_*` names as well, so 2026.11 and later use those and log nothing, while 2026.10 keeps working. Nothing changes in how rooms heat. The simulated TRVs and boiler in `dev/` got the same change.
 
 ## 1.7.1
 

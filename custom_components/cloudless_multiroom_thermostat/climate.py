@@ -66,6 +66,12 @@ class RoomClimate(ClimateEntity, RestoreEntity):
     _attr_name = None
     _attr_translation_key = "room"
     _attr_should_poll = False
+    # Home Assistant 2026.11 renamed the climate temperature API to native_*
+    # (the old names stop working in 2027.11); 2026.10, the minimum here, only
+    # has the old names. Both are provided: when a class has both, 2026.11 uses
+    # the native one and logs no deprecation. Drop the old names once the
+    # minimum Home Assistant version is 2026.11 or later (#91).
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_preset_modes = [PRESET_NONE, PRESET_ECO, PRESET_WARM]
@@ -121,11 +127,19 @@ class RoomClimate(ClimateEntity, RestoreEntity):
 
     # ------------------------------------------------------------------ state
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return self._room.current
 
     @property
-    def target_temperature(self) -> float:
+    def native_target_temperature(self) -> float:
+        return self._room.target
+
+    @property
+    def current_temperature(self) -> float | None:  # Home Assistant 2026.10
+        return self._room.current
+
+    @property
+    def target_temperature(self) -> float:  # Home Assistant 2026.10
         return self._room.target
 
     @property
