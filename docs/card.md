@@ -6,6 +6,14 @@ The dashboard card for Cloudless Multiroom Thermostat. It ships with the integra
 
 It shows every room with its temperature, target, Heat/Off and role, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings.
 
+### Examples
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-examples.png" alt="Heating Control Card in six states: hot water, cold tap, idle, heating, all rooms, boiler fault" width="720"></p>
+
+With several rooms every room shows its role, and the room the boiler heats for is highlighted. On the right the hallway is below target but does not drive the boiler, so heating stays off:
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-roles.png" alt="Three Heating Control Cards showing every room role" width="900"></p>
+
 The card writes only to the room climates, the single source of truth per room. Everything downstream (TRVs, the overshoot buffer for the winner, the boiler setpoint) is the integration's job, exactly as with any other change to a room. The rooms tell the card which one is the winner, each room's role and why a room is paused, so no extra sensor is needed.
 
 ## How it gets on your dashboard
