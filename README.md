@@ -23,13 +23,11 @@ Other integrations put a smart controller on the boiler. This one puts a [virtua
 
 ## Dashboard: Heating Control Card
 
-**[Heating Control Card](https://github.com/BarBaar44/Heating-Control-Card)** is the dashboard for this system: a Lovelace card, installed from the Marketplace (Home Assistant 2026.11 and newer) or HACS, as a repository added by link. It shows every room with its temperature, target, Heat/Off and role, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings.
+The integration comes with its own dashboard card, **Heating Control Card**: no separate install. It shows every room with its temperature, target, Heat/Off and role, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings.
 
-![Heating Control Card](https://raw.githubusercontent.com/BarBaar44/Heating-Control-Card/main/shot.png)
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card.png" alt="Heating Control Card" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-multi-room.png" alt="Heating Control Card with several rooms" width="412"></p>
 
-<img src="https://raw.githubusercontent.com/BarBaar44/Heating-Control-Card/main/multi-room-card.png" alt="Heating Control Card with several rooms" width="412">
-
-The card's README lists its options, including how to pick the rooms and the boiler entities.
+Add a card of type `custom:heating-control-card` to a dashboard; it finds the rooms by itself. The integration adds the card to your dashboard resources at startup (reload the browser once). Options, YAML-mode dashboards and moving over from the separately installed card: **[docs/card.md](docs/card.md)**.
 
 ## Contents
 
@@ -50,10 +48,14 @@ The card's README lists its options, including how to pick the rooms and the boi
 
 Requires Home Assistant 2026.10 or newer.
 
+Search for **Cloudless Multiroom Thermostat** in the Marketplace (Home Assistant 2026.11 and newer) or HACS, install it and restart Home Assistant. Then **Settings > Devices & services > Add integration > Cloudless Multiroom Thermostat**. The dashboard card comes with it.
+
+Not found? The catalog listing is still in review. Use the button, or add the repository by hand as below.
+
 [![Open your Home Assistant instance and open this repository.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=BarBaar44&repository=Cloudless-Multiroom-Thermostat&category=integration)
 [![Open your Home Assistant instance and start setting up Cloudless Multiroom Thermostat.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=cloudless_multiroom_thermostat)
 
-The first button opens the repository in your Home Assistant (the Marketplace on 2026.11 and newer, HACS on 2026.10), ready to install. After installing, the second button starts the setup. Or do it by hand:
+The first button opens the repository in your Home Assistant (the Marketplace on 2026.11 and newer, HACS on 2026.10), ready to install. After installing, the second button starts the setup. Or add it as a custom repository:
 
 **Home Assistant 2026.11 and newer (Marketplace):**
 

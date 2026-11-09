@@ -2,6 +2,8 @@
   "domain": "cloudless_multiroom_thermostat",
   "name": "Cloudless Multiroom Thermostat",
   "after_dependencies": [
+    "http",
+    "lovelace",
     "recorder"
   ],
   "categories": [
@@ -17,5 +19,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues",
   "requirements": [],
-  "version": "1.7.1"
+  "version": "1.8.0"
 }
