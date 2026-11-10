@@ -16,6 +16,7 @@ Comfort comes first. Saving money never means a cold room at a time you asked fo
 - **Nobody can take it away.** The integration has no account, no subscription and no feature that a company can move behind a paywall, change or switch off from a distance. The code is open, your learning data stays in files in your own Home Assistant, and a release you run keeps working the way it did the day you installed it. A heating system is part of the house; it should outlive any company's business model. That is why local control is recommended for every device it talks to.
 - **You own the controller.** The integration is built for a thermostat you run yourself: an OpenTherm controller such as DIYLess or an ESPHome build of [`thermostat.yaml`](thermostat.yaml). The room thermostat on the wall goes; the boiler (and later the heat pump) gets its setpoint from a controller you can read, change and flash. This is what makes per room control, learning and price optimization possible, and it is the setup the docs and the test environment are written for first.
 - **For people who like to tinker.** Settings are explained in plain words, but the audience builds its own hardware, reads logs and wants to know why the heating does what it does. Every decision is visible in a sensor or attribute.
+- **Easy to start.** A heat source, your rooms and a schedule: that is all you need on day one. Everything else is a switch on one Features page, and a feature that is off really disappears: no settings, no entities, nothing on the card. Every feature has its own docs page in plain words.
 - **Measured before trusted.** Features start observe only, prove themselves against exit criteria, and only then act, with guardrails and a way back. See [How a feature gets in](#how-a-feature-gets-in).
 - **Safe for the hardware.** Nothing is written to a boiler or heat pump that is known to break it, and a lost connection to Home Assistant always ends in heating off, never in heating on.
 
@@ -55,6 +56,7 @@ Everything v2 needs to know, measured now, without changing how the house heats.
 - **Boiler identity:** read the OpenTherm manufacturer code where the firmware exposes it, and check which adapters can (ESPHome, DIYLess, OTGW). Groundwork for the boiler profile.
 - **DIYLess on par with `thermostat.yaml`:** check which DIYLess firmware features (flow setpoint, flow limit, room temperature as process value, fail safe) match what the ESPHome config does, document the gaps, and test both in the simulated house.
 - **Cost per warm-up:** the gas prices already on the learning features page feed a cost per warm-up and per day in the records, so v2 starts with a cost history.
+- **Docs you can read:** the README shrinks to what it is, why, install and running in 10 minutes. Everything else moves to one page per feature in `docs/`, all with the same layout (in one sentence, when you want it, how to turn it on, settings, what you see on the card, common questions), plus getting started, hardware, upgrading, troubleshooting and a reference of every entity and service.
 - **Deprecation notices:** the log and README announce what v2 removes (the 21:00 report, the report sensor, the evening notification option, `experimental_report`).
 
 ## v2: the house runs itself
@@ -64,7 +66,8 @@ A major version: presets become a list, schedules get their own storage, the car
 ### v2.0: schedules, presets, live learning data
 
 - **Schedules in the integration:** a week schedule per room with switch points at 15 minutes that set a preset; copy days and weeks; schedule off per room, suspend all at once. Replaces schedule automations.
-- **Every room gets a schedule:** a room without one holds 15 °C and the card says so clearly, with two choices: make a schedule (one block is enough) or turn scheduling off and control the room yourself. Upgrading from v1 is a behaviour change, and the release notes say so first.
+- **Features page:** one options page with a switch per feature (away, windows, sun assist, guest mode, learning features). Off means gone.
+- **Every room gets a schedule:** Add room ends with a schedule step (one block for the whole day, or scheduling off), so a new room is ready straight away. As a safety net, a room without one holds 15 °C and the card says so clearly, with two choices: make a schedule (one block is enough) or turn scheduling off and control the room yourself. Upgrading from v1 is a behaviour change, and the release notes say so first.
 - **Your own presets:** Eco and Warm plus your own (Sleep, for example), a temperature per room or "not used".
 - **Manual changes that expire:** until the next switch point, 1 hour, 3 hours, or until you go back to the schedule. Dropped when everyone leaves, unless you tick "keep when away".
 - **Guest mode:** "someone is home" for visitors Home Assistant doesn't track, so the whole house keeps its schedule.
