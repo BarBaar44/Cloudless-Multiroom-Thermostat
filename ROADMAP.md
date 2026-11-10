@@ -4,7 +4,7 @@ Where Cloudless Multiroom Thermostat is going, and in what order. Plans can chan
 
 ## The horizon
 
-**An autonomous thermostat in every room that keeps the house comfortable at the lowest cost, fully local and fully under your control.**
+**An autonomous thermostat in every room that keeps the house comfortable at the lowest cost, local first and under your control.**
 
 You say when a room must be warm and how warm. Each room learns how fast it heats and cools, the integration decides when to start, how hot the water needs to be, which rooms heat together and, later, whether gas or electricity is cheaper right now. It shows what that saved. No cloud, no tuning by hand.
 
