@@ -1,6 +1,6 @@
 # Roadmap
 
-Where Cloudless Multiroom Thermostat is going, and in what order. Plans can change; the issues linked below hold the details and the discussion.
+Where Cloudless Multiroom Thermostat is going, and in what order. Plans can change: everything beyond the next version is a direction, not a date. The issues linked below hold the details and the discussion.
 
 ## The horizon
 
