@@ -21,6 +21,14 @@ Other integrations put a smart controller on the boiler. This one puts a [virtua
 - **Presence aware:** rooms go off or to eco when everybody is away, and come back when someone is home.
 - **Open window detection** per room.
 
+## Why this exists
+
+*A note from Bb.* Before this, my house ran on Tado. It worked, until I noticed how little of it was mine. My heating depended on a server I didn't control, and features came and went with decisions made by people whose priorities were not my living room. When the internet was down, so was the clever part of my heating. And every question about how it decided things ended at "that's how the service works".
+
+A heating system is part of the house. It should keep working when a company changes its plans, its prices or its owner. So I built one that runs in Home Assistant, talks to the boiler through a controller I flash myself, and keeps everything it learns in files on my own machine.
+
+That is the idea behind this integration: no account, no subscription, nothing that can be switched off from a distance. Local control is what it is built for. Where you do use cloud devices, it works with them and tells you plainly what depends on that cloud. Where it is going next: [ROADMAP.md](ROADMAP.md).
+
 ## Dashboard: Heating Control Card
 
 The integration comes with its own dashboard card, **Heating Control Card**: no separate install. It shows every room with its temperature, target, Heat/Off and role, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings.
@@ -33,6 +41,7 @@ Add a card of type `custom:heating-control-card` to a dashboard; it finds the ro
 
 ## Contents
 
+- [Why this exists](#why-this-exists)
 - [Dashboard: Heating Control Card](#dashboard-heating-control-card)
 - [Install](#install)
 - [Set up](#set-up)
