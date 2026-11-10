@@ -61,14 +61,15 @@ Everything v2 needs to know, measured now, without changing how the house heats.
 
 A major version: presets become a list, schedules get their own storage, the card writes more than room climates, and the evening report gives way to live data. Upgrades from v1.9 keep rooms, presets and learning history.
 
-### v2.0: schedules, live learning data, boiler profile
+### v2.0: schedules, presets, live learning data
 
 - **Schedules in the integration:** a week schedule per room with switch points at 15 minutes that set a preset; copy days and weeks; schedule off per room, suspend all at once. Replaces schedule automations.
+- **Every room gets a schedule:** a room without one holds 15 °C and the card says so clearly, with two choices: make a schedule (one block is enough) or turn scheduling off and control the room yourself. Upgrading from v1 is a behaviour change, and the release notes say so first.
 - **Your own presets:** Eco and Warm plus your own (Sleep, for example), a temperature per room or "not used".
-- **Manual changes that expire:** until the next switch point, 1 hour, 3 hours, or until you go back to the schedule.
-- **Sun assist in the integration:** rooms that get sun hold a lower temperature on a sunny morning and warm up only if a light sensor still reads dark at the check time.
+- **Manual changes that expire:** until the next switch point, 1 hour, 3 hours, or until you go back to the schedule. Dropped when everyone leaves, unless you tick "keep when away".
+- **Guest mode:** "someone is home" for visitors Home Assistant doesn't track, so the whole house keeps its schedule.
+- **Sun assist in the integration:** rooms that get sun hold a lower temperature on a sunny morning (a window you set, 05:00 to 12:00 by default) and warm up only if a light sensor still reads dark at the check time.
 - **Live learning data:** sensors per feature that update when their value changes, an `event` entity for automatic changes and other events, and history on request for the card. The 21:00 report goes.
-- **Boiler profile and known quirks:** pick the boiler make and model at setup; anything the integration would write to the boiler is checked against a list of known problems (first entry: never write the hot water temperature on an Atag E325EC). Unknown boilers have boiler writes off by default.
 - **Heating Control Card:** schedule line and today strip per room, a whole house timeline, a week view, editors for schedules, presets and overrides, and a learning view.
 
 ### v2.1: warm when you need it
@@ -79,11 +80,12 @@ The step from "switch on at" to "be warm at". Built on the per room cooling and 
 - **Early stop:** before a switch point to a cooler preset, stop heating when the room will coast to the end within a set margin.
 - **Show it:** the card and the room attributes show the planned start and why ("starts 06:20, needs 40 min at 3 °C outside").
 
-### v2.2: a controller per room, cooler water
+### v2.2: a controller per room, cooler water, a safe boiler
 
 - **PID per room** ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82), option B, if v1.9 shows rooms differ enough): each room calculates the flow it needs, the heat source gets the highest request, and each room's PID values are advised and applied from its own warm-ups. `thermostat.yaml` and DIYLess get a flow setpoint mode with the same fail safe as today. Existing installs keep the firmware PID until they switch. This is also the base for v3: the integration knows each room's demand, not only who wins.
 - **Heating curve from Home Assistant** ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)): the flow limit follows the outdoor temperature in fixed steps, chosen from measured warm-ups, never changed during a warm-up. With a PID per room it is the upper bound for every room's flow request.
 - **Lowest flow that still meets comfort:** with comfort times known, the flow limit is lowered on mornings with time to spare, and judged on gas per degree-day, not only on comfort.
+- **Boiler profile and known quirks:** pick the boiler make and model at setup (a suggestion from the boiler's own OpenTherm code where it can be read, always confirmed by you); anything the integration would write to the boiler is checked against a list of known problems (first entry: never write the hot water temperature on an Atag E325EC). Unknown boilers have boiler writes off by default. It arrives here, with the first thing the integration writes to the boiler.
 - **Buffer rooms for low load** ([#80](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/80), phase 2): an opt-in room option that heats along when the only driving room needs less than the boiler's minimum, measured on starts per hour with and without.
 
 ### v2.3: the cheaper moment on gas
@@ -117,6 +119,7 @@ For houses without gas, and the house this integration ends up in once the boile
 
 - **Duty cycle for low load** in `thermostat.yaml` (burn at a fixed flow, then hold off longer than the anti-cycle time).
 - **Electric heaters per room** as a heat source of their own, for rooms a heat pump can't reach well.
+- **Sun based window for sun assist:** from sunrise to before solar noon instead of fixed times, for advanced users.
 - **Learned occupancy:** suggest schedule changes from presence history; never applied without a confirm.
 - **Top-up PID values:** only if the records show top-up overshoot changes with Kp and Ki (an open question from v1.6).
 
