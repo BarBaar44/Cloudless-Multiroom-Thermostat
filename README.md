@@ -23,9 +23,9 @@ Other integrations put a smart controller on the boiler. This one puts a [virtua
 
 ## Why this exists
 
-I have been using Home Assistant for several years. One of the main reasons is automating my house with little or no cloud dependency. Over the years, some cloud dependencies still crept in quietly: Home Connect, SmartThings and Tado. Recently Tado and SmartThings announced changes to their business model that make users pay for connectivity.
+I have been using Home Assistant for several years. One of the main reasons is automating my house with little or no cloud dependency. Over the years, some cloud dependencies still crept in quietly: Home Connect, SmartThings and Tado. Then Tado, and later SmartThings, announced changes to their business model that make users pay for connectivity.
 
-That is when I started building a local heating system I had full control over. The hardware turned out to be the easy part. On the Home Assistant forum I found [a post by Dujith](https://community.home-assistant.io/t/opentherm-multi-room-brainstorming-ideas/337784) with a Home Assistant template holding a basic version of what is now one of the core principles: the two tier system. Kudos to him! I extended the template, added automations and ended up with a pretty good basic system. Having full control gave me insights and ideas, and opened the door to a much more efficient heating system.
+When Tado did, more than a year ago, I started building a local heating system I had full control over. The hardware turned out to be the easy part. On the Home Assistant forum I found [a post by Dujith](https://community.home-assistant.io/t/opentherm-multi-room-brainstorming-ideas/337784) with a Home Assistant template holding a basic version of what is now one of the core principles: the two tier system. Kudos to him! I extended the template, added automations and ended up with a pretty good basic system, which heated my house for a full season before it became this integration. Having full control gave me insights and ideas, and opened the door to a much more efficient heating system.
 
 Things really took off when I started using Claude Code for the programming, a skill I lack. That is how development works today: I design, review, monitor and make sure we are heading in the right direction. Claude Code writes the code.
 
