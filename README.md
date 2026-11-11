@@ -43,6 +43,7 @@ Add a card of type `custom:heating-control-card` to a dashboard; it finds the ro
 - [Example setup](#example-setup)
 - [ESPHome OpenTherm thermostat (`thermostat.yaml`)](#esphome-opentherm-thermostat-thermostatyaml)
 - [Boiler specific notes](#boiler-specific-notes)
+- [Why this exists](#why-this-exists)
 - [Coming in v2.0.0](#coming-in-v200)
 - [Development and test environment](#development-and-test-environment)
 
@@ -209,6 +210,14 @@ Found on an **Atag E325EC** combi boiler (2015) over OpenTherm. Other Atag model
 1. Check what the thermostat *writes* to the boiler. The ESPHome log shows every message (`WRITE_DATA; id: ...`); with `web_server:` enabled it can be followed at `http://<thermostat-ip>/events`.
 2. Disconnect the thermostat, reset the boiler and open a hot water tap. No fault means the boiler is fine and something the thermostat sends is the trigger; remove recently added writes first.
 3. Only if C1 51 also returns with nothing connected is it the fan, its wiring or the control board: a job for the installer.
+
+## Why this exists
+
+I have been using Home Assistant for several years. One of the main reasons is automating my house with little or no cloud dependency. Over the years, some cloud dependencies still crept in quietly: Home Connect, SmartThings and Tado. Then Tado, and later SmartThings, announced changes to their business model that make users pay for connectivity.
+
+When Tado did, more than a year ago, I started building a local heating system I had full control over. The hardware turned out to be the easy part. On the Home Assistant forum I found [a post by Dujith](https://community.home-assistant.io/t/opentherm-multi-room-brainstorming-ideas/337784) with a Home Assistant template holding a basic version of what is now one of the core principles: the two tier system. Kudos to him! I extended the template, added automations and ended up with a pretty good basic system, which heated my house for a full season before it became this integration. Having full control gave me insights and ideas, and opened the door to a much more efficient heating system.
+
+Things really took off when I started using Claude Code for the programming, a skill I lack. That is how development works today: I design, review, monitor and make sure we are heading in the right direction. Claude Code writes the code.
 
 ## Coming in v2.0.0
 
