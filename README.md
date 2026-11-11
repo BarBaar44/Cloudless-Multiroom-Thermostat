@@ -23,11 +23,13 @@ Other integrations put a smart controller on the boiler. This one puts a [virtua
 
 ## Why this exists
 
-*A note from Bb.* Before this, my house ran on Tado. It worked, until I noticed how little of it was mine. My heating depended on a server I didn't control, and features came and went with decisions made by people whose priorities were not my living room. When the internet was down, so was the clever part of my heating. And every question about how it decided things ended at "that's how the service works".
+I have been using Home Assistant for several years. One of the main reasons is automating my house with little or no cloud dependency. Over the years, some cloud dependencies still crept in quietly: Home Connect, SmartThings and Tado. Recently Tado and SmartThings announced changes to their business model that make users pay for connectivity.
 
-A heating system is part of the house. It should keep working when a company changes its plans, its prices or its owner. So I built one that runs in Home Assistant, talks to the boiler through a controller I flash myself, and keeps everything it learns in files on my own machine.
+That is when I started building a local heating system I had full control over. The hardware turned out to be the easy part. On the Home Assistant forum I found [a post by Dujith](https://community.home-assistant.io/t/opentherm-multi-room-brainstorming-ideas/337784) with a Home Assistant template holding a basic version of what is now one of the core principles: the two tier system. Kudos to him! I extended the template, added automations and ended up with a pretty good basic system. Having full control gave me insights and ideas, and opened the door to a much more efficient heating system.
 
-That is the idea behind this integration: no account, no subscription, nothing that can be switched off from a distance. Local control is what it is built for. Where you do use cloud devices, it works with them and tells you plainly what depends on that cloud. Where it is going next: [ROADMAP.md](ROADMAP.md).
+Things really took off when I started using Claude Code for the programming, a skill I lack. That is how development works today: I design, review, monitor and make sure we are heading in the right direction. Claude Code writes the code.
+
+Where it is going next: [ROADMAP.md](ROADMAP.md).
 
 ## Dashboard: Heating Control Card
 
