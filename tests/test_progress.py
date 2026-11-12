@@ -82,7 +82,8 @@ def test_pid_progress_compares_same_flow_limit() -> None:
     change = progress.pid_changes(before + after)["0_8"]
     assert change["before"] == [] and len(change["after"]) == 5
     text = progress.pid_progress(before + after)["text"]
-    assert "0 of 2 outdoor bands confirmed" in text and "0_8 5/5)" in text
+    assert "0 of 2 outdoor bands confirmed" in text
+    assert "0_8 0/5 after a baseline)" in text  # the 5 after the change are the baseline
 
     # Same limit on both sides: compared as before
     before = [{**e, "max_ch": 40.0} for e in before]
@@ -146,3 +147,33 @@ def test_a_later_change_replaces_the_earlier_one_per_band() -> None:
     change = progress.pid_changes(episodes)["0_8"]
     assert [e["params"] for e in change["after"]] == [p3, p3]
     assert [e["params"] for e in change["before"]] == [P1, P2]
+
+
+def _schema_change(after_overshoots: list[float]) -> list[dict]:
+    """A PID change that came with a schema bump: nothing before it is comparable (#96)."""
+    before = [{**_ep(d, P1, 0.5), "schema": 2} for d in range(1, 4)]
+    after = [{**_ep(4 + i, P2, o), "schema": 3} for i, o in enumerate(after_overshoots)]
+    return before + after
+
+
+def test_pid_progress_says_nothing_comparable_before() -> None:
+    text = progress.pid_progress(_schema_change([0.2, 0.15, 0.1]))["text"]
+    assert "0 of 2 outdoor bands confirmed" in text
+    assert "0_8 3/5 for a baseline, nothing comparable before the change" in text
+
+
+def test_pid_progress_baseline_then_steady_confirms() -> None:
+    episodes = _schema_change([0.2] * 5 + [0.25] * 4)
+    assert "0_8 4/5 after a baseline steady" in progress.pid_progress(episodes)["text"]
+    episodes = _schema_change([0.2] * 5 + [0.25] * 5)
+    text = progress.pid_progress(episodes)["text"]
+    assert "1 of 2 outdoor bands confirmed" in text and "0_8 5/5 after a baseline steady" in text
+
+
+def test_pid_progress_baseline_not_steady() -> None:
+    worse_overshoot = _schema_change([0.2] * 5 + [0.4] * 5)
+    assert "0_8 5/5 after a baseline not steady" in progress.pid_progress(worse_overshoot)["text"]
+    slower = _schema_change([0.2] * 10)
+    for e in slower[-5:]:
+        e["rise_min"] = 60  # 20% longer than the baseline's 50
+    assert "0 of 2 outdoor bands confirmed" in progress.pid_progress(slower)["text"]
