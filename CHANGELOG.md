@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fix (#96):** the PID advice progress could never confirm a PID change that came together with a new flow limit or a new record schema. Nothing before such a change can be compared, so the band stayed at "0 of 2 confirmed" for good, and the report didn't say why. Now the first 5 warm-ups after the change in a band become a baseline, and the band is confirmed once the next 5 hold steady against it (at most 0.1 °C more overshoot and 10% longer warm-up on average). The report shows the path: `0_8 3/5 for a baseline, nothing comparable before the change`, then `0_8 2/5 after a baseline steady`. Observe only, nothing changes in the heating. See [When a feature becomes stable](docs/experimental.md#when-a-feature-becomes-stable).
+
 ## 1.8.0
 
 *A note from Bb: until the HACS reviewer pointed it out, I had no idea an integration could simply bring its own card. Two repositories, two release flows and a lot of keeping them in step later, it turns out they could have shared a suitcase all along. Lesson learned, luggage merged.*
