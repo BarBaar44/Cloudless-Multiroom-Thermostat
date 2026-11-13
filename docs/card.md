@@ -1,22 +1,18 @@
 # Heating Control Card
 
-The dashboard card for Cloudless Multiroom Thermostat. It ships with the integration: no separate install.
+**In one sentence:** a dashboard card that shows every room and what the boiler is doing, and lets you set rooms to Heat or Off and change their targets.
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card.png" alt="Heating Control Card" width="412"></p>
 
-It shows every room with its temperature, target, Heat/Off and role, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings.
+## When you want it
 
-### Examples
+On any dashboard where you want to see or change the heating. It ships with the integration: no separate install.
 
-<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-examples.png" alt="Heating Control Card in six states: hot water, cold tap, idle, heating, all rooms, boiler fault" width="720"></p>
+## How to turn it on
 
-With several rooms every room shows its role, and the room the boiler heats for is highlighted. On the right the hallway is below target but does not drive the boiler, so heating stays off:
+Reload the browser once after installing or updating the integration, then add a card of type `custom:heating-control-card` to a dashboard. It finds the rooms by itself. The card also has a visual editor in the dashboard UI.
 
-<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-roles.png" alt="Three Heating Control Cards showing every room role" width="900"></p>
-
-The card writes only to the room climates, the single source of truth per room. Everything downstream (TRVs, the overshoot buffer for the winner, the boiler setpoint) is the integration's job, exactly as with any other change to a room. The rooms tell the card which one is the winner, each room's role and why a room is paused, so no extra sensor is needed.
-
-## How it gets on your dashboard
+### How it gets on your dashboard
 
 The integration serves the card at `/cloudless_multiroom_thermostat/heating-control-card.js` and adds it to your dashboard resources when Home Assistant starts, with the integration version in the URL so your browser loads the new card after an update. Reload the browser once after installing or updating.
 
@@ -29,11 +25,12 @@ lovelace:
       type: module
 ```
 
+
 **Had the separate Heating Control Card installed?** Remove it in HACS or the Marketplace, and remove its entry under **Settings > Dashboards > ⋮ > Resources** if it is still there. Your dashboards keep working: the card type stays `custom:heating-control-card`. The log warns while both copies are installed.
 
 When you remove the last heating system, the integration removes its resource again.
 
-## Use
+## Settings
 
 ```yaml
 type: custom:heating-control-card
@@ -99,6 +96,28 @@ colors:
 | `warning` | pressure icon and warning line | `var(--error-color)` |
 | `room` | Heat buttons, Heating along, Paused, pending targets | `var(--state-climate-heat-color)` |
 | `water` | water flow text and line | `var(--light-blue-color)` |
+
+## What you see on the card
+
+It shows every room with its temperature, target, Heat/Off and [role](rooms.md#what-you-see-on-the-card), highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings.
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-examples.png" alt="Heating Control Card in six states: hot water, cold tap, idle, heating, all rooms, boiler fault" width="720"></p>
+
+With several rooms every room shows its role, and the room the boiler heats for is highlighted. On the right the hallway is below target but does not drive the boiler, so heating stays off:
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-roles.png" alt="Three Heating Control Cards showing every room role" width="900"></p>
+
+The card writes only to the room climates, the single source of truth per room. Everything downstream (TRVs, the overshoot buffer for the winner, the boiler setpoint) is the integration's job, exactly as with any other change to a room. The rooms tell the card which one is the winner, each room's role and why a room is paused, so no extra sensor is needed.
+
+## Common questions
+
+**The card shows "Custom element doesn't exist".** Reload the browser. On a dashboard in YAML mode, add the resource yourself, see [How it gets on your dashboard](#how-it-gets-on-your-dashboard).
+
+**The header says "Thermostat offline".** The boiler or flame entity is unavailable: check the thermostat in ESPHome.
+
+**The boiler state never changes.** The boiler entity defaults are the names of an ESPHome OpenTherm thermostat built from [`thermostat.yaml`](../thermostat.yaml). Point the boiler options at your own entities, or set them to `null`.
+
+**Can I show one room but keep the header for the whole house?** Yes: list that room under `thermostats`. The header still says which room the boiler heats for.
 
 ## Development
 

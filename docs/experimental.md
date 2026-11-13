@@ -1,10 +1,18 @@
 # Learning features (observe only)
 
-Cloudless Multiroom Thermostat has a set of **observe-only** learning features. Earlier versions called them *experimental features*; the option, service and file names still use that word.
+**In one sentence:** optional features that record how your house and boiler behave and say what they would change, without changing the heating.
 
-**Observe only** is the default: they record how the house and the boiler behave and report what they *would* change. Nothing here changes the heating (no setpoints, no PID values, no schedule), with one opt-in exception: **[Apply PID advice automatically](#applying-the-advice-automatically)** writes the PID advice to your Kp and Ki numbers.
+Earlier versions called them *experimental features*; the option, service and file names still use that word.
 
-They are off by default. To switch them on: **Settings > Devices & services > Cloudless Multiroom Thermostat > Configure**, tick **Enable learning features (observe only)**, then fill in the entities on the next page. Every entity is optional; each feature runs as soon as the entities it needs are set. [The entities on the settings page](#the-entities-on-the-settings-page) explains each one and where to get it.
+**Observe only** is the default: nothing here changes the heating (no setpoints, no PID values, no schedule), with one opt-in exception: **[Apply PID advice automatically](#applying-the-advice-automatically)** writes the PID advice to your Kp and Ki numbers.
+
+## When you want it
+
+When you want to know how your house heats: what a degree colder costs in gas, how fast the living room cools at night, and whether the boiler's PID values can do better. Most useful with an OpenTherm controller such as [`thermostat.yaml`](hardware.md#esphome-opentherm-thermostat-thermostatyaml). The heating control itself (rooms, TRVs, winner, heat source) does not depend on them.
+
+## How to turn it on
+
+They are off by default. **Settings > Devices & services > Cloudless Multiroom Thermostat > Configure**, tick **Enable learning features (observe only)**, then fill in the entities on the next page. Every entity is optional; each feature runs as soon as the entities it needs are set. [The entities on the settings page](#the-entities-on-the-settings-page) explains each one and where to get it.
 
 ## What this is for
 
@@ -170,7 +178,7 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 - **What:** two entities in °C: the highest flow temperature the thermostat asks for, and the boiler's hot water setpoint (OpenTherm ID 56). They are only read, never written.
 - **Why:** the maximum flow temperature caps what the PID can ask for. Lower it from 50 to 40 °C and warm-ups get slower with less overshoot, whatever the PID values are. The PID advice limits also follow it (see [the PID values](#pid-kp-pid-ki-pid-kd)). Each warm-up stores the limit (`max_ch`), advice only combines warm-ups with the same limit, and the [progress check](#when-a-feature-becomes-stable) only compares warm-ups before and after a PID change that had the same limit. A warm-up during which the limit changed is skipped (`max_ch_changed`). Each gas day stores both settings in effect at the end of the day (`max_ch`, `dhw_setpoint` in `gas_days.jsonl`), so you can see what a lower hot water setpoint did to the hot-water gas. When either setting changes, the next evening report says so.
 - **Required:** no. Without them nothing changes; older records without `max_ch` are only compared with each other.
-- **Where from:** for the flow limit, the entity that sets the limit: with [`thermostat.yaml`](../thermostat.yaml) the **Central heating max flow temperature** number. The boiler's own maximum (ESPHome OpenTherm `max_t_set`, an OpenTherm Gateway) only fits when the thermostat really stops there; on the ATAG this was built on, the boiler followed requests above its panel maximum. For the hot water setpoint: ESPHome OpenTherm `t_dhw_set`, DIYLess, or an OpenTherm Gateway. **Don't make the hot water setpoint changeable from Home Assistant** just to see it: some boilers stop working when a thermostat sends it (see [Atag E325EC](../README.md#atag-e325ec-set-the-hot-water-temperature-on-the-boiler-never-from-the-thermostat-c1-51)).
+- **Where from:** for the flow limit, the entity that sets the limit: with [`thermostat.yaml`](../thermostat.yaml) the **Central heating max flow temperature** number. The boiler's own maximum (ESPHome OpenTherm `max_t_set`, an OpenTherm Gateway) only fits when the thermostat really stops there; on the ATAG this was built on, the boiler followed requests above its panel maximum. For the hot water setpoint: ESPHome OpenTherm `t_dhw_set`, DIYLess, or an OpenTherm Gateway. **Don't make the hot water setpoint changeable from Home Assistant** just to see it: some boilers stop working when a thermostat sends it (see [Atag E325EC](boiler-notes.md#atag-e325ec-set-the-hot-water-temperature-on-the-boiler-never-from-the-thermostat-c1-51)).
 
 ### PID Kp, PID Ki, PID Kd
 
