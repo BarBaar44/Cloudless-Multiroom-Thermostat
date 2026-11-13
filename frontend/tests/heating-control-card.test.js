@@ -240,12 +240,15 @@ test("pauses keep their texts, rows editable; all away", () => {
     [OFFICE]: room("Office", 17, 20, { role: "paused", paused_reason: "manual" }),
   })));
   assert.strictEqual(row(v, "Hallway").role, "Paused · window open");
+  assert(!row(v, "Hallway").cls("away"));
   assert.strictEqual(row(v, "Office").role, "Paused");
   assert(!row(v, "Hallway").down);
   assert.strictEqual(v.winner, "Heating paused");
   const v2 = read(render(intHass({ [HALL]: room("Hallway", 17, 19, { role: "paused", paused_reason: "away" }) })));
   assert.strictEqual(v2.winner, "Heating off · nobody home");
-  assert.strictEqual(row(v2, "Hallway").role, "Paused · nobody home");
+  const h2 = row(v2, "Hallway");
+  assert.strictEqual(h2.role, "Away");
+  assert(h2.cls("away") && h2.cls("paused"));
 });
 
 test("off room shows Off; only integration climates listed, named after the room", () => {

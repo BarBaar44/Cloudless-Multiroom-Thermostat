@@ -4,6 +4,7 @@
 
 - **Fix (card 1.0.1):** with the central heating enable switch in the card, the card said "Central heating is off by schedule" and lost "nobody home" whenever every room was paused (away, windows) or only rooms that heat along wanted heat. The integration turns that switch off itself in those cases, so it was never a schedule. The note now shows only when the switch is off while a room that drives the heat source is heating, and reads "Central heating switch is off". Room climates get a `drives_heat_source` attribute for this.
 - **Docs:** the help text of the central heating enable switch and the README say when the integration turns it on and off.
+- **Card 1.0.1 (#128):** a room held off because nobody is home now reads a calm grey **Away** instead of an orange "Paused · nobody home". Away is the normal state of an empty house; the header still says "Heating off · nobody home". A window or a manual pause keeps the orange "Paused" text, because those may need you. The room stays on Heat with its target dimmed, and comes back by itself.
 
 ## 1.8.1
 
