@@ -20,7 +20,11 @@ Edit the room (the gear next to it on the integration page) and pick its **Windo
 
 While open, the room is held off: it can't win, and its TRVs get the off temperature. When it closes, the room returns to its own mode and target.
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/room-windows.png" alt="Edit room, step 2: window and door sensors with their open and close delays (here set shorter than the defaults)" width="420"></p>
+
 ## What you see on the card
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-window.png" alt="Heating Control Card with the Master Bedroom paused because its window is open" width="412"></p>
 
 The room shows as **Paused** with the reason window. The room gets a **Window** binary sensor that follows the delays, so it shows what the heating acts on, not the raw sensor.
 

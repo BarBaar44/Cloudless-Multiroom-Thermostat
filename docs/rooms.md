@@ -43,6 +43,8 @@ The gear next to a room edits it, with the same two steps. To put a room in an a
 | Window open delay | 120 s | See [Windows](windows.md) |
 | Window close delay | 60 s | See [Windows](windows.md) |
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/room-sensors.png" alt="Edit room, step 2: room temperature sensor, TRVs and their external temperature inputs" width="420"></p>
+
 ### Presets
 
 Every room has two presets, **Eco** and **Warm**, with the temperatures above. Setting a temperature yourself switches the preset to **Manual**. Mode, preset and target survive a restart.

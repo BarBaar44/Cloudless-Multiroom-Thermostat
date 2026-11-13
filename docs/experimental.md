@@ -14,6 +14,8 @@ When you want to know how your house heats: what a degree colder costs in gas, h
 
 They are off by default. **Settings > Devices & services > Cloudless Multiroom Thermostat > Configure**, tick **Enable learning features (observe only)**, then fill in the entities on the next page. Every entity is optional; each feature runs as soon as the entities it needs are set. [The entities on the settings page](#the-entities-on-the-settings-page) explains each one and where to get it.
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/learning-settings.png" alt="The learning features page with the room to follow, comfort times, outdoor temperature, weather forecast and people at home" width="420"></p>
+
 ## What this is for
 
 The aim is to learn how one room and the boiler behave, so the heating can later tune its own settings to the weather instead of running on fixed values. The room you pick under **Room to follow** (usually the living room: people are there and it leads the heating most often) is profiled:

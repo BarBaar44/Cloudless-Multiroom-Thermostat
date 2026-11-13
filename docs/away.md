@@ -12,6 +12,8 @@ When Home Assistant knows whether someone is home, for example through the Compa
 
 ## Settings
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/options-away.png" alt="Heating system settings: presence entity and what happens when everybody is away" width="420"></p>
+
 | Setting | Default | What it does |
 |---|---|---|
 | Presence | none | Who is home. See below which entities work |
@@ -28,6 +30,8 @@ When Home Assistant knows whether someone is home, for example through the Compa
 When the presence entity is unavailable or unknown, the house counts as occupied, so a lost connection never leaves the house cold.
 
 ## What you see on the card
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-away.png" alt="Heating Control Card while nobody is home: every room paused" width="412"></p>
 
 With **Turn rooms off**, rooms set to heat show as **Paused** with the reason away. With **Lower rooms to eco**, they keep heating, to the lower temperature. Rooms that are Off stay Off either way, and every room returns to its own mode and target when someone is home.
 
