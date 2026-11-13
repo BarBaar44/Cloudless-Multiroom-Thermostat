@@ -35,29 +35,26 @@ v1.8.0 is the last feature release of v1. The integration does what the v1 scope
 
 ### v1.8.x: small updates
 
-Fixes and upkeep only. No new behaviour.
+Fixes and upkeep only. No new behaviour. Milestone [v1.8.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/1).
 
 - Fixes from daily use and issue reports.
 - Keep up with Home Assistant: deprecations, new minimum versions, the pinned test version.
-- README: rewrite the Atag C1 51 section and the help text of **Boiler hot water setpoint** in plain words first (what happens, what to do), codes after.
-- README: put the self-run OpenTherm controller up front as the recommended setup, with DIYLess and `thermostat.yaml` as the two ready paths, and say plainly what you lose with a target only heat source.
-- Card: show the `waiting` role for rooms that only heat along.
 
 ### v1.9.x: preparing v2
 
-Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise.
+Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestone [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2).
 
-- **Learning per room** ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82), step 1): warm-up episodes and PID advice for every room, not only the room to follow. Shows whether rooms really need their own PID values before v2 builds it.
-- **Cooling per room:** the night model learns each room's cooling rate, not only the followed room's. Needed to know how early each room has to start, and later how long the house can coast on cheap heat.
-- **Low-load detection** ([#80](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/80), phase 1): burn and off times per warm-up, an estimate of the boiler's minimum output, and `low_load` warm-ups kept out of the `oscillating` advice so automatic PID changes don't act on them.
-- **Data for the heating curve** ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)): prove the flow really stays at the flow limit, and collect warm-ups at one fixed limit across cold and mild mornings.
-- **Return water and condensing:** record the share of each warm-up with return water below about 55 °C, so a lower flow can be judged on gas, not only on comfort.
-- **Long-term statistics everywhere:** every numeric learning sensor gets a state class and a unit, so trends are kept from now on (statistics start the day this ships).
-- **Boiler identity:** read the OpenTherm manufacturer code where the firmware exposes it, and check which adapters can (ESPHome, DIYLess, OTGW). Groundwork for the boiler profile.
-- **DIYLess on par with `thermostat.yaml`:** check which DIYLess firmware features (flow setpoint, flow limit, room temperature as process value, fail safe) match what the ESPHome config does, document the gaps, and test both in the simulated house.
-- **Cost per warm-up:** the gas prices already on the learning features page feed a cost per warm-up and per day in the records, so v2 starts with a cost history.
-- **Docs you can read:** the README shrinks to what it is, why, install and running in 10 minutes. Everything else moves to one page per feature in `docs/`, all with the same layout (in one sentence, when you want it, how to turn it on, settings, what you see on the card, common questions), plus getting started, hardware, upgrading, troubleshooting and a reference of every entity and service.
-- **Deprecation notices:** the log and README announce what v2 removes (the 21:00 report, the report sensor, the evening notification option, `experimental_report`).
+- **Learning per room** ([#101](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/101)): warm-up episodes and PID advice for every room, not only the room to follow. Shows whether rooms really need their own PID values before v2 builds it.
+- **Cooling per room** ([#102](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/102)): the night model learns each room's cooling rate, not only the followed room's. Needed to know how early each room has to start, and later how long the house can coast on cheap heat.
+- **Low-load detection** ([#103](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/103)): burn and off times per warm-up, an estimate of the boiler's minimum output, and `low_load` warm-ups kept out of the `oscillating` advice so automatic PID changes don't act on them.
+- **Data for the heating curve** ([#104](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/104)): prove the flow really stays at the flow limit, and collect warm-ups at one fixed limit across cold and mild mornings.
+- **Return water and condensing** ([#105](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/105)): record the share of each warm-up with return water below about 55 °C, so a lower flow can be judged on gas, not only on comfort.
+- **Long-term statistics everywhere** ([#106](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/106)): every numeric learning sensor gets a state class and a unit, so trends are kept from now on (statistics start the day this ships).
+- **Boiler identity** ([#107](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/107)): read the OpenTherm manufacturer code where the firmware exposes it, and check which adapters can (ESPHome, DIYLess, OTGW). Groundwork for the boiler profile.
+- **DIYLess on par with `thermostat.yaml`** ([#108](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/108)): check which DIYLess firmware features (flow setpoint, flow limit, room temperature as process value, fail safe) match what the ESPHome config does, document the gaps, and test both in the simulated house.
+- **Cost per warm-up** ([#109](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/109)): the gas prices already on the learning features page feed a cost per warm-up and per day in the records, so v2 starts with a cost history.
+- **Docs you can read** ([#110](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/110)): the README shrinks to what it is, why, install and running in 10 minutes. Everything else moves to one page per feature in `docs/`, all with the same layout (in one sentence, when you want it, how to turn it on, settings, what you see on the card, common questions), plus getting started, hardware, upgrading, troubleshooting and a reference of every entity and service.
+- **Deprecation notices** ([#111](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/111)): the log and README announce what v2 removes (the 21:00 report, the report sensor, the evening notification option, `experimental_report`).
 
 ## v2: the house runs itself
 
@@ -65,15 +62,17 @@ A major version: presets become a list, schedules get their own storage, the car
 
 ### v2.0: schedules, presets, live learning data
 
-- **Schedules in the integration:** a week schedule per room with switch points at 15 minutes that set a preset; copy days and weeks; schedule off per room, suspend all at once. Replaces schedule automations.
-- **Features page:** one options page with a switch per feature (away, windows, sun assist, guest mode, learning features). Off means gone.
-- **Every room gets a schedule:** Add room ends with a schedule step (one block for the whole day, or scheduling off), so a new room is ready straight away. As a safety net, a room without one holds 15 °C and the card says so clearly, with two choices: make a schedule (one block is enough) or turn scheduling off and control the room yourself. Upgrading from v1 is a behaviour change, and the release notes say so first.
-- **Your own presets:** Eco and Warm plus your own (Sleep, for example), a temperature per room or "not used".
-- **Manual changes that expire:** until the next switch point, 1 hour, 3 hours, or until you go back to the schedule. Dropped when everyone leaves, unless you tick "keep when away".
-- **Guest mode:** "someone is home" for visitors Home Assistant doesn't track, so the whole house keeps its schedule.
-- **Sun assist in the integration:** rooms that get sun hold a lower temperature on a sunny morning (a window you set, 05:00 to 12:00 by default) and warm up only if a light sensor still reads dark at the check time.
-- **Live learning data:** sensors per feature that update when their value changes, an `event` entity for automatic changes and other events, and history on request for the card. The 21:00 report goes.
-- **Heating Control Card:** schedule line and today strip per room, a whole house timeline, a week view, editors for schedules, presets and overrides, and a learning view.
+Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/3).
+
+- **Schedules in the integration** ([#112](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/112), [#114](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/114)): a week schedule per room with switch points at 15 minutes that set a preset; copy days and weeks; schedule off per room, suspend all at once. Replaces schedule automations.
+- **Features page** ([#120](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/120)): one options page with a switch per feature (away, windows, sun assist, guest mode, learning features). Off means gone.
+- **Every room gets a schedule** ([#115](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/115)): Add room ends with a schedule step (one block for the whole day, or scheduling off), so a new room is ready straight away. As a safety net, a room without one holds 15 °C and the card says so clearly, with two choices: make a schedule (one block is enough) or turn scheduling off and control the room yourself. Upgrading from v1 is a behaviour change, and the release notes say so first.
+- **Your own presets** ([#113](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/113)): Eco and Warm plus your own (Sleep, for example), a temperature per room or "not used".
+- **Manual changes that expire** ([#116](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/116)): until the next switch point, 1 hour, 3 hours, or until you go back to the schedule. Dropped when everyone leaves, unless you tick "keep when away".
+- **Guest mode** ([#117](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/117)): "someone is home" for visitors Home Assistant doesn't track, so the whole house keeps its schedule.
+- **Sun assist in the integration** ([#118](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/118)): rooms that get sun hold a lower temperature on a sunny morning (a window you set, 05:00 to 12:00 by default) and warm up only if a light sensor still reads dark at the check time.
+- **Live learning data** ([#119](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/119)): sensors per feature that update when their value changes, an `event` entity for automatic changes and other events, and history on request for the card. The 21:00 report goes.
+- **Heating Control Card** ([#121](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/121)): schedule line and today strip per room, a whole house timeline, a week view, editors for schedules, presets and overrides, and a learning view.
 
 ### v2.1: warm when you need it
 
