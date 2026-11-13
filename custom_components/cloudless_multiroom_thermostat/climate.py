@@ -170,6 +170,7 @@ class RoomClimate(ClimateEntity, RestoreEntity):
             "window_open": room.window_open,
             "effective_target": ctl.effective_target(room),
             "is_winner": ctl.winner.room_id == room.room_id,
+            "drives_heat_source": room.drives,
         }
 
     # -------------------------------------------------------------- commands
