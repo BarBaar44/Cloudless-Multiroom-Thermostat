@@ -210,6 +210,8 @@ async def test_room_that_does_not_drive_only_heats_along(hass: HomeAssistant, se
     hallway = hass.states.get("climate.hallway")
     assert hallway.attributes["role"] == "waiting"
     assert hallway.attributes["hvac_action"] == "idle"
+    assert hallway.attributes["drives_heat_source"] is False
+    assert hass.states.get("climate.living").attributes["drives_heat_source"] is True
 
     # Living drives the boiler; the hallway heats along without the buffer
     hass.states.async_set("climate.trv_hallway", "heat", {**TRV_ATTRS, "temperature": 18})
