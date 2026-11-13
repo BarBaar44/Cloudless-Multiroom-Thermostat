@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fix (card 1.0.1):** with the central heating enable switch in the card, the card said "Central heating is off by schedule" and lost "nobody home" whenever every room was paused (away, windows) or only rooms that heat along wanted heat. The integration turns that switch off itself in those cases, so it was never a schedule. The note now shows only when the switch is off while a room that drives the heat source is heating, and reads "Central heating switch is off". Room climates get a `drives_heat_source` attribute for this.
+- **Docs:** the help text of the central heating enable switch and the README say when the integration turns it on and off.
+
 ## 1.8.1
 
 - **Fix (#96):** the PID advice progress could never confirm a PID change that came together with a new flow limit or a new record schema. Nothing before such a change can be compared, so the band stayed at "0 of 2 confirmed" for good, and the report didn't say why. Now the first 5 warm-ups after the change in a band become a baseline, and the band is confirmed once the next 5 hold steady against it (at most 0.1 °C more overshoot and 10% longer warm-up on average). The report shows the path: `0_8 3/5 for a baseline, nothing comparable before the change`, then `0_8 2/5 after a baseline steady`. Observe only, nothing changes in the heating. See [When a feature becomes stable](docs/experimental.md#when-a-feature-becomes-stable).
