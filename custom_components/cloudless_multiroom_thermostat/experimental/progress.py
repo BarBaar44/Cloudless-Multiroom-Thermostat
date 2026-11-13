@@ -22,6 +22,11 @@ NIGHT_MAX_ERROR = 0.6      # degC, worst night
 PID_BANDS = 2              # outdoor bands with a confirmed change
 PID_EPISODES_AFTER = 5     # valid episodes in that band after the change
 PID_COMPARE_BEFORE = 5     # episodes before the change to compare with
+# Nothing comparable before a change (schema or flow limit changed with it):
+# the first PID_COMPARE_BEFORE episodes after it are the baseline, and the
+# PID_EPISODES_AFTER that follow must hold steady against it.
+PID_STEADY_OVERSHOOT = 0.1  # degC more average overshoot than the baseline, at most
+PID_STEADY_RISE = 0.1       # fraction longer average warm-up than the baseline, at most
 
 
 def gas_progress(summary):
@@ -81,6 +86,22 @@ def _better(before, after):
     return False
 
 
+def _steady(baseline, after):
+    """Not worse than the baseline: overshoot and warm-up time within a small margin."""
+    compared = False
+    for key, worse in (
+        ("overshoot", lambda b, a: a > b + PID_STEADY_OVERSHOOT),
+        ("rise_min", lambda b, a: a > b * (1 + PID_STEADY_RISE)),
+    ):
+        b, a = _mean([e.get(key) for e in baseline]), _mean([e.get(key) for e in after])
+        if b is None or a is None:
+            continue
+        if worse(b, a):
+            return False
+        compared = True
+    return compared
+
+
 def pid_changes(episodes, room_id=None, room_name=None):
     """
     PID values changed (by hand or by autotune) between valid episodes of the followed room
@@ -131,18 +152,37 @@ def pid_changes(episodes, room_id=None, room_name=None):
     return by_band
 
 
+def _band_progress(band, change):
+    """(confirmed, text) for one band's last change."""
+    before, after = change["before"], change["after"]
+    if before:
+        n = len(after)
+        better = n > 0 and _better(before, after)
+        text = "{} {}/{}{}".format(
+            band, min(n, PID_EPISODES_AFTER), PID_EPISODES_AFTER,
+            " better" if better else (" not better" if n else ""),
+        )
+        return n >= PID_EPISODES_AFTER and better, text
+    # Nothing comparable before the change: judge against a baseline taken after it
+    baseline, rest = after[:PID_COMPARE_BEFORE], after[PID_COMPARE_BEFORE:]
+    if len(baseline) < PID_COMPARE_BEFORE:
+        return False, f"{band} {len(baseline)}/{PID_COMPARE_BEFORE} for a baseline, nothing comparable before the change"
+    n = len(rest)
+    steady = n > 0 and _steady(baseline, rest)
+    text = "{} {}/{} after a baseline{}".format(
+        band, min(n, PID_EPISODES_AFTER), PID_EPISODES_AFTER,
+        " steady" if steady else (" not steady" if n else ""),
+    )
+    return n >= PID_EPISODES_AFTER and steady, text
+
+
 def pid_progress(episodes, room_id=None, room_name=None):
     changes = pid_changes(episodes, room_id, room_name)
     good, parts = 0, []
     for band, c in sorted(changes.items()):
-        n = len(c["after"])
-        better = n > 0 and c["before"] and _better(c["before"], c["after"])
-        if n >= PID_EPISODES_AFTER and better:
-            good += 1
-        parts.append("{} {}/{}{}".format(
-            band, min(n, PID_EPISODES_AFTER), PID_EPISODES_AFTER,
-            " better" if better else (" not better" if n and c["before"] else ""),
-        ))
+        confirmed, part = _band_progress(band, c)
+        good += confirmed
+        parts.append(part)
     text = f"PID advice: {min(good, PID_BANDS)} of {PID_BANDS} outdoor bands confirmed"
     if parts:
         text += " (episodes after a change: {})".format(", ".join(parts))
