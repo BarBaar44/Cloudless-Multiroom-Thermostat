@@ -187,6 +187,7 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .row.win .rrole { color: var(--hc-fire); font-weight: 600; }
   .row.along .rrole { color: var(--hc-heat); }
   .row.paused .rrole { color: var(--hc-heat); }
+  .row.away .rrole { color: var(--secondary-text-color); }
   /* Waiting: below target, but nothing heats it; calmer than Calls for heat. */
   .row.waiting .rrole { opacity: .7; }
   /* Room temperature is the main reading: larger and bolder than the target. */
@@ -629,7 +630,9 @@ class HeatingControlCard extends HTMLElement {
     let role, roleIcon, along = false;
     if (unavailable) { role = "Unavailable"; roleIcon = "mdi:help-circle-outline"; }
     else if (paused && reason === "window") { role = "Paused · window open"; roleIcon = "mdi:window-open-variant"; }
-    else if (paused && reason === "away") { role = "Paused · nobody home"; roleIcon = "mdi:home-export-outline"; }
+    // Away is the normal state of an empty house, not something to act on:
+    // a calm "Away", the header says "nobody home" for the whole house.
+    else if (paused && reason === "away") { role = "Away"; roleIcon = "mdi:home-export-outline"; }
     else if (paused) { role = "Paused"; roleIcon = "mdi:pause"; }
     else if (isOff) { role = "Off"; roleIcon = "mdi:power"; }
     else if (isWinner && ctx.heating) { role = "Heating"; roleIcon = "mdi:fire"; }
@@ -667,6 +670,7 @@ class HeatingControlCard extends HTMLElement {
     cls.toggle("heat", !isOff && !unavailable);
     cls.toggle("off", isOff);
     cls.toggle("paused", paused);
+    cls.toggle("away", paused && reason === "away");
     cls.toggle("pending", r.pending !== null);
     cls.toggle("unavailable", unavailable);
   }

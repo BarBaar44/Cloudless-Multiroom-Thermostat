@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Card:** a room held off because nobody is home now reads a calm grey **Away** instead of an orange "Paused · nobody home". Away is the normal state of an empty house; the header still says "Heating off · nobody home". A window or a manual pause keeps the orange "Paused" text, because those may need you. The room stays on Heat with its target dimmed, and comes back by itself.
+
 ## 1.8.1
 
 - **Fix (#96):** the PID advice progress could never confirm a PID change that came together with a new flow limit or a new record schema. Nothing before such a change can be compared, so the band stayed at "0 of 2 confirmed" for good, and the report didn't say why. Now the first 5 warm-ups after the change in a band become a baseline, and the band is confirmed once the next 5 hold steady against it (at most 0.1 °C more overshoot and 10% longer warm-up on average). The report shows the path: `0_8 3/5 for a baseline, nothing comparable before the change`, then `0_8 2/5 after a baseline steady`. Observe only, nothing changes in the heating. See [When a feature becomes stable](docs/experimental.md#when-a-feature-becomes-stable).
