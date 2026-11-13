@@ -70,6 +70,8 @@ function read(c) {
     winner: c._el.winner.textContent,
     sub: c._el.sub.textContent,
     icon: c._el.flame.getAttribute("icon"),
+    sched: c._el.sched.classList.contains("show"),
+    schedText: c._el.sched.textContent.trim(),
     cls: (k) => cls.contains(k),
     rows: [...sr.querySelectorAll(".row")].map((r) => ({
       name: r.querySelector(".rname").textContent,
@@ -188,10 +190,41 @@ test("unknown role value falls back to the card's own logic", () => {
   assert.strictEqual(row(v, "Hallway").role, "Reached");
 });
 
-test("waiting with central heating off by schedule: Heating off, no waiting note", () => {
-  const v = read(render(intHass({ [HALL]: room("Hallway", 17.5, 19, { role: "waiting" }) }, "idle", { ch: false })));
+test("waiting room with the central heating switch off (the integration did that): same as without it", () => {
+  const v = read(render(intHass({ [HALL]: room("Hallway", 17.5, 19, { role: "waiting", drives_heat_source: false }) }, "idle", { ch: false })));
   assert.strictEqual(v.winner, "Heating off");
-  assert.strictEqual(v.sub, "Boiler idle");
+  assert.strictEqual(v.sub, "Boiler idle · Hallway waiting");
+  assert(!v.sched);
+});
+
+test("every room paused for away with the switch off: nobody home, no switch note", () => {
+  const v = read(render(intHass({
+    [HALL]: room("Hallway", 17, 19, { role: "paused", paused_reason: "away" }),
+    [OFFICE]: room("Office", 18, 20, { role: "paused", paused_reason: "away" }),
+  }, "idle", { ch: false })));
+  assert.strictEqual(v.winner, "Heating off · nobody home");
+  assert(!v.sched);
+});
+
+test("window and manual pause with the switch off: Heating paused, no switch note", () => {
+  const v = read(render(intHass({
+    [HALL]: room("Hallway", 17, 19, { role: "paused", paused_reason: "window" }),
+    [OFFICE]: room("Office", 17, 20, { role: "paused", paused_reason: "manual" }),
+  }, "idle", { ch: false })));
+  assert.strictEqual(v.winner, "Heating paused");
+  assert(!v.sched);
+});
+
+test("a heating room that drives, but the switch is off: Heating off with the switch note", () => {
+  const v = read(render(intHass({ [OFFICE]: room("Office", 18, 20, { role: "calls_for_heat", drives_heat_source: true }) }, "idle", { ch: false })));
+  assert.strictEqual(v.winner, "Heating off");
+  assert(v.sched);
+  assert.strictEqual(v.schedText, "Central heating switch is off");
+});
+
+test("a room that only heats along and has reached target, switch off: no switch note", () => {
+  const v = read(render(intHass({ [HALL]: room("Hallway", 19.5, 19, { role: "reached", drives_heat_source: false }) }, "idle", { ch: false })));
+  assert(!v.sched);
 });
 
 test("waiting room during hot water: header Hot water", () => {
@@ -207,12 +240,15 @@ test("pauses keep their texts, rows editable; all away", () => {
     [OFFICE]: room("Office", 17, 20, { role: "paused", paused_reason: "manual" }),
   })));
   assert.strictEqual(row(v, "Hallway").role, "Paused · window open");
+  assert(!row(v, "Hallway").cls("away"));
   assert.strictEqual(row(v, "Office").role, "Paused");
   assert(!row(v, "Hallway").down);
   assert.strictEqual(v.winner, "Heating paused");
   const v2 = read(render(intHass({ [HALL]: room("Hallway", 17, 19, { role: "paused", paused_reason: "away" }) })));
   assert.strictEqual(v2.winner, "Heating off · nobody home");
-  assert.strictEqual(row(v2, "Hallway").role, "Paused · nobody home");
+  const h2 = row(v2, "Hallway");
+  assert.strictEqual(h2.role, "Away");
+  assert(h2.cls("away") && h2.cls("paused"));
 });
 
 test("off room shows Off; only integration climates listed, named after the room", () => {

@@ -50,7 +50,7 @@
  * Originally https://github.com/BarBaar44/Heating-Control-Card  (MIT)
  */
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 
 const INTEGRATION = "cloudless_multiroom_thermostat";
 // Room roles the integration sets (attribute `role`, thermostat v1.1.0+).
@@ -187,6 +187,7 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .row.win .rrole { color: var(--hc-fire); font-weight: 600; }
   .row.along .rrole { color: var(--hc-heat); }
   .row.paused .rrole { color: var(--hc-heat); }
+  .row.away .rrole { color: var(--secondary-text-color); }
   /* Waiting: below target, but nothing heats it; calmer than Calls for heat. */
   .row.waiting .rrole { opacity: .7; }
   /* Room temperature is the main reading: larger and bolder than the target. */
@@ -313,7 +314,7 @@ class HeatingControlCard extends HTMLElement {
           </div>
           <button class="mode" id="hmode"><ha-icon id="hmicon" icon="mdi:radiator-off"></ha-icon></button>
         </div>
-        <div class="note" id="sched"><ha-icon icon="mdi:calendar-clock"></ha-icon><span>Central heating is off by schedule</span></div>
+        <div class="note" id="sched"><ha-icon icon="mdi:calendar-clock"></ha-icon><span>Central heating switch is off</span></div>
         <div class="note" id="warn"><ha-icon icon="mdi:alert"></ha-icon><span id="warnText"></span></div>
         <div class="rooms" id="rooms"></div>
       </ha-card>`;
@@ -459,6 +460,15 @@ class HeatingControlCard extends HTMLElement {
     // Every room in heat held off by the integration (window, away, manual)
     const allPaused = anyHeat && inHeat.every((r) => this._pauseReason(r));
     const awayAll = allPaused && inHeat.every((r) => this._pauseReason(r) === "away");
+    // The integration turns the central heating enable switch off itself while
+    // no room that drives the heat source is heating (all paused, or only rooms
+    // that heat along). Only a switch that is off while such a room is heating
+    // was turned off by something else, so only then say so.
+    const drives = (r) => {
+      const s = this._state(r.entity);
+      return !(s && (s.attributes.drives_heat_source === false || s.attributes.role === "waiting"));
+    };
+    const chOff = chDisabled && inHeat.some((r) => !this._pauseReason(r) && drives(r));
     // Integration roles: a calling room asks for the heat source, a waiting
     // room does not (it only heats along), so only the first counts as demand.
     const calling = inHeat.filter((r) => this._roleOf(r) === "calls_for_heat");
@@ -481,13 +491,13 @@ class HeatingControlCard extends HTMLElement {
     } else {
       // No winner: either nothing is set to heat, or every room is at target.
       e.winner.textContent = dhw ? "Hot water"
-        : !anyHeat || chDisabled ? "Heating off"
+        : !anyHeat || chOff ? "Heating off"
         : awayAll ? "Heating off · nobody home"
         : allPaused ? "Heating paused"
         : calling.length ? roomsText(calling, "calls for heat", "call for heat")
         : waiting.length ? "Heating off"
         : "All rooms at target";
-      const note = !chDisabled && !calling.length && waiting.length ? roomsText(waiting, "waiting", "waiting") : "";
+      const note = !chOff && !calling.length && waiting.length ? roomsText(waiting, "waiting", "waiting") : "";
       e.sub.textContent = [activity.charAt(0).toUpperCase() + activity.slice(1), note].filter(Boolean).join(" · ");
     }
     if (fault) {
@@ -521,7 +531,7 @@ class HeatingControlCard extends HTMLElement {
     const coldIcon = icon === "mdi:water-pump";
     this._iconTarget = offline ? c.boiler : fault ? c.fault : dhw ? c.hot_water : coldIcon ? c.water_flow : c.flame && flameState ? c.flame : c.boiler;
 
-    e.sched.classList.toggle("show", chDisabled && anyHeat);
+    e.sched.classList.toggle("show", chOff);
     e.warn.classList.toggle("show", lowP || highP);
     e.warnText.textContent = lowP
       ? `Low CH pressure: ${fmt(p)} bar (min ${fmt(c.pressure_min)})`
@@ -629,7 +639,9 @@ class HeatingControlCard extends HTMLElement {
     let role, roleIcon, along = false;
     if (unavailable) { role = "Unavailable"; roleIcon = "mdi:help-circle-outline"; }
     else if (paused && reason === "window") { role = "Paused · window open"; roleIcon = "mdi:window-open-variant"; }
-    else if (paused && reason === "away") { role = "Paused · nobody home"; roleIcon = "mdi:home-export-outline"; }
+    // Away is the normal state of an empty house, not something to act on:
+    // a calm "Away", the header says "nobody home" for the whole house.
+    else if (paused && reason === "away") { role = "Away"; roleIcon = "mdi:home-export-outline"; }
     else if (paused) { role = "Paused"; roleIcon = "mdi:pause"; }
     else if (isOff) { role = "Off"; roleIcon = "mdi:power"; }
     else if (isWinner && ctx.heating) { role = "Heating"; roleIcon = "mdi:fire"; }
@@ -667,6 +679,7 @@ class HeatingControlCard extends HTMLElement {
     cls.toggle("heat", !isOff && !unavailable);
     cls.toggle("off", isOff);
     cls.toggle("paused", paused);
+    cls.toggle("away", paused && reason === "away");
     cls.toggle("pending", r.pending !== null);
     cls.toggle("unavailable", unavailable);
   }

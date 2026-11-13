@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Fix (card 1.0.1):** with the central heating enable switch in the card, the card said "Central heating is off by schedule" and lost "nobody home" whenever every room was paused (away, windows) or only rooms that heat along wanted heat. The integration turns that switch off itself in those cases, so it was never a schedule. The note now shows only when the switch is off while a room that drives the heat source is heating, and reads "Central heating switch is off". Room climates get a `drives_heat_source` attribute for this.
+- **Docs:** the help text of the central heating enable switch and the README say when the integration turns it on and off.
+- **Card 1.0.1 (#128):** a room held off because nobody is home now reads a calm grey **Away** instead of an orange "Paused · nobody home". Away is the normal state of an empty house; the header still says "Heating off · nobody home". A window or a manual pause keeps the orange "Paused" text, because those may need you. The room stays on Heat with its target dimmed, and comes back by itself.
 - **Docs restructure (#110):** the README is down to what it is, running in 10 minutes and why it exists. Everything else has its own page in [`docs/`](docs/README.md): getting started, how it works, rooms, away, windows, card, learning features, hardware, boiler notes, upgrading, troubleshooting and a reference of every entity, attribute and service. Feature pages share one layout. The help text of the heat source field points to How it works instead of a README section.
 - **Roadmap:** [ROADMAP.md](ROADMAP.md) replaces the README section *Coming in v2.0.0*.
 
