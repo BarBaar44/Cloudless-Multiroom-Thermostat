@@ -31,9 +31,9 @@ When the presence entity is unavailable or unknown, the house counts as occupied
 
 ## What you see on the card
 
-<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-away.png" alt="Heating Control Card while nobody is home: every room paused" width="412"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-away.png" alt="Heating Control Card while nobody is home: every room Away" width="412"></p>
 
-With **Turn rooms off**, rooms set to heat show as **Paused** with the reason away. With **Lower rooms to eco**, they keep heating, to the lower temperature. Rooms that are Off stay Off either way, and every room returns to its own mode and target when someone is home.
+With **Turn rooms off**, rooms set to heat show **Away**, and the header says **Heating off · nobody home**. With **Lower rooms to eco**, they keep heating, to the lower temperature. Rooms that are Off stay Off either way, and every room returns to its own mode and target when someone is home.
 
 The heating system's **Winning room** sensor has a `present` attribute; each room's **Paused** sensor says why it is paused.
 
