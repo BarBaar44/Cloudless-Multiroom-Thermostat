@@ -61,7 +61,7 @@ The Climate and OTGW types only send a *target*. For real multi-room control the
 | Setting | Default | What it does |
 |---|---|---|
 | Heat source | | The relay, thermostat or OTGW climate entity |
-| Central heating enable switch | none | Optional. On while any room is set to heat, off when no room is |
+| Central heating enable switch | none | Optional. On while a room that drives the heat source is heating; off while none is (rooms off or paused, or only rooms that heat along) |
 | Hysteresis | 0.3 °C | On/off switch only: start when a room is this far below its target, stop when it reaches it |
 
 **3. Settings.**
