@@ -19,7 +19,8 @@ NIGHT_MEAN_ERROR = 0.3     # degC, average absolute error
 NIGHT_MAX_ERROR = 0.6      # degC, worst night
 
 # Warm-up episodes and PID advice
-PID_BANDS = 2              # outdoor bands with a confirmed change
+PID_RECENT = 30            # warm-ups looked at for the bands that occur
+PID_BAND_MIN = 5           # warm-ups among them for a band to need confirming
 PID_EPISODES_AFTER = 5     # valid episodes in that band after the change
 PID_COMPARE_BEFORE = 5     # episodes before the change to compare with
 # Nothing comparable before a change (schema or flow limit changed with it):
@@ -259,15 +260,31 @@ def _band_progress(band, change):
     return n >= PID_EPISODES_AFTER and steady, text
 
 
+def bands_seen(episodes, room_id=None, room_name=None):
+    """
+    Outdoor bands with at least PID_BAND_MIN of the last PID_RECENT warm-ups of
+    the followed room: the weather the house actually gets. A band that doesn't
+    occur isn't waited for (#132); one that comes back with the season needs
+    confirming again.
+    """
+    recent = [e for e in episodes if tuner_core.for_advice(e, room_id, room_name)][-PID_RECENT:]
+    counts = {}
+    for e in recent:
+        if e.get("outdoor_band") not in (None, "unknown"):
+            counts[e["outdoor_band"]] = counts.get(e["outdoor_band"], 0) + 1
+    return sorted(band for band, n in counts.items() if n >= PID_BAND_MIN)
+
+
 def pid_progress(episodes, room_id=None, room_name=None, optimum=None):
     """
-    Bands confirmed by a change that helped, or by probing (optimum: {band: date}
-    from autotune.optimum_bands): neither a step up nor a step down was better,
-    so the values there were already right. A band counts once.
+    Confirmed in every outdoor band that occurs (bands_seen), by a change that
+    helped or by probing (optimum: {band: date} from autotune.optimum_bands):
+    neither a step up nor a step down was better, so the values there were
+    already right. A band counts once.
     """
     changes = pid_changes(episodes, room_id, room_name)
     optimum = optimum or {}
-    head = f"PID advice: {{}} of {PID_BANDS} outdoor bands confirmed"
+    seen = bands_seen(episodes, room_id, room_name)
     confirmed_bands, parts = set(), []
     labels = {band: _change_label(c) for band, c in changes.items()}
     shared = len(set(labels.values())) == 1
@@ -282,15 +299,22 @@ def pid_progress(episodes, room_id=None, room_name=None, optimum=None):
         if band not in confirmed_bands:
             confirmed_bands.add(band)
             parts.append(f"{band}: confirmed by probing on {day} (no better value up or down)")
-    good = len(confirmed_bands)
-    text = head.format(min(good, PID_BANDS))
+    if seen:
+        good = len(confirmed_bands & set(seen))
+        text = "PID advice: {} of {} outdoor bands confirmed ({} seen in the last {} warm-ups)".format(
+            good, len(seen), ", ".join(seen), PID_RECENT,
+        )
+    else:
+        good = 0
+        text = f"PID advice: no outdoor band with {PID_BAND_MIN} of the last {PID_RECENT} warm-ups yet"
+    done = bool(seen) and good == len(seen)
     if not parts:
-        return {"done": False, "text": text + " (no change applied yet). Check gas per degree-day did not get worse"}
+        return {"done": False, "text": text + ", no change applied yet. Check gas per degree-day did not get worse"}
     if changes and shared:
-        text += " for " + next(iter(labels.values()))
+        text += ", for " + next(iter(labels.values()))
     text += ". " + "; ".join(parts)
     text += ". Check gas per degree-day did not get worse"
-    return {"done": good >= PID_BANDS, "text": text}
+    return {"done": done, "text": text}
 
 
 FEATURES = (("gas", "Gas per degree-day"), ("night", "Night model"), ("pid", "PID advice"))

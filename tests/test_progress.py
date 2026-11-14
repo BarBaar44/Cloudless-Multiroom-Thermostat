@@ -52,17 +52,17 @@ def test_night_progress_done() -> None:
 
 def test_pid_progress_needs_change_by_hand() -> None:
     p = progress.pid_progress([_ep(1, P1, 0.6), _ep(2, P1, 0.5)])
-    assert "0 of 2" in p["text"] and "no change applied yet" in p["text"]
+    assert "no outdoor band with 5 of the last 30 warm-ups yet" in p["text"] and "no change applied yet" in p["text"]
 
 
 def test_pid_progress_change_improves() -> None:
     episodes = [_ep(1, P1, 0.6), _ep(2, P1, 0.5)] + [_ep(3 + i, P2, 0.2) for i in range(5)]
     episodes.append(_ep(9, P2, 0.9, room_class="other"))  # other rooms do not count
     p = progress.pid_progress(episodes)
-    assert "1 of 2 outdoor bands confirmed" in p["text"]
+    assert "1 of 1 outdoor bands confirmed (0_8 seen in the last 30 warm-ups)" in p["text"]
     assert "for the change of 2026-11-03 (Ki 0.002 → 0.0018)" in p["text"]
     assert "0_8: 5 of 5 warm-ups after the change, better." in p["text"]
-    assert not p["done"]
+    assert p["done"], "0_8 is the only band that occurs"
 
 
 def test_pid_progress_change_not_better() -> None:
@@ -83,7 +83,7 @@ def test_pid_progress_compares_same_flow_limit() -> None:
     change = progress.pid_changes(before + after)["0_8"]
     assert change["before"] == [] and len(change["after"]) == 5
     text = progress.pid_progress(before + after)["text"]
-    assert "0 of 2 outdoor bands confirmed" in text
+    assert "0 of 1 outdoor bands confirmed" in text
     assert "0_8: 0 of 5 warm-ups after a baseline of 5 (5 more warm-ups needed)" in text  # the 5 after the change are the baseline
 
     # Same limit on both sides: compared as before
@@ -159,7 +159,7 @@ def _schema_change(after_overshoots: list[float]) -> list[dict]:
 
 def test_pid_progress_says_nothing_comparable_before() -> None:
     text = progress.pid_progress(_schema_change([0.2, 0.15, 0.1]))["text"]
-    assert "0 of 2 outdoor bands confirmed" in text
+    assert "0 of 1 outdoor bands confirmed" in text
     assert "0_8: 3 of 5 warm-ups for a baseline (7 more warm-ups needed; nothing to compare with: the record format changed with it)" in text
 
 
@@ -168,7 +168,7 @@ def test_pid_progress_baseline_then_steady_confirms() -> None:
     assert "0_8: 4 of 5 warm-ups after a baseline of 5, steady so far (1 more warm-up needed)" in progress.pid_progress(episodes)["text"]
     episodes = _schema_change([0.2] * 5 + [0.25] * 5)
     text = progress.pid_progress(episodes)["text"]
-    assert "1 of 2 outdoor bands confirmed" in text and "0_8: 5 of 5 warm-ups after a baseline of 5, steady." in text
+    assert "1 of 1 outdoor bands confirmed" in text and "0_8: 5 of 5 warm-ups after a baseline of 5, steady." in text
 
 
 def test_pid_progress_baseline_not_steady() -> None:
@@ -177,7 +177,7 @@ def test_pid_progress_baseline_not_steady() -> None:
     slower = _schema_change([0.2] * 10)
     for e in slower[-5:]:
         e["rise_min"] = 60  # 20% longer than the baseline's 50
-    assert "0 of 2 outdoor bands confirmed" in progress.pid_progress(slower)["text"]
+    assert "0 of 1 outdoor bands confirmed" in progress.pid_progress(slower)["text"]
 
 
 def _rescale(day: int, overshoot: float, schema: int, max_ch: float | None, params: dict, band: str = "0_8") -> dict:
@@ -236,8 +236,25 @@ def test_bands_on_different_changes_name_their_own() -> None:
 
 
 def test_a_band_confirmed_by_probing_counts() -> None:
-    p = progress.pid_progress([], optimum={"0_8": "2026-11-20"})
-    assert p["text"].startswith("PID advice: 1 of 2 outdoor bands confirmed. 0_8: confirmed by probing on 2026-11-20")
-    assert not p["done"]
-    p = progress.pid_progress([], optimum={"0_8": "2026-11-20", "below_0": "2026-12-03"})
+    episodes = [_ep(d, P1, 0.2) for d in range(1, 6)]
+    p = progress.pid_progress(episodes, optimum={"0_8": "2026-11-20"})
+    assert p["text"].startswith("PID advice: 1 of 1 outdoor bands confirmed (0_8 seen in the last 30 warm-ups). 0_8: confirmed by probing on 2026-11-20")
+    assert p["done"]
+    episodes += [_ep(d, P1, 0.2, band="below_0") for d in range(6, 11)]
+    p = progress.pid_progress(episodes, optimum={"0_8": "2026-11-20"})
+    assert "1 of 2 outdoor bands confirmed (0_8, below_0 seen" in p["text"] and not p["done"]
+    p = progress.pid_progress(episodes, optimum={"0_8": "2026-11-20", "below_0": "2026-12-03"})
     assert p["done"] and "2 of 2" in p["text"]
+
+
+def test_only_bands_that_occur_need_confirming() -> None:
+    """The house adjusts to the weather it gets; it doesn't wait for other weather (#132)."""
+    old = [_ep(d, P1, 0.2, band="8_15") for d in range(1, 11)]
+    recent = [_ep(11 + i % 18, P1, 0.2) for i in range(30)]
+    assert progress.bands_seen(old + recent) == ["0_8"], "8_15 is no longer among the last 30"
+    few = [_ep(d, P1, 0.2, band="below_0") for d in range(1, 5)]
+    assert progress.bands_seen(recent[:26] + few) == ["0_8"], "4 warm-ups are not enough for a band"
+    unknown = [{**_ep(d, P1, 0.2), "outdoor_band": "unknown"} for d in range(1, 8)]
+    assert progress.bands_seen(unknown) == []
+    p = progress.pid_progress(old + recent, optimum={"0_8": "2026-11-20"})
+    assert p["done"], "a band that left with the season isn't waited for"
