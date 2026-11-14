@@ -918,6 +918,21 @@ def test_recommend_follows_the_room_followed_now() -> None:
     assert tuner_core.recommend(old, params, room_id="b", room_name="b")["param"] == "ki"
 
 
+def test_advice_per_room() -> None:
+    """#101: every room with enough warm-ups gets its own advice, observe only."""
+    params = {"kp": 0.7, "ki": 0.003, "kd": 0.0}
+    history = [_led_by("b", "a"), _led_by("b", "a"), _led_by("a", "a"), _led_by("c", "a")]
+    rooms = [("a", "A"), ("b", "B"), ("c", "C")]
+    out = tuner_core.per_room(history, params, rooms)
+    # a and c have one warm-up each: not enough, left out
+    assert [r["room_id"] for r in out] == ["b"]
+    assert out[0]["room"] == "B" and out[0]["warm_ups"] == 2 and out[0]["rec"]["param"] == "ki"
+    # A room with enough warm-ups that agree on nothing still shows up, without advice
+    calm = {**_led_by("a", "a"), "overshoot": 0.1}
+    out = tuner_core.per_room([*history, calm], params, rooms)
+    assert {r["room_id"]: r["rec"] for r in out}["a"] is None
+
+
 def test_for_room_keeps_nights_without_a_room() -> None:
     nights = [{"room_id": "a"}, {"room_id": "b"}, {}]
     assert night_core.for_room(nights, "a") == [{"room_id": "a"}, {}]
@@ -990,6 +1005,13 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
 
     entry = await _setup(hass, EXP)
     runner = entry.runtime_data.experimental
+    office = next(sid for sid, sub in entry.subentries.items() if sub.title == "Office")
+    for start in ("2026-11-03T17:00:00+01:00", "2026-11-03T21:00:00+01:00"):
+        # Overshooting Office warm-ups while Living is followed (#101)
+        store.append_episode(runner.f_episodes, {
+            **_judged(None), "start": start, "room_id": office, "area": "Office", "room_class": "other",
+            "valid": False, "invalid_reasons": ["other_room"], "kind": "warm_up",
+        })
     store.append_episode(runner.f_episodes, {
         "start": "2026-11-04T06:30:00+01:00", "area": "Living", "overshoot": 0.3,
         "rise_min": 34, "undershoot": 0.1, "flame_starts": 3,
@@ -1012,6 +1034,10 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.heating_pid_advice").state == "ki 0.003 -> 0.0027 (overshoot)"
     night = hass.states.get("sensor.heating_night_prediction")
     assert night.state == "06:41" and night.attributes["warmup_min"] == 49
+    per_room = hass.states.get("sensor.heating_pid_advice").attributes["per_room"]
+    assert per_room == [
+        {"room": "Office", "followed": False, "warm_ups": 2, "advice": "ki 0.003 -> 0.0027 (overshoot above 0.4 degC)"}
+    ]
     # Attribute numbers promoted to their own sensors for long-term statistics (#106)
     for name, value in (
         ("last_warm_up_rise_time", "34"), ("last_warm_up_undershoot", "0.1"), ("last_warm_up_flame_starts", "3"),

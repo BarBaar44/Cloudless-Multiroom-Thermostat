@@ -34,8 +34,8 @@ STEP = 0.10                # 10 % parameter step
 
 # Only episodes led by the followed room (the "Room to follow" option, matched
 # by room id) are used for tuning. Other rooms' episodes are still recorded
-# (reason "other_room") so we can judge later whether they need parameters of
-# their own. The class name "living" is what the records store for the
+# (reason "other_room") and get advice of their own in per_room(), observe
+# only, to judge whether they need parameters of their own (#101, #82). The class name "living" is what the records store for the
 # followed room; it is kept so older records group with new ones.
 
 # Advice limits for an ESPHome PID whose output spans a 0 to 100 degC flow
@@ -331,6 +331,25 @@ def recommend(episodes, params, *, room_id=None, room_name=None):
     if new == old:
         return {**rec, "at_limit": True}
     return {**rec, "new": new}
+
+
+def per_room(episodes, params, rooms):
+    """
+    PID advice for every room with at least CONSISTENT_EPISODES valid warm-ups
+    (#101, observe only). rooms is a list of (room_id, name). Each room is
+    judged on its own warm-ups, the same way as the followed room; nothing is
+    applied. Returns a list of {room_id, room, warm_ups, rec}.
+    """
+    out = []
+    for room_id, name in rooms:
+        n = sum(1 for e in episodes if for_advice(e, room_id, name))
+        if n < CONSISTENT_EPISODES:
+            continue
+        out.append({
+            "room_id": room_id, "room": name, "warm_ups": n,
+            "rec": recommend(episodes, params, room_id=room_id, room_name=name),
+        })
+    return out
 
 
 def _or_dash(value):
