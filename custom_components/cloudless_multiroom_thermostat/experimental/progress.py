@@ -259,21 +259,34 @@ def _band_progress(band, change):
     return n >= PID_EPISODES_AFTER and steady, text
 
 
-def pid_progress(episodes, room_id=None, room_name=None):
+def pid_progress(episodes, room_id=None, room_name=None, optimum=None):
+    """
+    Bands confirmed by a change that helped, or by probing (optimum: {band: date}
+    from autotune.optimum_bands): neither a step up nor a step down was better,
+    so the values there were already right. A band counts once.
+    """
     changes = pid_changes(episodes, room_id, room_name)
+    optimum = optimum or {}
     head = f"PID advice: {{}} of {PID_BANDS} outdoor bands confirmed"
-    if not changes:
-        text = head.format(0) + " (no change applied yet)"
-        return {"done": False, "text": text + "; check gas per degree-day did not get worse"}
+    confirmed_bands, parts = set(), []
     labels = {band: _change_label(c) for band, c in changes.items()}
     shared = len(set(labels.values())) == 1
-    good, parts = 0, []
     for band, c in sorted(changes.items()):
         confirmed, part = _band_progress(band, c)
-        good += confirmed
+        if confirmed:
+            confirmed_bands.add(band)
+        elif band in optimum:
+            continue  # said below
         parts.append(part if shared else f"{part}, for {labels[band]}")
+    for band, day in sorted(optimum.items()):
+        if band not in confirmed_bands:
+            confirmed_bands.add(band)
+            parts.append(f"{band}: confirmed by probing on {day} (no better value up or down)")
+    good = len(confirmed_bands)
     text = head.format(min(good, PID_BANDS))
-    if shared:
+    if not parts:
+        return {"done": False, "text": text + " (no change applied yet). Check gas per degree-day did not get worse"}
+    if changes and shared:
         text += " for " + next(iter(labels.values()))
     text += ". " + "; ".join(parts)
     text += ". Check gas per degree-day did not get worse"
@@ -283,13 +296,16 @@ def pid_progress(episodes, room_id=None, room_name=None):
 FEATURES = (("gas", "Gas per degree-day"), ("night", "Night model"), ("pid", "PID advice"))
 
 
-def statuses(gas_summary, nights, episodes, room_id=None, room_name=None):
-    """{feature key: progress} for each feature; nights and episodes of the followed room."""
+def statuses(gas_summary, nights, episodes, room_id=None, room_name=None, optimum=None):
+    """{feature key: progress} for each feature; nights and episodes of the followed room.
+
+    optimum: {band: date} of the PID values confirmed by probing (autotune.optimum_bands).
+    """
     nights = night_core.for_room(nights, room_id) if room_id else nights
     return {
         "gas": gas_progress(gas_summary),
         "night": night_progress(nights),
-        "pid": pid_progress(episodes, room_id, room_name),
+        "pid": pid_progress(episodes, room_id, room_name, optimum),
     }
 
 

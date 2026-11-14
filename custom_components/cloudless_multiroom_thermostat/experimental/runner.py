@@ -280,13 +280,14 @@ class ExperimentalRunner:
         self, history: list[dict[str, Any]], params: dict[str, float | None], rec: dict[str, Any] | None,
         tuner_state: dict[str, Any],
     ) -> None:
-        """Apply, keep or revert a PID change after a finished warm-up (autotune.decide)."""
+        """Apply, probe, keep or revert a PID change after a finished warm-up (autotune.decide)."""
         room = self.room
         before = tuner_state.get("auto") or {}
         now = dt_util.now().isoformat(timespec="seconds")
         action, after = autotune.decide(
             history, params, rec, before, now,
             room_id=room.room_id if room else None, room_name=room.name if room else None,
+            probe=True, round_value=self._round_to_step,
         )
         if action and not await self._async_write_param(action["param"], action["value"]):
             # Keep the old state, so the same step is tried after the next warm-up
@@ -1019,7 +1020,10 @@ class ExperimentalRunner:
         gas_line = (
             gas_core.summary_line(gas) if gas else "Gas per degree-day: set a gas meter and an outdoor sensor to enable"
         )
-        status = progress.statuses(gas, nights, episodes, room.room_id if room else None, room.name if room else None)
+        status = progress.statuses(
+            gas, nights, episodes, room.room_id if room else None, room.name if room else None,
+            optimum=autotune.optimum_bands(tuner_state.get("auto")),
+        )
         progress_lines = progress.lines_from(status)
 
         message = "\n".join(lines) + "\n\n" + "\n".join(pid_lines)
