@@ -33,18 +33,23 @@ In order of how much they are expected to matter, starting with a gas boiler:
 
 v1.8.0 is the last feature release of v1. The integration does what the v1 scope set out to do: rooms, winner selection, TRV sync, windows, presence, presets, the Heating Control Card inside the integration, and learning features that observe and can apply PID advice.
 
-### v1.8.x: small updates
+### v1.8.x: small updates, and the PID advice judged right
 
-Fixes and upkeep only. No new behaviour. Milestone [v1.8.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/1).
+Fixes and upkeep, plus one thing that has to be right before v2: how the PID advice is judged ([#132](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/132)). Milestone [v1.8.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/1).
 
 - Fixes from daily use and issue reports.
 - Keep up with Home Assistant: deprecations, new minimum versions, the pinned test version.
+- **A rescale is no PID change** ([#133](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/133)): gains are compared in real units (°C of flow per °C of error), and the report names the change it judges, counts warm-ups and says how many are still needed.
+- **Probing** ([#134](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/134)): with Apply PID advice automatically on, values that get no advice are tested one step up and down, so values that are already right can be confirmed instead of waiting for a problem. The only new behaviour in v1.8.x, and only with that option on.
+- **Keep the minute samples** ([#136](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/136), step 1 of [#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)): every episode's time series is kept, the data a model of how each room heats up needs. Started now because Home Assistant keeps raw history for about 10 days.
+- **Judge the weather we get** (#132): a feature is confirmed in the outdoor bands that actually occur, instead of waiting for 2 fixed bands. The house adjusts to the situation it is in; it never waits for weather that matches the model.
 
 ### v1.9.x: preparing v2
 
 Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestone [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2).
 
 - **Learning per room** ([#101](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/101)): warm-up episodes and PID advice for every room, not only the room to follow. Shows whether rooms really need their own PID values before v2 builds it.
+- **A heat-up model per room** ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)): from the kept samples, fit how each room heats up (delay, speed, and how much a degree of flow does) against outdoor temperature, predict every warm-up and report how far off it was. Observe only: the model has to predict well before any gains are calculated from it. Replaces trial and error with a model; probing becomes the check on it.
 - **Cooling per room** ([#102](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/102)): the night model learns each room's cooling rate, not only the followed room's. Needed to know how early each room has to start, and later how long the house can coast on cheap heat.
 - **Low-load detection** ([#103](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/103)): burn and off times per warm-up, an estimate of the boiler's minimum output, and `low_load` warm-ups kept out of the `oscillating` advice so automatic PID changes don't act on them.
 - **Data for the heating curve** ([#104](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/104)): prove the flow really stays at the flow limit, and collect warm-ups at one fixed limit across cold and mild mornings.
@@ -84,7 +89,7 @@ The step from "switch on at" to "be warm at". Built on the per room cooling and 
 
 ### v2.2: a controller per room, cooler water, a safe boiler
 
-- **PID per room** ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82), option B, if v1.9 shows rooms differ enough): each room calculates the flow it needs, the heat source gets the highest request, and each room's PID values are advised and applied from its own warm-ups. `thermostat.yaml` and DIYLess get a flow setpoint mode with the same fail safe as today. Existing installs keep the firmware PID until they switch. This is also the base for v3: the integration knows each room's demand, not only who wins.
+- **PID per room** ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82), option B, if v1.9 shows rooms differ enough): each room calculates the flow it needs, the heat source gets the highest request, and each room's PID values are calculated from its own heat-up model ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)) for today's weather and tomorrow's forecast, set before a warm-up, and checked by probing. `thermostat.yaml` and DIYLess get a flow setpoint mode with the same fail safe as today. Existing installs keep the firmware PID until they switch. This is also the base for v3: the integration knows each room's demand, not only who wins.
 - **Heating curve from Home Assistant** ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)): the flow limit follows the outdoor temperature in fixed steps, chosen from measured warm-ups, never changed during a warm-up. With a PID per room it is the upper bound for every room's flow request.
 - **Lowest flow that still meets comfort:** with comfort times known, the flow limit is lowered on mornings with time to spare, and judged on gas per degree-day, not only on comfort.
 - **Boiler profile and known quirks:** pick the boiler make and model at setup (a suggestion from the boiler's own OpenTherm code where it can be read, always confirmed by you); anything the integration would write to the boiler is checked against a list of known problems (first entry: never write the hot water temperature on an Atag E325EC). Unknown boilers have boiler writes off by default. It arrives here, with the first thing the integration writes to the boiler.
