@@ -8,6 +8,7 @@ are small and written atomically (temp file + rename).
 from __future__ import annotations
 
 import glob
+import gzip
 import json
 import logging
 import os
@@ -46,6 +47,46 @@ def read_episodes(path: str, last_n: int | None = None) -> list[dict[str, Any]]:
             except ValueError:
                 continue  # a torn last line after a crash
     return episodes if last_n is None else episodes[-last_n:]
+
+
+def samples_path(directory: str, start: str) -> str:
+    """samples/<YYYY-MM>/<start>.json.gz for the episode that started at start (ISO time)."""
+    name = start.replace(":", "")  # no colons: they are not allowed in Windows file names
+    return os.path.join(directory, "samples", start[:7], f"{name}.json.gz")
+
+
+def write_samples(directory: str, start: str, record: dict[str, Any]) -> None:
+    """The minute samples of one episode, gzipped, one file per episode (#135).
+
+    One file each, written atomically, so a crash can only lose the episode
+    being written. A file already there (a restart finishing the same
+    episode twice) is replaced.
+    """
+    path = samples_path(directory, start)
+    folder = os.path.dirname(path)
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=folder, prefix=os.path.basename(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as f:
+            f.write(json.dumps(record, sort_keys=True, separators=(",", ":")).encode())
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def read_samples(directory: str, start: str) -> dict[str, Any] | None:
+    """What write_samples stored for the episode that started at start, or None."""
+    path = samples_path(directory, start)
+    if not os.path.exists(path):
+        return None
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError, EOFError):
+        _LOGGER.warning("Unreadable samples file %s", path)
+        return None
 
 
 def write_state(path: str, state: dict[str, Any]) -> None:

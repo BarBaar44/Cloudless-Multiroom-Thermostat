@@ -213,6 +213,40 @@ async def test_warm_up_episode_recorded(hass: HomeAssistant) -> None:
     assert state.attributes["room"] == "Living" and state.attributes["experimental"] is True
     assert hass.states.get("sensor.heating_pid_advice").state != "unknown"
 
+    # The minute samples are kept next to the summary (#135)
+    kept = store.read_samples(runner.dir, record["start"])
+    assert kept["start"] == record["start"] and kept["room_id"] == record["room_id"]
+    assert kept["kind"] == "warm_up" and kept["params"] == record["params"]
+    assert len(kept["samples"]) > 40
+    first = kept["samples"][0]
+    assert first["room"] is not None and "flame" in first
+    assert set(first["rooms"]) == set(entry.runtime_data.rooms), "every room's temperature and target"
+
+
+async def test_samples_write_failure_never_blocks_the_episode(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, {**EXP, "exp_room": None})
+    runner = await _start_episode(hass, entry, 35)
+    with patch.object(store, "write_samples", side_effect=OSError("disk full")):
+        await runner._async_finish([])
+        await hass.async_block_till_done()
+    assert len(store.read_episodes(runner.f_episodes)) == 1
+
+
+def test_samples_round_trip(tmp_path) -> None:
+    start = "2026-11-14T07:30:11+01:00"
+    data = {"start": start, "samples": [{"t": start, "room": 16.2}] * 3}
+    store.write_samples(str(tmp_path), start, data)
+    path = store.samples_path(str(tmp_path), start)
+    assert path.endswith(os.path.join("samples", "2026-11", "2026-11-14T073011+0100.json.gz"))
+    assert store.read_samples(str(tmp_path), start) == data
+    store.write_samples(str(tmp_path), start, {**data, "samples": []})  # finished twice: replaced
+    assert store.read_samples(str(tmp_path), start)["samples"] == []
+    assert store.read_samples(str(tmp_path), "2026-11-15T07:30:00+01:00") is None
+    with open(path, "wb") as f:
+        f.write(b"not gzip")
+    assert store.read_samples(str(tmp_path), start) is None
+    assert os.listdir(os.path.dirname(path)) == [os.path.basename(path)], "no temp files left"
+
 
 async def test_episode_saved_while_running(hass: HomeAssistant) -> None:
     """Saved every few samples, so even a crash loses at most a few minutes."""

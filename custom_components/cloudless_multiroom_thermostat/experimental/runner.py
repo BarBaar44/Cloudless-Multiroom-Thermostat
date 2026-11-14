@@ -263,6 +263,26 @@ class ExperimentalRunner:
             return {**rec, "new": rec["old"], "at_limit": True}
         return {**rec, "new": new}
 
+    async def _async_keep_samples(self, record: dict[str, Any], ep: dict[str, Any]) -> None:
+        """Keep the episode's minute samples next to its record, for a model of how rooms heat up (#135).
+
+        The record in episodes.jsonl only holds a summary; Home Assistant's
+        recorder keeps the raw history for about 10 days. Never blocks the
+        rest: a failed write is logged and the episode is still recorded.
+        """
+        data = {
+            "start": record["start"],
+            "room_id": record.get("room_id"),
+            "kind": record.get("kind"),
+            "valid": record.get("valid"),
+            "params": record.get("params"),
+            "samples": ep["samples"],
+        }
+        try:
+            await self._io(store.write_samples, self.dir, record["start"], data)
+        except Exception:  # noqa: BLE001 - samples are extra; the episode is already recorded
+            _LOGGER.warning("Could not keep the samples of the episode started %s", record["start"], exc_info=True)
+
     async def _async_write_param(self, name: str, value: float) -> bool:
         entity_id = self._entity(self._param_key(name))
         if not entity_id:
@@ -329,6 +349,10 @@ class ExperimentalRunner:
             # so records match older ones; it means any window of the followed room
             "garden_paused": bool(room and self.ctl.pause_reason(room) == PAUSE_WINDOW),
             "gas": self._float(CONF_EXP_GAS),
+            # Every room, for a model of rooms that heat along (#135); not used by analyse()
+            "rooms": {
+                rid: [r.current, self.ctl.effective_target(r)] for rid, r in self.ctl.rooms.items()
+            },
         }
 
     def _night_sample(self) -> dict[str, Any]:
@@ -506,6 +530,7 @@ class ExperimentalRunner:
             followed_room_id=self.room.room_id if self.room else None,
         )
         await self._io(store.append_episode, self.f_episodes, record)
+        await self._async_keep_samples(record, ep)
         history = await self._io(store.read_episodes, self.f_episodes)
         room = self.room
         tuner_state = await self._io(store.read_state, self.f_state)
