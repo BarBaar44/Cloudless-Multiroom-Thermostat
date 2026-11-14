@@ -338,6 +338,7 @@ If the weather forecast is unavailable at 21:00, the report says there is no pre
 Everything stays on your Home Assistant. Files are stored in `config/cloudless_multiroom_thermostat/<entry id>/`:
 
 - `episodes.jsonl`, `nights.jsonl`, `gas_days.jsonl`: append-only, one JSON record per line.
+- `samples/<YYYY-MM>/<start>.json.gz`: the minute samples of each episode (warm-ups and top-ups, every room), gzipped, one file per episode. `episodes.jsonl` only keeps a summary of each, and Home Assistant keeps raw history for about 10 days, so these are what a future model of how each room heats up learns from ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)). Each sample also holds every room's temperature and target (`rooms`). Expect a few MB a year.
 - `state.json`, `night_state.json`, `episode_state.json`, `report.json`: small state files (`episode_state.json` holds the warm-up episode in progress, `report.json` the last report and what the next evening compares against for events).
 
 Switching the features off stops all sampling; the files and your entity choices are kept, so switching back on continues where it left off. Delete the folder to start over.
