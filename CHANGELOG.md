@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Advice per room (#101):** every room that has led at least 2 valid warm-ups now gets PID advice of its own, judged on its own warm-ups. Observe only: never applied, also with Apply PID advice automatically on. Shown in the `per_room` attribute of the PID advice sensor and in the evening report. It shows whether rooms need PID values of their own (#82). See [Advice per room](docs/experimental.md#advice-per-room). Nothing changes in the heating.
 - **Long-term statistics (#106):** nine numbers that were only attributes of the learning sensors now also have a numeric sensor of their own, so Home Assistant keeps their trend beyond the 10 days of history: last warm-up rise time, undershoot and flame starts; predicted warm-up time, night cooling time constant and evening drop; gas per degree-day over 28 days, hot water gas rate and base gas use per day. Diagnostic entities, only with the learning features on. The attributes stay. See [Long-term statistics](docs/experimental.md#long-term-statistics). Observe only, nothing changes in the heating.
 
 ## 1.8.3

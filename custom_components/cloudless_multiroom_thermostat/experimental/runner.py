@@ -176,6 +176,7 @@ class ExperimentalRunner:
         # The episode in progress is saved every few samples and on stop, so a
         # restart (an update) doesn't lose a warm-up; a long gap drops it.
         self._episode: dict[str, Any] | None = None
+        self._per_room: list[dict[str, Any]] = []
         self._last_target: float | None = None
         # The night in progress is saved every sample (long, restarts likely).
         self._night: dict[str, Any] | None = None
@@ -548,20 +549,23 @@ class ExperimentalRunner:
         tuner_state["last_episode"] = record["start"]
         tuner_state["recommendation"] = rec
         await self._io(store.write_state, self.f_state, tuner_state)
+        self._per_room = self._advice_per_room(history)
         self._publish_episode(record, rec, tuner_state.get("auto"))
         _LOGGER.info(
             "Episode %s valid=%s overshoot=%s rec=%s",
             record["start"], record["valid"], record["overshoot"], rec,
         )
 
-    def _rec_text(self, rec: dict[str, Any] | None, auto_state: dict[str, Any] | None = None) -> str:
+    def _rec_text(
+        self, rec: dict[str, Any] | None, auto_state: dict[str, Any] | None = None, *, applied: bool = True
+    ) -> str:
         if not self._pid_configured:
             return "no PID numbers configured"
         if not all(v is not None for v in self._params().values()):
             return "PID numbers unavailable"
         if rec is None:
             return "no change"
-        if self._auto_on and autotune.is_reverted(auto_state, rec):
+        if applied and self._auto_on and autotune.is_reverted(auto_state, rec):
             return f"{rec['param']} {rec['old']} -> {rec['new']} ({rec['why']}): tried before and reverted, not applied again"
         if rec.get("outside_range"):
             return (
@@ -594,8 +598,33 @@ class ExperimentalRunner:
             )
         self._publish_advice(rec, auto_state)
 
+    def _advice_per_room(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Advice for every room with enough warm-ups (#101); observe only, never applied."""
+        params = self._params()
+        if not all(v is not None for v in params.values()):
+            return []
+        rooms = [(r.room_id, r.name) for r in self.ctl.rooms.values()]
+        return tuner_core.per_room(history, params, rooms)
+
+    def _per_room_attr(self) -> list[dict[str, Any]]:
+        followed = self.room.room_id if self.room else None
+        return [
+            {
+                "room": r["room"],
+                "followed": r["room_id"] == followed,
+                "warm_ups": r["warm_ups"],
+                # Never with the automatic-revert note: per room advice is not applied
+                "advice": self._rec_text(r["rec"], applied=False),
+            }
+            for r in self._per_room
+        ]
+
     def _publish_advice(self, rec: dict[str, Any] | None, auto_state: dict[str, Any] | None = None) -> None:
-        self._set("recommendation", self._rec_text(rec, auto_state)[:255], {"mode": "auto" if self._auto_on else "observe"})
+        self._set(
+            "recommendation",
+            self._rec_text(rec, auto_state)[:255],
+            {"mode": "auto" if self._auto_on else "observe", "per_room": self._per_room_attr()},
+        )
 
     @callback
     def _on_pid_number_change(self, _event: Event) -> None:
@@ -604,6 +633,7 @@ class ExperimentalRunner:
     async def _async_publish_stored_advice(self) -> None:
         """Show the stored advice again, for instance once the PID numbers have values after a restart."""
         tuner_state = await self._io(store.read_state, self.f_state)
+        self._per_room = self._advice_per_room(await self._io(store.read_episodes, self.f_episodes))
         self._publish_advice(tuner_state.get("recommendation"), tuner_state.get("auto"))
 
     async def _async_publish_stored(self) -> None:
@@ -612,8 +642,10 @@ class ExperimentalRunner:
         Without this the sensors stay unknown until the next episode, or
         until 21:00 for the prediction, although the values are on disk.
         """
-        episodes = await self._io(store.read_episodes, self.f_episodes, 1)
+        history = await self._io(store.read_episodes, self.f_episodes)
+        episodes = history[-1:]
         tuner_state = await self._io(store.read_state, self.f_state)
+        self._per_room = self._advice_per_room(history)
         self._publish_episode(
             episodes[-1] if episodes else None, tuner_state.get("recommendation"), tuner_state.get("auto")
         )
@@ -1040,6 +1072,13 @@ class ExperimentalRunner:
         else:
             rec_text = self._rec_text(rec)
             pid_lines.append(f"Would change (observe mode, nothing applied): {rec_text}")
+        self._per_room = self._advice_per_room(episodes)
+        if self._per_room:
+            pid_lines.append("Per room (observe only, never applied):")
+            pid_lines += [
+                f"- {r['room']}{' (followed)' if r['followed'] else ''}, {r['warm_ups']} warm-ups: {r['advice']}"
+                for r in self._per_room_attr()
+            ]
         room = self.room
         night_title = f"Night, {room.name if room else 'no room'} (observe mode):"
         gas_line = (
