@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fix (#132):** the PID advice progress counted a rescale as a PID change. On 2026-11-07 `thermostat.yaml` started multiplying the PID output by the flow limit instead of 0 to 100, with Kp and Ki times 2.5 to match: the same controller, yet the report judged it as a change in every band. A change is now a change of effective gains (Kp, Ki and Kd times what the output is multiplied by: the flow limit from schema 3 on, otherwise 100). With the history of the house this was built in, the report now says "no change applied yet". Observe only, nothing changes in the heating.
+- **Report wording (#132):** the PID advice line names the change it judges (date and values), counts warm-ups instead of "episodes", says how many more are needed per band, and says why nothing before a change can be compared (the flow limit or the record format changed with it, or no warm-ups in that band before it). See [When a feature becomes stable](docs/experimental.md#when-a-feature-becomes-stable).
+
 ## 1.8.2
 
 - **Fix (card 1.0.1):** with the central heating enable switch in the card, the card said "Central heating is off by schedule" and lost "nobody home" whenever every room was paused (away, windows) or only rooms that heat along wanted heat. The integration turns that switch off itself in those cases, so it was never a schedule. The note now shows only when the switch is off while a room that drives the heat source is heating, and reads "Central heating switch is off". Room climates get a `drives_heat_source` attribute for this.

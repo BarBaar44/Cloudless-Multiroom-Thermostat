@@ -60,14 +60,15 @@ def test_pid_progress_change_improves() -> None:
     episodes.append(_ep(9, P2, 0.9, room_class="other"))  # other rooms do not count
     p = progress.pid_progress(episodes)
     assert "1 of 2 outdoor bands confirmed" in p["text"]
-    assert "0_8 5/5 better" in p["text"]
+    assert "for the change of 2026-11-03 (Ki 0.002 → 0.0018)" in p["text"]
+    assert "0_8: 5 of 5 warm-ups after the change, better." in p["text"]
     assert not p["done"]
 
 
 def test_pid_progress_change_not_better() -> None:
     episodes = [_ep(1, P1, 0.3), _ep(2, {**P2, "kp": 0.4}, 0.6)]
     episodes[1]["rise_min"] = 70
-    assert "0_8 1/5 not better" in progress.pid_progress(episodes)["text"]
+    assert "0_8: 1 of 5 warm-ups after the change, not better so far (4 more warm-ups needed)" in progress.pid_progress(episodes)["text"]
 
 
 def test_report_lines() -> None:
@@ -83,11 +84,11 @@ def test_pid_progress_compares_same_flow_limit() -> None:
     assert change["before"] == [] and len(change["after"]) == 5
     text = progress.pid_progress(before + after)["text"]
     assert "0 of 2 outdoor bands confirmed" in text
-    assert "0_8 0/5 after a baseline)" in text  # the 5 after the change are the baseline
+    assert "0_8: 0 of 5 warm-ups after a baseline of 5 (5 more warm-ups needed)" in text  # the 5 after the change are the baseline
 
     # Same limit on both sides: compared as before
     before = [{**e, "max_ch": 40.0} for e in before]
-    assert "0_8 5/5 better" in progress.pid_progress(before + after)["text"]
+    assert "0_8: 5 of 5 warm-ups after the change, better" in progress.pid_progress(before + after)["text"]
 
 
 def test_pid_progress_compares_same_schema() -> None:
@@ -117,7 +118,7 @@ def test_pid_progress_follows_the_room_followed_now() -> None:
     episodes += [_room_ep(d, P1, 0.6, "a", "a") for d in range(11, 13)]
     by_b = progress.pid_changes(episodes, "b", "B")
     assert len(by_b["0_8"]["before"]) == 5 and len(by_b["0_8"]["after"]) == 5
-    assert "0_8 5/5 better" in progress.pid_progress(episodes, "b", "B")["text"]
+    assert "0_8: 5 of 5 warm-ups after the change, better" in progress.pid_progress(episodes, "b", "B")["text"]
     # Room "a" now only has its own episodes, all with the same values
     assert progress.pid_changes(episodes, "a", "A") == {}
 
@@ -159,21 +160,76 @@ def _schema_change(after_overshoots: list[float]) -> list[dict]:
 def test_pid_progress_says_nothing_comparable_before() -> None:
     text = progress.pid_progress(_schema_change([0.2, 0.15, 0.1]))["text"]
     assert "0 of 2 outdoor bands confirmed" in text
-    assert "0_8 3/5 for a baseline, nothing comparable before the change" in text
+    assert "0_8: 3 of 5 warm-ups for a baseline (7 more warm-ups needed; nothing to compare with: the record format changed with it)" in text
 
 
 def test_pid_progress_baseline_then_steady_confirms() -> None:
     episodes = _schema_change([0.2] * 5 + [0.25] * 4)
-    assert "0_8 4/5 after a baseline steady" in progress.pid_progress(episodes)["text"]
+    assert "0_8: 4 of 5 warm-ups after a baseline of 5, steady so far (1 more warm-up needed)" in progress.pid_progress(episodes)["text"]
     episodes = _schema_change([0.2] * 5 + [0.25] * 5)
     text = progress.pid_progress(episodes)["text"]
-    assert "1 of 2 outdoor bands confirmed" in text and "0_8 5/5 after a baseline steady" in text
+    assert "1 of 2 outdoor bands confirmed" in text and "0_8: 5 of 5 warm-ups after a baseline of 5, steady." in text
 
 
 def test_pid_progress_baseline_not_steady() -> None:
     worse_overshoot = _schema_change([0.2] * 5 + [0.4] * 5)
-    assert "0_8 5/5 after a baseline not steady" in progress.pid_progress(worse_overshoot)["text"]
+    assert "0_8: 5 of 5 warm-ups after a baseline of 5, not steady." in progress.pid_progress(worse_overshoot)["text"]
     slower = _schema_change([0.2] * 10)
     for e in slower[-5:]:
         e["rise_min"] = 60  # 20% longer than the baseline's 50
     assert "0 of 2 outdoor bands confirmed" in progress.pid_progress(slower)["text"]
+
+
+def _rescale(day: int, overshoot: float, schema: int, max_ch: float | None, params: dict, band: str = "0_8") -> dict:
+    return {**_ep(day, params, overshoot, band=band), "schema": schema, "max_ch": max_ch}
+
+
+OLD = {"kp": 0.7, "ki": 0.003, "kd": 0.0}  # PID output on a 0 to 100 range
+NEW = {"kp": 1.75, "ki": 0.0075, "kd": 0.0}  # same PID, output times a 40 degC flow limit
+
+
+def test_effective_gains_follow_the_output_scale() -> None:
+    # Before schema 3 the recorded limit was not what the PID output was scaled by
+    assert progress.output_scale({"schema": 2, "max_ch": 40.0}) == 100.0
+    assert progress.output_scale({"schema": 3, "max_ch": 40.0}) == 40.0
+    assert progress.output_scale({"schema": 3, "max_ch": None}) == 100.0
+    assert progress.output_scale({}) == 100.0
+    old = progress.effective_gains({"schema": 2, "max_ch": 40.0, "params": OLD})
+    new = progress.effective_gains({"schema": 3, "max_ch": 40.0, "params": NEW})
+    assert old == new == {"kd": 0.0, "ki": 0.3, "kp": 70.0}
+
+
+def test_a_rescale_is_no_pid_change() -> None:
+    """thermostat.yaml 2026-11-07: Kp and Ki times 2.5 with the output times 40 instead of 100 (#132)."""
+    episodes = [_rescale(d, 0.4, 2, 40.0, OLD) for d in range(1, 4)]
+    episodes += [_rescale(d, 0.1, 3, 40.0, NEW) for d in range(4, 14)]
+    assert progress.pid_changes(episodes) == {}
+    assert "no change applied yet" in progress.pid_progress(episodes)["text"]
+
+
+def test_a_real_change_after_a_rescale_is_seen() -> None:
+    episodes = [_rescale(d, 0.4, 2, 40.0, OLD) for d in range(1, 3)]
+    episodes += [_rescale(d, 0.2, 3, 40.0, NEW) for d in range(3, 6)]
+    episodes += [_rescale(d, 0.1, 3, 40.0, {**NEW, "kp": 1.9}) for d in range(6, 8)]
+    change = progress.pid_changes(episodes)["0_8"]
+    assert len(change["before"]) == 3 and len(change["after"]) == 2
+    assert change["date"] == "2026-11-06"
+    assert "for the change of 2026-11-06 (Kp 1.75 → 1.9)" in progress.pid_progress(episodes)["text"]
+
+
+def test_report_says_why_nothing_is_comparable() -> None:
+    p3 = {**NEW, "kp": 1.9}
+    flow = [_rescale(1, 0.3, 3, 50.0, NEW), _rescale(2, 0.2, 3, 40.0, p3)]
+    assert "the flow limit changed with it" in progress.pid_progress(flow)["text"]
+    mild = [_rescale(1, 0.3, 3, 40.0, NEW), _rescale(2, 0.2, 3, 40.0, p3, band="8_15")]
+    assert "no warm-ups in this band before it" in progress.pid_progress(mild)["text"]
+
+
+def test_bands_on_different_changes_name_their_own() -> None:
+    p3 = {**NEW, "kp": 1.9}
+    episodes = [_rescale(1, 0.3, 3, 40.0, NEW), _rescale(2, 0.3, 3, 40.0, NEW, band="8_15")]
+    episodes += [_rescale(3, 0.2, 3, 40.0, p3, band="8_15")]  # 8_15 last changed on 11-03
+    episodes += [_rescale(4, 0.2, 3, 40.0, NEW)]  # back again: 0_8 last changed on 11-04
+    text = progress.pid_progress(episodes)["text"]
+    assert "8_15: " in text and ", for the change of 2026-11-03 (Kp 1.75 → 1.9)" in text
+    assert ", for the change of 2026-11-04 (Kp 1.9 → 1.75)" in text
