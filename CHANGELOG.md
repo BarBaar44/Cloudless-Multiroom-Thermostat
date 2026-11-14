@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Long-term statistics (#106):** nine numbers that were only attributes of the learning sensors now also have a numeric sensor of their own, so Home Assistant keeps their trend beyond the 10 days of history: last warm-up rise time, undershoot and flame starts; predicted warm-up time, night cooling time constant and evening drop; gas per degree-day over 28 days, hot water gas rate and base gas use per day. Diagnostic entities, only with the learning features on. The attributes stay. See [Long-term statistics](docs/experimental.md#long-term-statistics). Observe only, nothing changes in the heating.
+
 ## 1.8.3
 
 **Behaviour change, only with Apply PID advice automatically on:** the integration now also probes Kp when there is no advice (see Probing below). With that option off, nothing changes in how the house heats.
