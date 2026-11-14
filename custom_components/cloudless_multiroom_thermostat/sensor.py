@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -37,7 +37,7 @@ async def async_setup_entry(
     )
     if controller.experimental is not None:
         async_add_entities(
-            [ExperimentalSensor(controller, desc) for desc in EXPERIMENTAL_SENSORS]
+            [ExperimentalSensor(controller, desc) for desc in EXPERIMENTAL_SENSORS + EXPERIMENTAL_STAT_SENSORS]
         )
 
 
@@ -124,7 +124,13 @@ class LegacyDeltaSensor(_SystemSensor):
 
 @dataclass(frozen=True, kw_only=True)
 class ExperimentalSensorDescription(SensorEntityDescription):
-    """Experimental sensor: value comes from the runner's values[key]."""
+    """Experimental sensor: value comes from the runner's values[key].
+
+    With `source` set, the value is attribute `key` of values[source] instead:
+    a number promoted from an attribute so it gets long-term statistics (#106).
+    """
+
+    source: str | None = None
 
 
 EXPERIMENTAL_SENSORS: tuple[ExperimentalSensorDescription, ...] = (
@@ -167,6 +173,36 @@ EXPERIMENTAL_SENSORS: tuple[ExperimentalSensorDescription, ...] = (
 )
 
 
+def _stat(source: str, key: str, unit: str | None, precision: int, icon: str) -> ExperimentalSensorDescription:
+    return ExperimentalSensorDescription(
+        key=key,
+        source=source,
+        translation_key=f"exp_{key}",
+        native_unit_of_measurement=unit,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=precision,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon=icon,
+    )
+
+
+# Numbers kept as attributes of the sensors above, promoted to their own
+# sensors because Home Assistant keeps no long-term statistics for attributes
+# (#106). The attributes stay: the card and the report use them. Temperature
+# values are differences, so no temperature device class.
+EXPERIMENTAL_STAT_SENSORS: tuple[ExperimentalSensorDescription, ...] = (
+    _stat("last_overshoot", "rise_min", UnitOfTime.MINUTES, 0, "mdi:timer-sand"),
+    _stat("last_overshoot", "undershoot", UnitOfTemperature.CELSIUS, 2, "mdi:thermometer-chevron-down"),
+    _stat("last_overshoot", "flame_starts", None, 0, "mdi:fire-circle"),
+    _stat("night_prediction", "warmup_min", UnitOfTime.MINUTES, 0, "mdi:timer-sand"),
+    _stat("night_prediction", "tau_h", UnitOfTime.HOURS, 1, "mdi:home-thermometer-outline"),
+    _stat("night_prediction", "evening_drop", UnitOfTemperature.CELSIUS, 2, "mdi:thermometer-minus"),
+    _stat("gas_per_degree_day", "per_dd_28", "m³/°Cd", 3, "mdi:fire"),
+    _stat("gas_per_degree_day", "hot_water_rate", "m³/min", 4, "mdi:water-boiler"),
+    _stat("gas_per_degree_day", "base_per_day", UnitOfVolume.CUBIC_METERS, 3, "mdi:fire"),
+)
+
+
 class ExperimentalSensor(SensorEntity):
     """Observe-only output of the experimental features."""
 
@@ -191,7 +227,11 @@ class ExperimentalSensor(SensorEntity):
 
     @property
     def _value(self) -> tuple[Any, dict[str, Any]]:
-        return self._controller.experimental.values.get(self.entity_description.key, (None, {}))
+        desc = self.entity_description
+        values = self._controller.experimental.values
+        if desc.source is None:
+            return values.get(desc.key, (None, {}))
+        return values.get(desc.source, (None, {}))[1].get(desc.key), {}
 
     @property
     def native_value(self) -> Any:

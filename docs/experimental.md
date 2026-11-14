@@ -43,9 +43,9 @@ The [evening report](#evening-report) shows where each feature stands against th
 
 | Feature | Maturity | Needs | Output |
 |---|---|---|---|
-| [Gas per degree-day](#gas-per-degree-day) | **Beta**: running daily since October 2026, the figures are usable for comparing weeks | Gas meter, outdoor temperature. For the hot-water split also burner flame, hot water active, central heating active. Optional: people at home | `sensor.<system>_gas_per_degree_day` |
-| [Night cooldown model](#night-cooldown-model) | **Alpha**: still learning; first back-test was 0.2 to 0.8 °C off | Outdoor temperature, weather forecast, a room to follow | `sensor.<system>_night_prediction` |
-| [Warm-up episodes and PID advice](#warm-up-episodes-and-pid-advice) | **Alpha**: records reliably, advice not yet validated; applied only when you switch that on | Room to follow. Helpful: burner flame, outdoor temperature. For advice: Kp, Ki, Kd of a firmware PID (for example ESPHome) | `sensor.<system>_last_warm_up_overshoot`, `sensor.<system>_pid_advice` |
+| [Gas per degree-day](#gas-per-degree-day) | **Beta**: running daily since October 2026, the figures are usable for comparing weeks | Gas meter, outdoor temperature. For the hot-water split also burner flame, hot water active, central heating active. Optional: people at home | `sensor.<system>_gas_per_degree_day`, plus [statistics sensors](#long-term-statistics) |
+| [Night cooldown model](#night-cooldown-model) | **Alpha**: still learning; first back-test was 0.2 to 0.8 °C off | Outdoor temperature, weather forecast, a room to follow | `sensor.<system>_night_prediction`, plus [statistics sensors](#long-term-statistics) |
+| [Warm-up episodes and PID advice](#warm-up-episodes-and-pid-advice) | **Alpha**: records reliably, advice not yet validated; applied only when you switch that on | Room to follow. Helpful: burner flame, outdoor temperature. For advice: Kp, Ki, Kd of a firmware PID (for example ESPHome) | `sensor.<system>_last_warm_up_overshoot`, `sensor.<system>_pid_advice`, plus [statistics sensors](#long-term-statistics) |
 | [Evening report](#evening-report) | **Beta**: a summary of the above | Any of the above | `sensor.<system>_learning_features_report` at 21:00, plus a notification as chosen |
 
 Maturity means:
@@ -334,6 +334,24 @@ The option **Evening notification** on the learning features page decides what t
 The time is fixed at 21:00 because the night model measures the evening drop from 21:00.
 
 If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
+
+## Long-term statistics
+
+Home Assistant keeps the history of a sensor's state for about 10 days, and keeps long-term statistics (hourly averages, forever) only for numeric sensors with a state class. It keeps neither for attributes. So the numbers worth following over a season also have a sensor of their own. They are diagnostic entities: on the device page, not on an auto-generated dashboard. Statistics start the day the sensor exists, so there is no history from before.
+
+| Sensor | Unit | Same value as | Updated |
+|---|---|---|---|
+| `sensor.<system>_last_warm_up_rise_time` | min | `rise_min` of the last warm-up overshoot | after each warm-up or top-up |
+| `sensor.<system>_last_warm_up_undershoot` | °C | `undershoot` of the last warm-up overshoot | after each warm-up or top-up |
+| `sensor.<system>_last_warm_up_flame_starts` | | `flame_starts` of the last warm-up overshoot | after each warm-up or top-up |
+| `sensor.<system>_predicted_warm_up_time` | min | `warmup_min` of the night prediction | at 21:00 |
+| `sensor.<system>_night_cooling_time_constant` | h | `tau_h` of the night prediction: how slowly the room cools, higher is better insulated | at 21:00 |
+| `sensor.<system>_evening_drop` | °C | `evening_drop` of the night prediction | at 21:00 |
+| `sensor.<system>_gas_per_degree_day_28_days` | m³/°Cd | `per_dd_28` of gas per degree-day | when the gas summary is made |
+| `sensor.<system>_hot_water_gas_rate` | m³/min | `hot_water_rate` of gas per degree-day | when the gas summary is made |
+| `sensor.<system>_base_gas_use_per_day` | m³ | `base_per_day` of gas per degree-day | when the gas summary is made |
+
+The attributes stay where they are. Use a statistics graph card to see a trend, for example the 28 day gas per degree-day over a winter.
 
 ## Data and privacy
 

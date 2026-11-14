@@ -249,6 +249,33 @@
       },
       "exp_report": {
         "name": "Learning features report"
+      },
+      "exp_rise_min": {
+        "name": "Last warm-up rise time"
+      },
+      "exp_undershoot": {
+        "name": "Last warm-up undershoot"
+      },
+      "exp_flame_starts": {
+        "name": "Last warm-up flame starts"
+      },
+      "exp_warmup_min": {
+        "name": "Predicted warm-up time"
+      },
+      "exp_tau_h": {
+        "name": "Night cooling time constant"
+      },
+      "exp_evening_drop": {
+        "name": "Evening drop"
+      },
+      "exp_per_dd_28": {
+        "name": "Gas per degree-day (28 days)"
+      },
+      "exp_hot_water_rate": {
+        "name": "Hot water gas rate"
+      },
+      "exp_base_per_day": {
+        "name": "Base gas use per day"
       }
     },
     "binary_sensor": {

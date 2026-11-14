@@ -990,7 +990,10 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
 
     entry = await _setup(hass, EXP)
     runner = entry.runtime_data.experimental
-    store.append_episode(runner.f_episodes, {"start": "2026-11-04T06:30:00+01:00", "area": "Living", "overshoot": 0.3})
+    store.append_episode(runner.f_episodes, {
+        "start": "2026-11-04T06:30:00+01:00", "area": "Living", "overshoot": 0.3,
+        "rise_min": 34, "undershoot": 0.1, "flame_starts": 3,
+    })
     store.write_state(
         runner.f_state,
         {"recommendation": {"param": "ki", "old": 0.003, "new": 0.0027, "why": "overshoot", "at_limit": False}},
@@ -1009,6 +1012,17 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.heating_pid_advice").state == "ki 0.003 -> 0.0027 (overshoot)"
     night = hass.states.get("sensor.heating_night_prediction")
     assert night.state == "06:41" and night.attributes["warmup_min"] == 49
+    # Attribute numbers promoted to their own sensors for long-term statistics (#106)
+    for name, value in (
+        ("last_warm_up_rise_time", "34"), ("last_warm_up_undershoot", "0.1"), ("last_warm_up_flame_starts", "3"),
+        ("predicted_warm_up_time", "49"), ("night_cooling_time_constant", "40.0"), ("evening_drop", "-0.8"),
+    ):
+        state = hass.states.get(f"sensor.heating_{name}")
+        assert state.state == value, name
+        assert state.attributes["state_class"] == "measurement", name
+    assert hass.states.get("sensor.heating_last_warm_up_rise_time").attributes["unit_of_measurement"] == "min"
+    for name in ("gas_per_degree_day_28_days", "hot_water_gas_rate", "base_gas_use_per_day"):
+        assert hass.states.get(f"sensor.heating_{name}") is not None, name
 async def test_unreadable_learning_file_does_not_block_heating(hass: HomeAssistant) -> None:
     entry = await _setup(hass, {})
     folder = os.path.join(hass.config.config_dir, DOMAIN, entry.entry_id)
