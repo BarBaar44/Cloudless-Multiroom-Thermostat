@@ -24,7 +24,7 @@ Most of what keeps a feature from stable is not waiting for data but proof: does
 |---|---|---|
 | Gas per degree-day | A full year of data (so a whole heating season), and with the boiler signals set, a measured (or set) hot-water rate | Serve as the official check for the other features |
 | Night cooldown model | At least 30 predicted nights spread over 3 or more outdoor bands, average error 0.3 °C or less, no night off by more than 0.6 °C | Optimum start: begin heating at the predicted time |
-| Warm-up episodes and PID advice | PID values changed (by hand or automatically), confirmed in at least 2 outdoor bands: in each band, 5 or more valid episodes of the followed room after the change with less overshoot or a faster warm-up on average than the 5 before it in that band (or, when nothing before it can be compared, 5 that hold steady against a baseline of the first 5 after it), and gas per degree-day not worse | Set the PID values per outdoor band (gain scheduling) |
+| Warm-up episodes and PID advice | Confirmed in at least 2 outdoor bands. A band is confirmed by [probing](#probing-values-that-get-no-advice) (neither a step up nor a step down was better, so the values were already right) or by a PID change (by hand or automatically): in that band, 5 or more valid episodes of the followed room after the change with less overshoot or a faster warm-up on average than the 5 before it in that band (or, when nothing before it can be compared, 5 that hold steady against a baseline of the first 5 after it), and gas per degree-day not worse | Set the PID values per outdoor band (gain scheduling) |
 | Evening report | The features it reports on are stable | Stay as it is |
 
 The night model counts its last 30 valid nights that had a prediction. A change is noticed when the effective gains of a warm-up differ from the warm-up before, whether you made it or [the advice was applied automatically](#applying-the-advice-automatically). Effective gains are Kp, Ki and Kd times what the PID output is multiplied by: the flow limit with `thermostat.yaml` (records from schema 3 on), otherwise 100. So a firmware change that rescales the output and the gains together, as `thermostat.yaml` did on 2026-11-07 (output times the flow limit instead of 0 to 100, Kp and Ki times 2.5), is the same controller and no change. There is one set of PID values for all weather, so a change is judged in every band it runs in: per band, its warm-ups on the new values against the 5 before the change in that band. One change can confirm both bands once the weather has varied; a later change replaces it.
@@ -259,7 +259,20 @@ Guardrails:
 - **Only warm-ups:** top-ups are left out of the advice and of the check.
 - **Failures never block heating:** a value that can't be written is logged and tried again after the next warm-up.
 
-The evening report shows every change (applied, kept, reverted, dropped, inconclusive, failed) and the check in progress. The PID advice sensor's `mode` attribute says `auto` or `observe`.
+### Probing values that get no advice
+
+Advice only comes when a warm-up misses a target, so values that are already good would never be tested, and the feature could never show it works. With **Apply PID advice automatically** on, the integration therefore also probes:
+
+- **When:** 5 warm-ups in a row of the followed room ran on the current values and met every target (no overshoot above the limit, no swinging, not slow), and there is no advice.
+- **What:** Kp one 10% step up, rounded to the number's step and inside the limits. 5 warm-ups in the same outdoor band, flow limit and schema then decide.
+- **Better** (less overshoot or a faster warm-up on average, the other not worse than the warm-ups before the probe): the new value stays, and the next probe starts from it after another 5 good warm-ups.
+- **Not better:** the old value is written back and Kp is probed one step down the same way. Neither direction better: the values are **confirmed optimal** for that band, flow limit and schema, and are not probed there again until they change.
+- **Safety:** a probe warm-up that misses a target ends the probe at once and writes the old value back. A probe without 5 warm-ups after 14 days is reverted too: unlike advice, nothing asked for it.
+- **Advice first:** advice always wins; a probe only starts when there is none. Changing Kp, Ki or Kd yourself ends a probe without a revert, as with advice.
+
+A confirmed optimum counts towards [stable](#when-a-feature-becomes-stable) the same way as a change that helped.
+
+The evening report shows every change (applied, probed, kept, reverted, dropped, inconclusive, failed), confirmed optima and the check or probe in progress. The PID advice sensor's `mode` attribute says `auto` or `observe`.
 
 Turning it on doesn't change the 21:00 report's other parts or any other feature: they stay observe only.
 

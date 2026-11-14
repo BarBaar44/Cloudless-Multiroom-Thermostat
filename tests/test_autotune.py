@@ -132,3 +132,116 @@ def test_a_check_without_verdict_ends_after_14_days_and_keeps_the_change() -> No
     action, state = autotune.decide(history, new, None, state, "2026-11-16T09:00:00+01:00")
     assert action is None and state["pending"] is None and state["reverted"] == []
     assert state["log"][-1]["action"] == "inconclusive" and "1 of 2 warm-ups" in state["log"][-1]["why"]
+
+
+# Probing (#132): values that get no advice are tested one step up and down
+
+NOW = "2026-11-{}T09:00:00+01:00"
+
+
+def _good(day: int, params: dict, overshoot: float = 0.2, rise: int = 30, band: str = "0_8") -> dict:
+    """A warm-up that met every target (no verdict)."""
+    return _ep(f"{day:02d}T06:30", params, overshoot=overshoot, band=band, rise_min=rise)
+
+
+def _probe(history, params, state, day):
+    return autotune.decide(history, params, None, state, NOW.format(f"{day:02d}"), probe=True)
+
+
+def test_no_probe_without_the_option_or_before_the_streak() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    assert autotune.decide(history, P, None, {}, NOW.format("05"))[0] is None
+    assert _probe(history[:4], P, {}, 4)[0] is None
+    # A warm-up that missed a target breaks the streak
+    history[2] = _ep("03T06:30", P, overshoot=0.6)
+    assert _probe(history, P, {}, 5)[0] is None
+
+
+def test_probe_up_kept_when_better() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    action, state = _probe(history, P, {}, 5)
+    up = {**P, "kp": 1.925}
+    assert action == {
+        "action": "probe", "param": "kp", "value": 1.925, "old": 1.75,
+        "why": "probe up: 5 warm-ups on target without advice",
+    }
+    assert state["pending"]["probe"] == "up" and state["pending"]["before"] == {"overshoot": 0.2, "rise_min": 30}
+    history += [_good(d, up, rise=25) for d in range(6, 10)]
+    action, state = _probe(history, up, state, 9)
+    assert action is None and state["pending"] is not None  # 4 of 5
+    history.append(_good(10, up, rise=25))
+    action, state = _probe(history, up, state, 10)
+    assert action is None and state["pending"] is None
+    assert state["log"][-1]["action"] == "kept" and state["probe_next"] is None
+
+
+def test_probe_up_then_down_then_optimum() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    _, state = _probe(history, P, {}, 5)
+    up = {**P, "kp": 1.925}
+    history += [_good(d, up, overshoot=0.25) for d in range(6, 11)]  # more overshoot: not better
+    action, state = _probe(history, up, state, 10)
+    assert action == {"action": "revert", "param": "kp", "value": 1.75, "old": 1.925, "why": "probe up: not better"}
+    assert state["probe_next"]["direction"] == "down"
+    # Next warm-up on the old values: probe down
+    history.append(_good(11, P))
+    action, state = _probe(history, P, state, 11)
+    down = {**P, "kp": 1.575}
+    assert action["action"] == "probe" and action["value"] == 1.575 and state["pending"]["probe"] == "down"
+    history += [_good(d, down, rise=40) for d in range(12, 17)]  # slower: not better
+    action, state = _probe(history, down, state, 16)
+    assert action["action"] == "revert" and action["value"] == 1.75
+    assert state["optimum"][-1]["params"] == P and state["optimum"][-1]["band"] == "0_8"
+    assert autotune.optimum_bands(state) == {"0_8": "2026-11-16"}
+    assert "- 09:00 optimum: kp 1.75 confirmed (no better value up or down)" in autotune.log_lines(state, "2026-11-16")
+    # Confirmed: no new probe on the same values in the same band
+    history += [_good(d, P) for d in range(17, 22)]
+    assert _probe(history, P, state, 21)[0] is None
+
+
+def test_probe_warm_up_that_misses_a_target_reverts_at_once() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    _, state = _probe(history, P, {}, 5)
+    up = {**P, "kp": 1.925}
+    history.append(_ep("06T06:30", up, overshoot=0.6))
+    action, state = _probe(history, up, state, 6)
+    assert action["action"] == "revert" and action["why"] == "probe up: a warm-up gave overshoot"
+    assert state["probe_next"]["direction"] == "down"
+
+
+def test_probe_without_verdict_reverts_after_14_days() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    _, state = _probe(history, P, {}, 5)
+    up = {**P, "kp": 1.925}
+    history.append(_good(6, up, band="8_15"))  # other band: does not count
+    assert _probe(history, up, state, 18)[0] is None
+    action, state = _probe(history, up, state, 20)
+    assert action["action"] == "revert" and "0 of 5 warm-ups in 14 days" in action["why"]
+    assert state["probe_next"] is None and not state["optimum"]
+
+
+def test_advice_comes_before_a_probe() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    _, state = _probe(history, P, {}, 5)
+    up = {**P, "kp": 1.925}
+    history += [_good(d, up, overshoot=0.25) for d in range(6, 11)]
+    _, state = _probe(history, up, state, 10)
+    assert state["probe_next"]
+    history += [_ep("11T06:30", P), _ep("12T06:30", P)]  # overshoot 0.8 twice: advice
+    action, state = autotune.decide(history, P, _rec(history, P), state, NOW.format("12"), probe=True)
+    assert action["action"] == "apply" and action["param"] == "ki" and state["probe_next"] is None
+
+
+def test_probe_respects_rounding_and_limits() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    # The number's step makes the step up impossible: probe down instead
+    at_limit = lambda rec: {**rec, "new": rec["old"], "at_limit": True} if rec["new"] > rec["old"] else rec  # noqa: E731
+    action, _ = autotune.decide(history, P, None, {}, NOW.format("05"), probe=True, round_value=at_limit)
+    assert action["action"] == "probe" and action["value"] == 1.575
+
+
+def test_status_line_for_a_probe() -> None:
+    history = [_good(d, P) for d in range(1, 6)]
+    _, state = _probe(history, P, {}, 5)
+    line = autotune.status_line(state, history)
+    assert line == "- Probing (up) kp 1.75 -> 1.925 (since 2026-11-05 09:00): 0 of 5 warm-ups in band 0_8"

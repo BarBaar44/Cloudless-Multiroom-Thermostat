@@ -233,3 +233,11 @@ def test_bands_on_different_changes_name_their_own() -> None:
     text = progress.pid_progress(episodes)["text"]
     assert "8_15: " in text and ", for the change of 2026-11-03 (Kp 1.75 → 1.9)" in text
     assert ", for the change of 2026-11-04 (Kp 1.9 → 1.75)" in text
+
+
+def test_a_band_confirmed_by_probing_counts() -> None:
+    p = progress.pid_progress([], optimum={"0_8": "2026-11-20"})
+    assert p["text"].startswith("PID advice: 1 of 2 outdoor bands confirmed. 0_8: confirmed by probing on 2026-11-20")
+    assert not p["done"]
+    p = progress.pid_progress([], optimum={"0_8": "2026-11-20", "below_0": "2026-12-03"})
+    assert p["done"] and "2 of 2" in p["text"]
