@@ -652,6 +652,44 @@ def _samples(area: str = "Living", minutes: int = 40) -> list[dict]:
     ]
 
 
+def test_flow_against_the_limit() -> None:
+    """#104: requested and real flow are recorded against the flow limit."""
+    samples = [
+        {**s, "max_ch": 40.0, "flow_req": 40.0, "water": 49.0 if i < 5 else 41.0}
+        for i, s in enumerate(_samples())
+    ]
+    samples[10]["dhw"] = True  # a hot water minute counts for neither
+    samples[10]["water"] = 60.0
+    samples[10]["flow_req"] = 60.0
+    rec = tuner_core.analyse(samples, {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert rec["flow_above_limit_min"] == 5 and rec["req_above_limit_min"] == 0
+    assert rec["flow_req_max"] == 40.0 and rec["flow_req_avg"] == 40.0 and rec["water_peak"] == 49.0
+    # Without the sensors nothing is claimed
+    bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert bare["flow_above_limit_min"] is None and bare["req_above_limit_min"] is None
+    assert bare["flow_req_max"] is None
+
+
+def test_curve_line() -> None:
+    assert tuner_core.curve_line([]) is None
+    up = {"schema": 3, "target": 20.0, "start_temp": 18.0, "invalid_reasons": [], "max_ch": 40.0,
+          "outdoor_band": "0_8", "flow_above_limit_min": 0, "req_above_limit_min": 0, "water_peak": 41.0}
+    episodes = [
+        {**up, "max_ch": 47.5},  # another limit: not counted
+        up,
+        {**up, "outdoor_band": "below_0", "flow_above_limit_min": 6, "water_peak": 49.0},
+        {**up, "invalid_reasons": ["other_room"]},  # other rooms count
+        {**up, "invalid_reasons": ["hot_water"]},  # disturbed: not counted
+        {**up, "start_temp": 19.8},  # a top-up: not counted
+    ]
+    assert tuner_core.curve_line(episodes) == (
+        "Heating curve data at flow limit 40 °C: 3 warm-ups "
+        "(outdoor below 0: 1, 0 to 8: 2, 8 to 15: 0, above 15: 0 °C). "
+        "Flow more than 2 °C above the limit in 1 of 3 (highest 49 °C); "
+        "requested flow above the limit in 0 of 3"
+    )
+
+
 def test_episode_room_matched_by_id() -> None:
     """other_room follows the room id of the "Room to follow" option, not a room name."""
     followed = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")

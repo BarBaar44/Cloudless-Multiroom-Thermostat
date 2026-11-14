@@ -31,6 +31,8 @@ UNDERSHOOT_LIMIT = 0.4     # degC below target after the first reach
 FLAME_STARTS_PER_HOUR = 6  # more than this is short-cycling
 CONSISTENT_EPISODES = 2    # this many valid episodes in a row must agree
 STEP = 0.10                # 10 % parameter step
+FLOW_MARGIN = 2.0          # degC the real flow may run above the flow limit before it counts (#104)
+REQUEST_MARGIN = 0.5       # degC: a requested flow above the limit by more than this is a firmware fault
 
 # Only episodes led by the followed room (the "Room to follow" option, matched
 # by room id) are used for tuning. Other rooms' episodes are still recorded
@@ -204,6 +206,16 @@ def analyse(samples, params, start_reason, extra_reasons=(), *, room_id, followe
     # The boiler's own flow limit (maximum CH setpoint): it caps what the PID
     # can ask for, so warm-ups with a different limit are not comparable
     caps = [s.get("max_ch") for s in samples if s.get("max_ch") is not None]
+    # Heating curve data (#104): requested and real flow while the burner
+    # heats (not hot water), against the flow limit of that minute
+    burning = [s for s in samples if s["flame"] and not s["dhw"]]
+    requests = [s.get("flow_req") for s in samples if not s["dhw"] and s.get("flow_req") is not None]
+    burn_waters = [s["water"] for s in burning if s["water"] is not None]
+    burn_requests = [s.get("flow_req") for s in burning if s.get("flow_req") is not None]
+
+    def _above(key, margin):
+        hits = [s for s in samples if not s["dhw"] and s.get(key) is not None and s.get("max_ch") is not None]
+        return len([1 for s in hits if s[key] > s["max_ch"] + margin]) if hits else None
 
     if len(samples) < MIN_EPISODE_MIN:
         reasons.append("too_short")
@@ -247,6 +259,11 @@ def analyse(samples, params, start_reason, extra_reasons=(), *, room_id, followe
         "flame_on_min": len([1 for s in samples if s["flame"]]),
         "water_peak": max(waters, default=None),
         "max_ch": caps[0] if caps else None,
+        "water_avg": _avg(burn_waters),
+        "flow_req_max": max(requests, default=None),
+        "flow_req_avg": _avg(burn_requests),
+        "flow_above_limit_min": _above("water", FLOW_MARGIN),
+        "req_above_limit_min": _above("flow_req", REQUEST_MARGIN),
         "gas_used": round(gas[-1] - gas[0], 3) if gas else None,
         "return_avg": round(sum(returns) / len(returns), 1) if returns else None,
         "return_max": max(returns) if returns else None,
@@ -350,6 +367,42 @@ def per_room(episodes, params, rooms):
             "rec": recommend(episodes, params, room_id=room_id, room_name=name),
         })
     return out
+
+
+BAND_NAMES = {"below_0": "below 0", "0_8": "0 to 8", "8_15": "8 to 15", "above_15": "above 15"}
+
+
+def curve_line(episodes):
+    """
+    Heating curve data (#104, observe only): how many warm-ups there are at
+    the current flow limit per outdoor band, and whether the flow stayed at
+    that limit. Warm-ups of every room count, of the latest schema; the
+    flow limit is the latest warm-up's. None without a warm-up with a limit.
+    """
+    ups = [
+        e for e in episodes
+        if episode_kind(e) == "warm_up" and e.get("max_ch") is not None
+        and all(r == "other_room" for r in e.get("invalid_reasons") or [])
+    ]
+    if not ups:
+        return None
+    last = ups[-1]
+    ups = [e for e in ups if e["max_ch"] == last["max_ch"] and schema_of(e) == schema_of(last)]
+    bands = ", ".join(
+        f"{label}: {len([1 for e in ups if e.get('outdoor_band') == band])}" for band, label in BAND_NAMES.items()
+    )
+    line = f"Heating curve data at flow limit {last['max_ch']:g} °C: {len(ups)} warm-ups (outdoor {bands} °C)"
+    flow = [e for e in ups if e.get("flow_above_limit_min") is not None]
+    if flow:
+        over = [e for e in flow if e["flow_above_limit_min"] > 0]
+        line += f". Flow more than {FLOW_MARGIN:g} °C above the limit in {len(over)} of {len(flow)}"
+        peak = max((e["water_peak"] for e in over if e.get("water_peak") is not None), default=None)
+        if peak is not None:
+            line += f" (highest {peak:g} °C)"
+    req = [e for e in ups if e.get("req_above_limit_min") is not None]
+    if req:
+        line += f"; requested flow above the limit in {len([1 for e in req if e['req_above_limit_min'] > 0])} of {len(req)}"
+    return line
 
 
 def _or_dash(value):

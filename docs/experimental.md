@@ -81,6 +81,7 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 | Flow water temperature | | | ○ |
 | Return water temperature | | | ○ |
 | Boiler maximum flow temperature | ○ (stored per day) | | ○ (keeps warm-ups with a different limit apart) |
+| Requested flow temperature | | | ○ ([heating curve data](#heating-curve-data)) |
 | Boiler hot water setpoint | ○ (stored per day) | | |
 | PID Kp, Ki, Kd | | | ✔ for advice (all three) |
 | PID integral | | | ○ |
@@ -177,6 +178,13 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 - **Why:** the maximum flow temperature caps what the PID can ask for. Lower it from 50 to 40 °C and warm-ups get slower with less overshoot, whatever the PID values are. The PID advice limits also follow it (see [the PID values](#pid-kp-pid-ki-pid-kd)). Each warm-up stores the limit (`max_ch`), advice only combines warm-ups with the same limit, and the [progress check](#when-a-feature-becomes-stable) only compares warm-ups before and after a PID change that had the same limit. A warm-up during which the limit changed is skipped (`max_ch_changed`). Each gas day stores both settings in effect at the end of the day (`max_ch`, `dhw_setpoint` in `gas_days.jsonl`), so you can see what a lower hot water setpoint did to the hot-water gas. When either setting changes, the next evening report says so.
 - **Required:** no. Without them nothing changes; older records without `max_ch` are only compared with each other.
 - **Where from:** for the flow limit, the entity that sets the limit: with [`thermostat.yaml`](../thermostat.yaml) the **Central heating max flow temperature** number. The boiler's own maximum (ESPHome OpenTherm `max_t_set`, an OpenTherm Gateway) only fits when the thermostat really stops there; on the ATAG this was built on, the boiler followed requests above its panel maximum. For the hot water setpoint: ESPHome OpenTherm `t_dhw_set`, DIYLess, or an OpenTherm Gateway. **Don't make the hot water setpoint changeable from Home Assistant** just to see it: some boilers stop working when a thermostat sends it (see [Atag E325EC](../README.md#atag-e325ec-set-the-hot-water-temperature-on-the-boiler-never-from-the-thermostat-c1-51)).
+
+### Requested flow temperature
+
+- **What:** a sensor in °C: the flow temperature the thermostat asks the boiler for at this moment. Only read.
+- **Why:** to check that the flow really stays at the [flow limit](#boiler-maximum-flow-temperature-boiler-hot-water-setpoint), and to collect data for a heating curve later. Each warm-up stores the highest and average request (`flow_req_max`, `flow_req_avg`) and the minutes the request was above the limit (`req_above_limit_min`). See [Heating curve data](#heating-curve-data).
+- **Required:** no. Without it the warm-ups still record how long the real flow ran above the limit.
+- **Where from:** with [`thermostat.yaml`](../thermostat.yaml) the **Central heating requested flow temperature** sensor. Other thermostats: whatever shows the control setpoint (OpenTherm ID 1), for example an OpenTherm Gateway.
 
 ### PID Kp, PID Ki, PID Kd
 
@@ -342,6 +350,25 @@ The option **Evening notification** on the learning features page decides what t
 The time is fixed at 21:00 because the night model measures the evening drop from 21:00.
 
 If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
+
+## Heating curve data
+
+**Question it answers:** which flow limit does this house need at which outdoor temperature? That is the start of a heating curve: Home Assistant lowering the flow limit on mild days and raising it in a frost ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)). This release only collects the data; nothing changes the limit.
+
+Two things have to be known first ([#104](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/104)):
+
+1. **Does the flow stay at the limit?** Each warm-up stores the minutes the real flow ran more than 2 °C above the flow limit (`flow_above_limit_min`), its average while the burner heated (`water_avg`), and, with the [requested flow temperature](#requested-flow-temperature) set, the same for the request. A request above the limit means the thermostat asks for too much; a request at the limit with the real flow above it means the boiler overshoots its own setpoint, which happens when its smallest flame is more than the radiators can take. Minutes with hot water are left out.
+2. **Warm-ups at one fixed limit across the weather.** Keep the flow limit the same for a while and let the cold and mild mornings come.
+
+The evening report has a line for it, for example:
+
+```
+Heating curve data at flow limit 40 °C: 14 warm-ups (outdoor below 0: 2, 0 to 8: 10, 8 to 15: 2, above 15: 0 °C). Flow more than 2 °C above the limit in 3 of 14 (highest 49 °C); requested flow above the limit in 0 of 14
+```
+
+It counts warm-ups (not top-ups) of every room that weren't disturbed, at the limit of the latest warm-up. Change the limit and the count starts again, as warm-ups at another limit aren't comparable. Change one thing at a time.
+
+**Why alpha:** data collection only.
 
 ## Long-term statistics
 
