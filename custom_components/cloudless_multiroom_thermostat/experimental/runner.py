@@ -65,6 +65,7 @@ from ..const import (
     CONF_EXP_OUTDOOR,
     CONF_EXP_PEOPLE,
     CONF_EXP_FLOW_REQUEST,
+    CONF_EXP_MIN_POWER,
     CONF_EXP_RETURN,
     CONF_EXP_ROOM,
     CONF_EXP_WATER,
@@ -1123,6 +1124,8 @@ class ExperimentalRunner:
             gas_core.summary_line(gas) if gas else "Gas per degree-day: set a gas meter and an outdoor sensor to enable"
         )
         curve_line = tuner_core.curve_line(episodes)
+        min_power = tuner_core.min_power(episodes, _num(self._s.get(CONF_EXP_MIN_POWER)))
+        low_load = [e for e in episodes if e.get("low_load")]
         status = progress.statuses(
             gas, nights, episodes, room.room_id if room else None, room.name if room else None,
             optimum=autotune.optimum_bands(tuner_state.get("auto")),
@@ -1138,6 +1141,8 @@ class ExperimentalRunner:
         message += f"\n\n{gas_line}"
         if curve_line:
             message += f"\n\n{curve_line}"
+        if low_load or min_power["source"] != "measuring":
+            message += f"\n\n{tuner_core.min_power_line(min_power)}"
         message += "\n\nProgress to stable:\n" + "\n".join(progress_lines)
         message += f"\n\n[What these mean]({DOCS_EXPERIMENTAL_URL})"
 
@@ -1167,6 +1172,7 @@ class ExperimentalRunner:
             "night": [night_title, *night_lines],
             "gas": gas_line,
             "heating_curve": curve_line,
+            "min_power": min_power,
             "progress": progress_lines,
             "text": message,
             "docs": DOCS_EXPERIMENTAL_URL,

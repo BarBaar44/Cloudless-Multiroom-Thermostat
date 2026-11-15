@@ -702,6 +702,61 @@ def test_cost() -> None:
     assert s["last"]["cost"] == 4.05
 
 
+def _cycling(minutes: int = 100, water_end: float = 47.0, flow_req: float | None = 40.0) -> list[dict]:
+    """Bedroom case of #80: 3 minute burns, 5 minutes off, flow above the request at each burn end."""
+    return [
+        {
+            **s,
+            "flame": 1 <= i % 8 <= 3,
+            "water": water_end if i % 8 == 3 else 38.0,
+            "max_ch": 40.0,
+            "flow_req": flow_req,
+        }
+        for i, s in enumerate(_samples(minutes=minutes))
+    ]
+
+
+def test_low_load_detected_and_kept_out_of_oscillating() -> None:
+    """#103: short-cycling with burns ending above the request is low load, not a PID problem."""
+    rec = tuner_core.analyse(_cycling(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert rec["flame_starts_per_hour"] > tuner_core.FLAME_STARTS_PER_HOUR
+    assert rec["burn_avg_min"] == 3.0 and rec["off_avg_min"] == 5.0 and rec["off_min_min"] == 5
+    assert rec["low_load"] is True and rec["burns_end_hot"] > 0
+    calm = {**rec, "overshoot": 0.1, "undershoot": 0.1, "rise_min": 30}
+    assert tuner_core.verdict(calm) is None
+    assert tuner_core.verdict({**calm, "overshoot": 0.6}) == "overshoot"  # still counts for overshoot
+    assert "low load: " in tuner_core.summary_line({**rec, "valid": True})
+    # Burns that end at the request: the PID stopped them, so it stays oscillating
+    pid = tuner_core.analyse(_cycling(water_end=40.0), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert pid["low_load"] is False and tuner_core.verdict({**pid, "overshoot": 0.1}) == "oscillating"
+    # Without flow data nothing is claimed and the verdict is as before
+    bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert bare["low_load"] is None
+    # Without a request the flow limit is the reference
+    limit = tuner_core.analyse(_cycling(flow_req=None), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert limit["low_load"] is True
+
+
+def test_burns_skip_hot_water_and_cut_burns() -> None:
+    samples = [{**s, "flame": i in (0, 1, 5, 6, 10, 11, 12, 20, 21), "dhw": i in (10, 11, 12)}
+               for i, s in enumerate(_samples(minutes=22))]
+    burns, offs = tuner_core._burns(samples)
+    # 0-1 runs at the first sample, 10-12 is hot water, 20-21 runs at the end
+    assert [n for n, _ in burns] == [2]
+    assert offs == [3, 3, 7]
+
+
+def test_min_power() -> None:
+    low = {"low_load": True, "dhw_min": 0, "gas_used": 0.4, "flame_on_min": 40}
+    assert tuner_core.min_power([low])["source"] == "measuring"
+    mp = tuner_core.min_power([low, low])
+    assert mp["source"] == "measured" and mp["minutes"] == 80 and mp["kw"] == round(0.01 * 60 * 9.77, 1)
+    # Hot water or normal-load warm-ups don't count; a setting wins
+    assert tuner_core.min_power([low, {**low, "dhw_min": 2}, {**low, "low_load": False}])["minutes"] == 40
+    assert tuner_core.min_power([low, low], 6.1) == {"source": "setting", "kw": 6.1, "minutes": None}
+    assert "about 5.9 kW" in tuner_core.min_power_line(mp)
+
+
 def test_curve_line() -> None:
     assert tuner_core.curve_line([]) is None
     up = {"schema": 3, "target": 20.0, "start_temp": 18.0, "invalid_reasons": [], "max_ch": 40.0,
