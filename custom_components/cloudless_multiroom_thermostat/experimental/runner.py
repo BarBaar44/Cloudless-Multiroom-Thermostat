@@ -533,6 +533,13 @@ class ExperimentalRunner:
             room_id=ep.get("room_id"),
             followed_room_id=self.room.room_id if self.room else None,
         )
+        # Cost per warm-up (#109): its gas at the price of its start
+        prices = await self._async_prices(record["start"][:10])
+        price = gas_core.price_at(prices, int(record["start"][11:13]))
+        record["gas_price"] = price
+        record["cost"] = (
+            round(record["gas_used"] * price, 2) if price is not None and record.get("gas_used") is not None else None
+        )
         await self._io(store.append_episode, self.f_episodes, record)
         await self._async_keep_samples(record, ep)
         history = await self._io(store.read_episodes, self.f_episodes)
@@ -596,6 +603,8 @@ class ExperimentalRunner:
                     "water_peak": record.get("water_peak"),
                     "return_avg": record.get("return_avg"),
                     "condensing_pct": record.get("condensing_pct"),
+                    "gas_used": record.get("gas_used"),
+                    "cost": record.get("cost"),
                     "outdoor_avg": record.get("outdoor_avg"),
                     "valid": record.get("valid"),
                     "invalid_reasons": record.get("invalid_reasons"),
@@ -864,6 +873,25 @@ class ExperimentalRunner:
             )
         )
 
+    async def _async_prices(self, date: str) -> tuple[float, float] | None:
+        """
+        Gas prices (before 06:00, after 06:00) that applied on `date`: the
+        "tomorrow" price sensors as they were at EXP_SUMMARY_HOUR the evening
+        before, when the night prediction reads them too. None unless both
+        are set and known.
+        """
+        ids = [self._entity(CONF_EXP_GAS_BEFORE6), self._entity(CONF_EXP_GAS_AFTER6)]
+        if not all(ids):
+            return None
+        when = _day_start(date) - timedelta(days=1) + timedelta(hours=EXP_SUMMARY_HOUR)
+        try:
+            states = await self._async_history(ids, when - timedelta(hours=1), when + timedelta(minutes=1))
+        except Exception as err:  # noqa: BLE001 - no cost only means less detail
+            _LOGGER.debug("No gas prices for %s: %s", date, err)
+            return None
+        values = tuple(_value_at(states.get(eid, []), when) for eid in ids)
+        return values if all(v is not None for v in values) else None
+
     def _away(self, people: list[tuple[datetime, float | None]], date: str) -> bool:
         """True if nobody was home the whole of `date`."""
         if not self._entity(CONF_EXP_PEOPLE):
@@ -912,6 +940,7 @@ class ExperimentalRunner:
                 h1 = h0 + timedelta(hours=1)
                 hours.append(
                     {
+                        "hour": dt_util.as_local(h0).hour,
                         "gas": r.get("change"),
                         "ch": gas_core.on_minutes(changes[ch], h0, h1),
                         "dhw": gas_core.on_minutes(changes[dhw], h0, h1),
@@ -933,6 +962,11 @@ class ExperimentalRunner:
             split["date"] = date
             split["gas"] = round(gas, 3)
             split["away"] = self._away(people, date)
+            # Cost per day (#109): the prices read the evening before, like the night prediction
+            prices = await self._async_prices(date)
+            if prices:
+                split["gas_price_before6"], split["gas_price_after6"] = prices
+                split["cost"] = gas_core.day_cost(hours, prices)
             day_end = _day_start(date) + timedelta(days=1)
             for key, eid in settings.items():
                 split[key] = _value_at(states.get(eid, []), day_end)

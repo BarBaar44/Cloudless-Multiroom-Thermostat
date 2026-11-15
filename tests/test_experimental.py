@@ -17,7 +17,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.cloudless_multiroom_thermostat.const import DOCS_EXPERIMENTAL_URL, DOMAIN
-from custom_components.cloudless_multiroom_thermostat.experimental import night_core, tuner_core
+from custom_components.cloudless_multiroom_thermostat.experimental import gas_core, night_core, tuner_core
 from custom_components.cloudless_multiroom_thermostat.experimental import runner as runner_mod
 from custom_components.cloudless_multiroom_thermostat.experimental import store
 
@@ -681,6 +681,25 @@ def test_condensing_share() -> None:
     bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
     assert bare["condensing_pct"] is None
     assert "condensing -" in tuner_core.summary_line({**bare, "valid": True})
+
+
+def test_cost() -> None:
+    """#109: gas times the price of its hour; 06:00 switches to the new price."""
+    prices = (1.20, 1.40)
+    assert gas_core.price_at(prices, 5) == 1.20 and gas_core.price_at(prices, 6) == 1.40
+    assert gas_core.price_at(None, 7) is None
+    hours = [{"hour": h, "gas": g} for h, g in ((4, 0.5), (5, 0.0), (6, 1.0), (7, None))]
+    assert gas_core.day_cost(hours, prices) == round(0.5 * 1.20 + 1.0 * 1.40, 2)
+    assert gas_core.day_cost(hours, None) is None
+    assert gas_core.day_cost([{"hour": 3, "gas": 0.0}], None) == 0.0
+    line = tuner_core.summary_line({**tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a",
+                                                         followed_room_id="a"), "valid": True,
+                                    "gas_used": 0.8, "cost": 1.12})
+    assert line.endswith(", gas 0.8 m3 cost 1.12")
+    s = gas_core.summary(gas_core.build_days(
+        {"2026-11-01": 3.0}, {"2026-11-01": 8.0}, "2026-11-02",
+        {"2026-11-01": {"dhw_gas": 1.0, "heating_gas": 2.0, "cost": 4.05}}))
+    assert s["last"]["cost"] == 4.05
 
 
 def _cycling(minutes: int = 100, water_end: float = 47.0, flow_req: float | None = 40.0) -> list[dict]:

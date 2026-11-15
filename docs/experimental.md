@@ -87,7 +87,7 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 | PID Kp, Ki, Kd | | | ✔ for advice (all three) |
 | PID integral | | | ○ |
 | Apply PID advice automatically | | | ○ (off: advice only) |
-| Gas price before / after 06:00 | | ○ | |
+| Gas price before / after 06:00 | ○ (cost per day) | ○ | ○ (cost per warm-up) |
 
 **A sensible start for most houses:** outdoor temperature, weather forecast and gas meter. That gives you gas per degree-day and the night model. The boiler fields only make sense with a smart (OpenTherm) boiler connection; the PID fields only with an ESPHome style PID.
 
@@ -210,7 +210,7 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 ### Gas price tomorrow before 06:00 / after 06:00
 
 - **What:** two sensors with the gas price for tomorrow, before and after 06:00.
-- **Why:** dynamic gas contracts change price at 06:00. The prices are shown next to the night prediction, so you can see whether starting the heating a bit earlier would be cheaper. Nothing is calculated with them yet.
+- **Why:** dynamic gas contracts change price at 06:00. The prices are shown next to the night prediction, so you can see whether starting the heating a bit earlier would be cheaper. They also give each warm-up and each day a [cost](#cost-per-warm-up-and-per-day).
 - **Required:** no, purely informational.
 - **Where from:** an integration for a dynamic energy contract, such as Frank Energie, Zonneplan, Tibber or EnergyZero. These usually give the current price or a list of prices; you may need a template sensor to pick tomorrow's price before and after 06:00.
 
@@ -357,6 +357,18 @@ The option **Evening notification** on the learning features page decides what t
 The time is fixed at 21:00 because the night model measures the evening drop from 21:00.
 
 If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
+
+## Cost per warm-up and per day
+
+**Question it answers:** what did the heating cost? Kept now so v2 starts with a cost history ([#109](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/109)). Needs the [gas price sensors](#gas-price-tomorrow-before-0600--after-0600) and a gas meter.
+
+- **Prices:** the price sensors as they were at 21:00 the evening before, when they give the coming day's prices (the night prediction reads them at the same moment). Before 06:00 the first price applies, from 06:00 the second. They are read from Home Assistant's history, so a day or warm-up that is processed more than about 10 days later (the recorder's default) gets no cost.
+- **Per warm-up:** `gas_price` (at its start) and `cost` (its gas use times that price), in the evening report ("gas 0.8 m3 cost 1.12") and as attributes of the last warm-up overshoot sensor. The gas comes from the meter at the start and end of the warm-up, so with a meter that reports every few minutes it is an estimate.
+- **Per day:** `gas_price_before6`, `gas_price_after6` and `cost` in `gas_days.jsonl`: each hour's gas at the price of that hour. Shown with the day's gas in the evening report. Stored with the [hot water split](#burner-flame-hot-water-active-central-heating-active), so it needs those three sensors too.
+
+The amount is in the unit of the price sensors (for example euro). A fixed price contract works too: point both fields at the same sensor (a template sensor with your price).
+
+**Why alpha:** data collection only.
 
 ## Low-load detection
 

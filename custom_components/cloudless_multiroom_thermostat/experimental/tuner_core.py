@@ -491,6 +491,8 @@ def summary_line(e):
     )
     if e.get("max_ch") is not None:
         line += f", flow limit {e['max_ch']:g}"
+    if e.get("cost") is not None:
+        line += f", gas {e['gas_used']:g} m3 cost {e['cost']:.2f}"
     if episode_kind(e) == "top_up":
         line += ", top-up (not used for advice)"
     if e.get("low_load"):

@@ -87,6 +87,35 @@ def nobody_home(changes, start, end):
     return seen
 
 
+PRICE_SWITCH_HOUR = 6  # dynamic gas prices change at 06:00 (the gas day)
+
+
+def price_at(prices, hour):
+    """The gas price (before 06:00, after 06:00) that applies at a local hour; None when unknown."""
+    if not prices:
+        return None
+    return prices[0] if hour < PRICE_SWITCH_HOUR else prices[1]
+
+
+def day_cost(hours, prices):
+    """
+    Cost of one day's gas (#109): each hour's gas times the price of that
+    hour. `hours` carry "hour" (local hour of the day) and "gas"; `prices` is
+    (before 06:00, after 06:00). None when a price for an hour with gas is
+    missing, so a cost is never only partly counted.
+    """
+    cost = 0.0
+    for h in hours:
+        gas = max(h["gas"] or 0.0, 0.0)
+        if gas == 0:
+            continue
+        price = price_at(prices, h["hour"])
+        if price is None:
+            return None
+        cost += gas * price
+    return round(cost, 2)
+
+
 def split_day(hours, dhw_rate=DEFAULT_DHW_RATE):
     """
     Split one day's gas into hot water and heating. `hours` is a list of
@@ -198,6 +227,8 @@ def build_days(gas_by_date, outdoor_by_date, today, split_by_date=None):
             day["heating_gas"] = split["heating_gas"]
         if split and split.get("away"):
             day["away"] = True
+        if split and split.get("cost") is not None:
+            day["cost"] = split["cost"]
         days.append(day)
     return days
 
@@ -264,6 +295,8 @@ def summary_line(s):
             s["base_days"], MIN_BASE_DAYS)
     last = s["last"]
     line = "- Gas {}: {:.2f} m3 at {} degree-days".format(last["date"], last["gas"], last["dd"])
+    if last.get("cost") is not None:
+        line += ", cost {:.2f}".format(last["cost"])
     if last.get("away"):
         line += " (nobody home, not counted)"
     elif "dhw_gas" in last:
