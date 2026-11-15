@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime, UnitOfVolume
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature, UnitOfTime, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -194,6 +194,7 @@ EXPERIMENTAL_STAT_SENSORS: tuple[ExperimentalSensorDescription, ...] = (
     _stat("last_overshoot", "rise_min", UnitOfTime.MINUTES, 0, "mdi:timer-sand"),
     _stat("last_overshoot", "undershoot", UnitOfTemperature.CELSIUS, 2, "mdi:thermometer-chevron-down"),
     _stat("last_overshoot", "flame_starts", None, 0, "mdi:fire-circle"),
+    _stat("last_overshoot", "condensing_pct", PERCENTAGE, 0, "mdi:water-thermometer"),
     _stat("night_prediction", "warmup_min", UnitOfTime.MINUTES, 0, "mdi:timer-sand"),
     _stat("night_prediction", "tau_h", UnitOfTime.HOURS, 1, "mdi:home-thermometer-outline"),
     _stat("night_prediction", "evening_drop", UnitOfTemperature.CELSIUS, 2, "mdi:thermometer-minus"),

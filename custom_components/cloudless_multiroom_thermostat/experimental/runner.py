@@ -593,6 +593,8 @@ class ExperimentalRunner:
                     "undershoot": record.get("undershoot"),
                     "flame_starts": record.get("flame_starts"),
                     "water_peak": record.get("water_peak"),
+                    "return_avg": record.get("return_avg"),
+                    "condensing_pct": record.get("condensing_pct"),
                     "outdoor_avg": record.get("outdoor_avg"),
                     "valid": record.get("valid"),
                     "invalid_reasons": record.get("invalid_reasons"),
