@@ -75,6 +75,7 @@ CONF_EXP_DHW_RATE: Final = "exp_dhw_rate"  # m³ of gas per burner minute on hot
 CONF_EXP_WATER: Final = "exp_water"
 CONF_EXP_RETURN: Final = "exp_return"
 CONF_EXP_MAX_CH: Final = "exp_max_ch"  # boiler maximum CH (flow) setpoint, read only
+CONF_EXP_MIN_POWER: Final = "exp_min_power"  # kW, boiler minimum burner power; measured when empty (#103)
 CONF_EXP_FLOW_REQUEST: Final = "exp_flow_request"  # flow temperature the thermostat asks for (#104)
 CONF_EXP_DHW_SETPOINT: Final = "exp_dhw_setpoint"  # boiler hot water setpoint, read only
 CONF_EXP_PEOPLE: Final = "exp_people"
