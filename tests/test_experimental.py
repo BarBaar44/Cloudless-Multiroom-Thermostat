@@ -670,6 +670,19 @@ def test_flow_against_the_limit() -> None:
     assert bare["flow_req_max"] is None
 
 
+def test_condensing_share() -> None:
+    """#105: share of burning minutes with the return below 55 degC."""
+    samples = [{**s, "ret": 50.0 if i < 30 else 58.0} for i, s in enumerate(_samples())]
+    samples[0]["dhw"] = True  # hot water minutes don't count
+    samples[1]["flame"] = False  # nor minutes without a flame
+    rec = tuner_core.analyse(samples, {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert rec["condensing_pct"] == round(100 * 28 / 38)
+    assert "condensing 74%" in tuner_core.summary_line({**rec, "valid": True})
+    bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert bare["condensing_pct"] is None
+    assert "condensing -" in tuner_core.summary_line({**bare, "valid": True})
+
+
 def test_curve_line() -> None:
     assert tuner_core.curve_line([]) is None
     up = {"schema": 3, "target": 20.0, "start_temp": 18.0, "invalid_reasons": [], "max_ch": 40.0,
@@ -1052,7 +1065,7 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
         })
     store.append_episode(runner.f_episodes, {
         "start": "2026-11-04T06:30:00+01:00", "area": "Living", "overshoot": 0.3,
-        "rise_min": 34, "undershoot": 0.1, "flame_starts": 3,
+        "rise_min": 34, "undershoot": 0.1, "flame_starts": 3, "condensing_pct": 80,
     })
     store.write_state(
         runner.f_state,
@@ -1079,6 +1092,7 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
     # Attribute numbers promoted to their own sensors for long-term statistics (#106)
     for name, value in (
         ("last_warm_up_rise_time", "34"), ("last_warm_up_undershoot", "0.1"), ("last_warm_up_flame_starts", "3"),
+        ("last_warm_up_condensing_share", "80"),
         ("predicted_warm_up_time", "49"), ("night_cooling_time_constant", "40.0"), ("evening_drop", "-0.8"),
     ):
         state = hass.states.get(f"sensor.heating_{name}")

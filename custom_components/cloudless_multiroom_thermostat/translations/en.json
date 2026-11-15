@@ -261,6 +261,9 @@
       "exp_flame_starts": {
         "name": "Last warm-up flame starts"
       },
+      "exp_condensing_pct": {
+        "name": "Last warm-up condensing share"
+      },
       "exp_warmup_min": {
         "name": "Predicted warm-up time"
       },

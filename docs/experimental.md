@@ -168,7 +168,7 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 ### Flow water temperature, Return water temperature
 
 - **What:** two sensors in °C. *Flow* is the water leaving the boiler towards the radiators, *return* is the water coming back.
-- **Why:** recorded with each warm-up and shown in the report (highest flow, average return), so you can see how hard the boiler worked. A condensing boiler is most efficient when the return water stays below about 55 °C: then it recovers extra heat from its exhaust.
+- **Why:** recorded with each warm-up and shown in the report (highest flow, average return), so you can see how hard the boiler worked. A condensing boiler is most efficient when the return water stays below about 55 °C: then it recovers extra heat from its exhaust. With the return set, each warm-up also gets its [condensing share](#condensing-share).
 - **Required:** no. They do not affect the advice.
 - **Where from:** the same sources as the flame sensors: OpenTherm Gateway, ESPHome OpenTherm, DIYLess.
 
@@ -351,6 +351,16 @@ The time is fixed at 21:00 because the night model measures the evening drop fro
 
 If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
 
+## Condensing share
+
+**Question it answers:** how much of the burner time was the boiler condensing? A condensing boiler gets up to about 10% more heat out of the same gas when the return water is below about 55 °C, because the water vapour in its exhaust then condenses on the heat exchanger ([#105](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/105)).
+
+Each warm-up stores the share of minutes the burner heated (not hot water) with the return below 55 °C (`condensing_pct`). The evening report shows it per warm-up ("condensing 74%"), the last warm-up overshoot sensor has it as an attribute, and `sensor.<system>_last_warm_up_condensing_share` keeps it in the [long-term statistics](#long-term-statistics).
+
+Together with the [heating curve data](#heating-curve-data) it lets a lower flow limit be judged on gas, not only on comfort: a lower limit usually raises the share. Needs the [return water temperature](#flow-water-temperature-return-water-temperature).
+
+**Why alpha:** data collection only; 55 °C is a rule of thumb, the real dew point depends on the boiler and the gas.
+
 ## Heating curve data
 
 **Question it answers:** which flow limit does this house need at which outdoor temperature? That is the start of a heating curve: Home Assistant lowering the flow limit on mild days and raising it in a frost ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)). This release only collects the data; nothing changes the limit.
@@ -379,6 +389,7 @@ Home Assistant keeps the history of a sensor's state for about 10 days, and keep
 | `sensor.<system>_last_warm_up_rise_time` | min | `rise_min` of the last warm-up overshoot | after each warm-up or top-up |
 | `sensor.<system>_last_warm_up_undershoot` | °C | `undershoot` of the last warm-up overshoot | after each warm-up or top-up |
 | `sensor.<system>_last_warm_up_flame_starts` | | `flame_starts` of the last warm-up overshoot | after each warm-up or top-up |
+| `sensor.<system>_last_warm_up_condensing_share` | % | `condensing_pct` of the last warm-up overshoot: [condensing share](#condensing-share) | after each warm-up or top-up |
 | `sensor.<system>_predicted_warm_up_time` | min | `warmup_min` of the night prediction | at 21:00 |
 | `sensor.<system>_night_cooling_time_constant` | h | `tau_h` of the night prediction: how slowly the room cools, higher is better insulated | at 21:00 |
 | `sensor.<system>_evening_drop` | °C | `evening_drop` of the night prediction | at 21:00 |

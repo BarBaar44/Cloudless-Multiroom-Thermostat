@@ -31,6 +31,7 @@ UNDERSHOOT_LIMIT = 0.4     # degC below target after the first reach
 FLAME_STARTS_PER_HOUR = 6  # more than this is short-cycling
 CONSISTENT_EPISODES = 2    # this many valid episodes in a row must agree
 STEP = 0.10                # 10 % parameter step
+CONDENSING_RETURN = 55.0   # degC: below this return temperature a condensing boiler condenses (#105)
 FLOW_MARGIN = 2.0          # degC the real flow may run above the flow limit before it counts (#104)
 REQUEST_MARGIN = 0.5       # degC: a requested flow above the limit by more than this is a firmware fault
 
@@ -266,6 +267,10 @@ def analyse(samples, params, start_reason, extra_reasons=(), *, room_id, followe
         "req_above_limit_min": _above("flow_req", REQUEST_MARGIN),
         "gas_used": round(gas[-1] - gas[0], 3) if gas else None,
         "return_avg": round(sum(returns) / len(returns), 1) if returns else None,
+        # Share of burning minutes (not hot water) with the return below
+        # CONDENSING_RETURN, in %: lets a lower flow be judged on gas (#105)
+        "condensing_pct": round(100 * len([r for r in returns if r < CONDENSING_RETURN]) / len(returns))
+        if returns else None,
         "return_max": max(returns) if returns else None,
         "people_avg": _avg([s.get("people") for s in samples]),
         "integral_min": min(integrals, default=None),
@@ -417,10 +422,11 @@ def summary_line(e):
         return "- {} {}: skipped ({})".format(start, e["area"], ", ".join(e["invalid_reasons"]))
     line = (
         "- {} {} -> {:.1f} degC (outside {} degC): target after {} min, "
-        "overshoot {:+.1f}, dip {:.1f}, {} flame starts, water max {}, return avg {}".format(
+        "overshoot {:+.1f}, dip {:.1f}, {} flame starts, water max {}, return avg {}, condensing {}".format(
             start, e["area"], e["target"], _or_dash(e["outdoor_avg"]), e["rise_min"],
             e["overshoot"], e["undershoot"], e["flame_starts"], _or_dash(e.get("water_peak")),
             _or_dash(e.get("return_avg")),
+            "-" if e.get("condensing_pct") is None else f"{e['condensing_pct']}%",
         )
     )
     if e.get("max_ch") is not None:
