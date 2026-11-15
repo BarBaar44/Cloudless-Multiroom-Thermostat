@@ -81,7 +81,8 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 | Flow water temperature | | | ○ |
 | Return water temperature | | | ○ |
 | Boiler maximum flow temperature | ○ (stored per day) | | ○ (keeps warm-ups with a different limit apart) |
-| Requested flow temperature | | | ○ ([heating curve data](#heating-curve-data)) |
+| Requested flow temperature | | | ○ ([heating curve data](#heating-curve-data), [low load](#low-load-detection)) |
+| Boiler minimum power | | | ○ (leave empty: measured) |
 | Boiler hot water setpoint | ○ (stored per day) | | |
 | PID Kp, Ki, Kd | | | ✔ for advice (all three) |
 | PID integral | | | ○ |
@@ -186,6 +187,12 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 - **Required:** no. Without it the warm-ups still record how long the real flow ran above the limit.
 - **Where from:** with [`thermostat.yaml`](../thermostat.yaml) the **Central heating requested flow temperature** sensor. Other thermostats: whatever shows the control setpoint (OpenTherm ID 1), for example an OpenTherm Gateway.
 
+### Boiler minimum power
+
+- **What:** the boiler's smallest burner power in kW (the minimum load in its manual).
+- **Why:** below it the boiler can only cycle. Shown in the evening report; buffer rooms (#80, after v2.0) will use it.
+- **Required:** no. Leave it empty and it is [measured](#low-load-detection). Set it only to pin the value from the manual.
+
 ### PID Kp, PID Ki, PID Kd
 
 - **What:** the three tuning values of the PID controller in your boiler firmware that decides the flow temperature. Roughly: **Kp** reacts to how far the room is below target, **Ki** to how long it has been below, **Kd** to how fast the temperature changes.
@@ -245,7 +252,7 @@ Each record stores how long the watch lasted (`watch_min`) and why it ended (`wa
 
 An episode in progress survives a restart, such as one to install an update: it's saved every 5 minutes and when Home Assistant stops, and the minutes it missed are filled with the last sample. After a gap of more than 15 minutes the episode is dropped.
 
-Each episode is judged on time to target (more than 60 minutes is slow), overshoot (more than 0.4 °C), the dip below target afterwards (more than 0.4 °C) and flame starts per hour (more than 6 is short-cycling).
+Each episode is judged on time to target (more than 60 minutes is slow), overshoot (more than 0.4 °C), the dip below target afterwards (more than 0.4 °C) and flame starts per hour (more than 6 is short-cycling). A [low-load](#low-load-detection) warm-up is never called short-cycling or swinging: there the cycling comes from the boiler, not from the PID.
 
 - **Only episodes led by the room to follow count for the advice that can be applied.** Others are recorded (reason `other_room`), get [advice of their own](#advice-per-room), and count again if you follow their room later.
 - **Only warm-ups count, not top-ups.** An episode that starts less than 0.5 °C below target is a **top-up** (`kind: top_up`): the burner reheating a room that sits just below target. Top-ups are valid records, shown in the report with "top-up (not used for advice)", but the advice, the progress check and the automatic changes leave them out. On a boiler whose minimum output is well above the room's load, one burn overshoots whatever the PID values are, so top-ups would push Ki down for nothing. Since 1.5.0 the watch ends at the first reheat, so a quiet afternoon can produce several top-ups. Whether top-ups would gain from PID values of their own is an open question: the records keep them so that can be checked later. Older records are sorted the same way, from their target and start temperature.
@@ -350,6 +357,27 @@ The option **Evening notification** on the learning features page decides what t
 The time is fixed at 21:00 because the night model measures the evening drop from 21:00.
 
 If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
+
+## Low-load detection
+
+**Question it answers:** is the boiler short-cycling because the room needs less heat than its smallest flame? ([#103](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/103), phase 1 of [#80](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/80)). Then every burn heats the water faster than the radiators give it off, the flow overshoots, the boiler stops itself and waits its anti-cycle time. No PID value prevents that. Example from the reference house: a bedroom of about 2.5 kW on a boiler with a 6.1 kW minimum, burns of 3 minutes, off for 5, about 6.5 starts an hour.
+
+Each warm-up stores:
+
+| Field | Meaning |
+|---|---|
+| `burn_avg_min`, `burn_min_min` | average and shortest burn for heating, in minutes |
+| `off_avg_min`, `off_min_min` | average and shortest pause between two burns |
+| `burns_end_hot` | burns that ended with the flow more than 1 °C above the [requested flow](#requested-flow-temperature) (without it: at the flow limit) |
+| `low_load` | more than 6 starts an hour, and at least half of the burns ended hot. Empty without flow data |
+
+Samples are one a minute, so burns and pauses are rounded to whole minutes. Burns with hot water, and burns cut off at the start or end of the warm-up, are left out.
+
+**What it changes:** a low-load warm-up never gets the verdict "swinging or short-cycling", so the advice never lowers Kp for it and **Apply PID advice automatically** never acts on it. Overshoot and a slow rise still count. The evening report marks it: "low load: 6.5 starts/h, burns 3.4 min, off 5.1 min (not a PID problem)".
+
+**Boiler minimum power:** measured from low-load warm-ups without hot water, where the boiler burns at its minimum: gas used over burner minutes, converted with the calorific value of Dutch gas (9.77 kWh/m³). It needs a gas meter and 60 burner minutes in low-load warm-ups; until then the report says "measuring". A gas meter that reports every few minutes makes this an estimate. The [setting](#boiler-minimum-power) replaces it. The report shows the line once there is a low-load warm-up or a value.
+
+**Why alpha:** observe only; nothing changes in the heating. What helps against low load (buffer rooms, a fixed burn and pause in the firmware) comes after v2.0 (#80).
 
 ## Condensing share
 
