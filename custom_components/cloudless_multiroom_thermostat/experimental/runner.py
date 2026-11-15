@@ -64,6 +64,7 @@ from ..const import (
     CONF_EXP_NOTIFY,
     CONF_EXP_OUTDOOR,
     CONF_EXP_PEOPLE,
+    CONF_EXP_FLOW_REQUEST,
     CONF_EXP_RETURN,
     CONF_EXP_ROOM,
     CONF_EXP_WATER,
@@ -342,6 +343,7 @@ class ExperimentalRunner:
             "water": self._float(CONF_EXP_WATER),
             "ret": self._float(CONF_EXP_RETURN),
             "max_ch": self._float(CONF_EXP_MAX_CH),
+            "flow_req": self._float(CONF_EXP_FLOW_REQUEST),
             "people": self._float(CONF_EXP_PEOPLE),
             "outdoor": self._float(CONF_EXP_OUTDOOR),
             # ESPHome reports the PID terms x100
@@ -1084,6 +1086,7 @@ class ExperimentalRunner:
         gas_line = (
             gas_core.summary_line(gas) if gas else "Gas per degree-day: set a gas meter and an outdoor sensor to enable"
         )
+        curve_line = tuner_core.curve_line(episodes)
         status = progress.statuses(
             gas, nights, episodes, room.room_id if room else None, room.name if room else None,
             optimum=autotune.optimum_bands(tuner_state.get("auto")),
@@ -1097,6 +1100,8 @@ class ExperimentalRunner:
             message += f"\n\n{boiler_line}"
         message += f"\n\n{night_title}\n" + "\n".join(night_lines)
         message += f"\n\n{gas_line}"
+        if curve_line:
+            message += f"\n\n{curve_line}"
         message += "\n\nProgress to stable:\n" + "\n".join(progress_lines)
         message += f"\n\n[What these mean]({DOCS_EXPERIMENTAL_URL})"
 
@@ -1125,6 +1130,7 @@ class ExperimentalRunner:
             "boiler": boiler_line,
             "night": [night_title, *night_lines],
             "gas": gas_line,
+            "heating_curve": curve_line,
             "progress": progress_lines,
             "text": message,
             "docs": DOCS_EXPERIMENTAL_URL,
