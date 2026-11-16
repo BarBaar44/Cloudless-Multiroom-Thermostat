@@ -238,6 +238,12 @@ At 21:00 it takes the hourly forecast and predicts the room temperature at your 
 
 **Why alpha:** predictions start after 2 valid nights and 2 morning warm-ups. In the house it was built in, a back-test on the first 9 evenings was off by 0.2 to 0.8 °C. It needs many more nights, in different weather, before it can drive anything (for example an optimum start).
 
+### Cooling per room
+
+Every night also samples every room, and fits each room's cooling by the same rules: quiet part only, its own windows closed (an open window makes that room's night invalid, reason `window`), enough difference with outside ([#102](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/102)). It is stored per room id in the night record (`rooms`), so renaming a room keeps its history.
+
+The time constant per room (median of its last 7 valid nights, after 2) is in the `cooling_per_room` attribute of `sensor.<system>_night_prediction` and in the evening report: "Cooling per room (time constant, higher keeps heat longer): Living Room 40 h (7 nights), Office 22 h (5 nights)". A room that cools fast needs to start earlier, and a well insulated room can coast longer. That is what comfort times per room and the buffer rooms will build on. Observe only: the prediction still uses the room to follow.
+
 ## Warm-up episodes and PID advice
 
 **Question it answers:** is the boiler's PID loop tuned well for this house?

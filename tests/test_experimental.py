@@ -1074,6 +1074,29 @@ def _night_samples(start: str, hours: float, room0: float = 20.0) -> list[dict]:
     ]
 
 
+def test_cooling_per_room() -> None:
+    """#102: every room gets its own cooling fit, by the followed room's rules."""
+    samples = _night_samples("2026-11-05T00:30:00+01:00", 6)
+    for i, smp in enumerate(samples):
+        smp["rooms"] = {
+            "a": {"t": smp["room"], "open": False},
+            "b": {"t": round(18.0 - 0.1 * i, 2), "open": False},  # cools twice as fast
+            "c": {"t": 19.0, "open": i == 20},  # window open for a moment
+        }
+    rooms = night_core.room_nights(samples)
+    followed = night_core.analyse(samples, "heating_on")
+    assert rooms["a"]["k"] == followed["k"] and rooms["a"]["valid"]
+    assert rooms["b"]["valid"] and rooms["b"]["tau_h"] < rooms["a"]["tau_h"]
+    assert not rooms["c"]["valid"] and "window" in rooms["c"]["invalid_reasons"]
+    # Older nights without rooms are skipped; MIN_NIGHTS valid nights are needed
+    nights = [{"rooms": rooms}, {"valid": True}, {"rooms": rooms}]
+    per_room = night_core.cooling_per_room(nights, [("a", "A"), ("b", "B"), ("c", "C"), ("d", "D")])
+    assert [r["room_id"] for r in per_room] == ["a", "b"]
+    assert per_room[0]["nights"] == 2 and per_room[0]["tau_h"] == rooms["a"]["tau_h"]
+    assert night_core.cooling_line(per_room).startswith("- Cooling per room")
+    assert night_core.cooling_line([]) is None
+
+
 def test_night_after_midnight_can_be_valid() -> None:
     # Heating off at 00:30, back on at 06:30: the quiet part is the same day
     record = night_core.analyse(_night_samples("2026-11-05T00:30:00+01:00", 6), "heating_on")
