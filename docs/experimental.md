@@ -377,6 +377,26 @@ The time is fixed at 21:00 because the night model measures the evening drop fro
 
 If the weather forecast is unavailable at 21:00, the report says there is no prediction and the forecast is tried again at 22:00 and 23:00. When a retry works, the prediction is made as of 21:00 (the room temperature then, with the new forecast) and the report is replaced (the sensor, and the notification with Short summary or Full report). A restart of Home Assistant in between cancels the retries.
 
+## Heat-up model per room
+
+**Question it answers:** how does each room respond to heat? After how many minutes does it start to rise (dead time), how fast does it then rise (time constant), and how much warmer does it get per degree of flow (gain)? ([#152](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/152), step 2 of [#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135).)
+
+Every warm-up keeps its minute samples (since 1.8.3). From them each warm-up gets a fit of a first order plus dead time model: the room's rise against the [requested flow](#requested-flow-temperature) (the flow water temperature when the request isn't known). Hot water minutes count as no heat; an open window or a target change ends the data. It needs 20 minutes and a rise of 0.3 °C. The kept samples from before this release are fitted too.
+
+**Predicted against real:** once a room has 5 fitted warm-ups in an outdoor band, the median of its last 7 is its model in that band. Every next warm-up there is first predicted with that model, using the flow it really got, and then compared: did the room reach its target when the model said? The evening report shows it per room and band, for example:
+
+```
+- Heat-up model per room: Living Room (0 to 8 °C: dead time 12 min, time constant 95 min, gain 0.081, reaches target within 9 min of the prediction (6 predicted); 8 to 15 °C: 3 of 5 warm-ups fitted)
+```
+
+The same is in the `heatup` attribute of the report sensor; the records are in `heatup.jsonl`.
+
+**What it is for:** calculating PID gains per room and per forecast instead of finding them by trial and error. That changes the heating, so it waits for a PID per room after v2.0 ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82)). Until then this only learns and checks itself.
+
+**Sensor resolution matters:** a room sensor in steps of 0.1 °C makes the time constant come out too low (fewer than 1 in 10 minutes shows a change). Sensors with 0.01 °C steps, such as reflashed LYWSD03MMC, fit well.
+
+**Why alpha:** a first model, observe only.
+
 ## Cost per warm-up and per day
 
 **Question it answers:** what did the heating cost? Kept now so v2 starts with a cost history ([#109](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/109)). Needs the [gas price sensors](#gas-price-tomorrow-before-0600--after-0600) and a gas meter.
