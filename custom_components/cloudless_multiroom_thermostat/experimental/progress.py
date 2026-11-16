@@ -14,7 +14,7 @@ GAS_DAYS = 365             # a full year of data holds a whole heating season
 
 # Night cooldown model
 NIGHTS = 30                # predicted nights judged
-NIGHT_BANDS = 3            # spread over this many outdoor bands
+NIGHT_BAND_MIN = 5         # nights among them for an outdoor band to need confirming (#139)
 NIGHT_MEAN_ERROR = 0.3     # degC, average absolute error
 NIGHT_MAX_ERROR = 0.6      # degC, worst night
 
@@ -52,25 +52,55 @@ def gas_progress(summary):
     return {"done": days >= GAS_DAYS and rate_ok, "text": text}
 
 
+def night_bands(nights):
+    """
+    Per outdoor band over the last NIGHTS valid nights with a prediction:
+    {band: {nights, mean, worst, ok}}. ok: the band has NIGHT_BAND_MIN
+    nights and its errors hold (#139). A band with fewer nights has
+    occurred but isn't confirmed: optimum start must not act in it yet.
+    """
+    judged = [n for n in nights if n.get("valid") and n.get("prediction_error") is not None][-NIGHTS:]
+    bands = {}
+    for n in judged:
+        band = tuner_core.outdoor_band(n.get("outdoor_avg"))
+        if band != "unknown":
+            bands.setdefault(band, []).append(abs(n["prediction_error"]))
+    out = {}
+    for band, errors in bands.items():
+        mean, worst = sum(errors) / len(errors), max(errors)
+        out[band] = {
+            "nights": len(errors), "mean": round(mean, 2), "worst": round(worst, 2),
+            "ok": len(errors) >= NIGHT_BAND_MIN and mean <= NIGHT_MEAN_ERROR and worst <= NIGHT_MAX_ERROR,
+        }
+    return out
+
+
 def night_progress(nights):
-    """The last NIGHTS valid nights with a prediction: count, bands and errors."""
+    """
+    Stable after NIGHTS predicted nights, when the errors hold in every
+    outdoor band that occurs (NIGHT_BAND_MIN of them), with at least one.
+    Bands that don't occur aren't waited for (#139).
+    """
     judged = [n for n in nights if n.get("valid") and n.get("prediction_error") is not None][-NIGHTS:]
     if not judged:
-        return {"done": False, "text": f"Night model: 0 of {NIGHTS} predicted nights"}
-    errors = [abs(n["prediction_error"]) for n in judged]
-    bands = {tuner_core.outdoor_band(n.get("outdoor_avg")) for n in judged} - {"unknown"}
-    mean, worst = sum(errors) / len(errors), max(errors)
-    done = (
-        len(judged) >= NIGHTS
-        and len(bands) >= NIGHT_BANDS
-        and mean <= NIGHT_MEAN_ERROR
-        and worst <= NIGHT_MAX_ERROR
-    )
-    text = (
-        f"Night model: {len(judged)} of {NIGHTS} predicted nights, {min(len(bands), NIGHT_BANDS)} of {NIGHT_BANDS} outdoor bands, "
-        f"average error {mean:.2f} (max {NIGHT_MEAN_ERROR}), worst {worst:.1f} (max {NIGHT_MAX_ERROR})"
-    )
-    return {"done": done, "text": text}
+        return {"done": False, "text": f"Night model: 0 of {NIGHTS} predicted nights", "bands": {}}
+    bands = night_bands(nights)
+    seen = [b for b in tuner_core.BAND_NAMES if b in bands and bands[b]["nights"] >= NIGHT_BAND_MIN]
+    done = len(judged) >= NIGHTS and bool(seen) and all(bands[b]["ok"] for b in seen)
+    parts = []
+    for band in [b for b in tuner_core.BAND_NAMES if b in bands]:
+        v, label = bands[band], tuner_core.BAND_NAMES[band] + " °C"
+        if v["nights"] < NIGHT_BAND_MIN:
+            parts.append(f"{label}: {v['nights']} of {NIGHT_BAND_MIN} nights (not confirmed yet)")
+            continue
+        verdict = "holds" if v["ok"] else (
+            f"average error above {NIGHT_MEAN_ERROR}" if v["mean"] > NIGHT_MEAN_ERROR else f"a night off by more than {NIGHT_MAX_ERROR}")
+        parts.append(f"{label}: {v['nights']} nights, average error {v['mean']:.2f}, worst {v['worst']:.1f} ({verdict})")
+    good = len([b for b in seen if bands[b]["ok"]])
+    text = f"Night model: {len(judged)} of {NIGHTS} predicted nights, {good} of {len(seen)} outdoor bands confirmed"
+    if parts:
+        text += ". " + "; ".join(parts)
+    return {"done": done, "text": text, "bands": bands}
 
 
 def _mean(values):

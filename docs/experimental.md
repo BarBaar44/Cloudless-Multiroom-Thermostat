@@ -23,7 +23,7 @@ Most of what keeps a feature from stable is not waiting for data but proof: does
 | Feature | Stable when | Then it may |
 |---|---|---|
 | Gas per degree-day | A full year of data (so a whole heating season), and with the boiler signals set, a measured (or set) hot-water rate | Serve as the official check for the other features |
-| Night cooldown model | At least 30 predicted nights spread over 3 or more outdoor bands, average error 0.3 °C or less, no night off by more than 0.6 °C | Optimum start: begin heating at the predicted time |
+| Night cooldown model | At least 30 predicted nights; in every outdoor band that occurs (5 or more of those nights) the average error is 0.3 °C or less and no night is off by more than 0.6 °C. Bands that don't occur aren't waited for | Optimum start: begin heating at the predicted time, only in confirmed bands |
 | Warm-up episodes and PID advice | Confirmed in every outdoor band the house actually gets: each band with at least 5 of the last 30 warm-ups. A band is confirmed by [probing](#probing-values-that-get-no-advice) (neither a step up nor a step down was better, so the values were already right) or by a PID change (by hand or automatically): in that band, 5 or more valid episodes of the followed room after the change with less overshoot or a faster warm-up on average than the 5 before it in that band (or, when nothing before it can be compared, 5 that hold steady against a baseline of the first 5 after it), and gas per degree-day not worse | Set the PID values per outdoor band (gain scheduling) |
 | Evening report | The features it reports on are stable | Stay as it is |
 
@@ -236,7 +236,13 @@ When the heating goes off in the evening (no room that drives the heat source he
 
 At 21:00 it takes the hourly forecast and predicts the room temperature at your **comfort time** (weekday and weekend times are settings). From the warm-up speed of earlier morning warm-ups in a similar outdoor temperature, it says when heating would have to start to reach the room's **warm** temperature by then. The next morning the prediction is compared with what really happened.
 
-**Why alpha:** predictions start after 2 valid nights and 2 morning warm-ups. In the house it was built in, a back-test on the first 9 evenings was off by 0.2 to 0.8 °C. It needs many more nights, in different weather, before it can drive anything (for example an optimum start).
+**Why alpha:** predictions start after 2 valid nights and 2 morning warm-ups. In the house it was built in, a back-test on the first 9 evenings was off by 0.2 to 0.8 °C. It needs many more nights before it can drive anything (for example an optimum start).
+
+**The weather it gets** ([#139](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/139)): outdoor temperature is an input of the model, so it has to prove itself in each kind of night separately. But it doesn't wait for weather that doesn't come: only the bands with 5 or more of the last 30 predicted nights must hold. A new kind of night (the first frost) shows as "not confirmed yet" until it has 5 nights that hold; optimum start won't act in a band before that. The evening report shows it per band:
+
+```
+Night model: 30 of 30 predicted nights, 2 of 2 outdoor bands confirmed. below 0 °C: 2 of 5 nights (not confirmed yet); 0 to 8 °C: 14 nights, average error 0.12, worst 0.3 (holds); 8 to 15 °C: 14 nights, average error 0.18, worst 0.5 (holds)
+```
 
 ### Cooling per room
 
