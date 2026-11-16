@@ -527,3 +527,20 @@ async def test_edited_preset_temperature_applies(hass: HomeAssistant, setup) -> 
     # A manual target stays manual, within the new maximum
     office = hass.states.get("climate.office")
     assert office.attributes["preset_mode"] == "none" and office.attributes["temperature"] == 20.0
+
+
+def test_v2_notices_logged_once(caplog) -> None:
+    """#111: each v2 notice is logged once per Home Assistant run."""
+    from custom_components.cloudless_multiroom_thermostat import (  # noqa: PLC0415
+        _NOTICES_LOGGED,
+        V2_REPORT_NOTICE,
+        V2_SCHEDULE_NOTICE,
+        _log_v2_notice,
+    )
+
+    _NOTICES_LOGGED.clear()
+    for _ in range(2):
+        _log_v2_notice(V2_SCHEDULE_NOTICE)
+        _log_v2_notice(V2_REPORT_NOTICE)
+    assert caplog.text.count("will need a schedule for every room") == 1
+    assert caplog.text.count("removes the 21:00 evening report") == 1

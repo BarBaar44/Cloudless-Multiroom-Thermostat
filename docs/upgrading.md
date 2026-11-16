@@ -24,3 +24,8 @@ Every release on the [releases page](https://github.com/BarBaar44/Cloudless-Mult
 ## Coming: v2.0
 
 v2.0 brings schedules in the integration and replaces the 21:00 evening report with live learning data. It is a behaviour change, and it gets its own upgrade guide on this page when it is released. What is planned: the [roadmap](../ROADMAP.md).
+
+**What changes for you when you upgrade** (Home Assistant's log says it too, once per start):
+
+- **Every room needs a schedule.** A room without one holds 15 °C until you make a schedule (one block for the whole day is enough) or turn scheduling off for that room. Automations that set a target on a room without a schedule get a clear error.
+- **The evening report goes:** the 21:00 report, the Learning features report sensor, the Evening notification option and the `experimental_report` service. The same information becomes live sensors with long-term statistics, events you can notify from in an automation, and a learning view in the card. If a dashboard or automation uses the report sensor or the service, plan to replace it.
