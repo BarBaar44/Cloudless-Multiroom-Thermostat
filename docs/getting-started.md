@@ -4,18 +4,33 @@ From nothing to a heating system with rooms on your dashboard. Every step can be
 
 ## What you need
 
+### Minimum
+
+To get it running at all:
+
 - **Home Assistant 2026.10 or newer.**
-- **A temperature sensor in every room.** Any sensor Home Assistant can see. TRVs are optional: a room without them still tells the boiler it needs heat.
-- **A boiler controller you run yourself (recommended).** An OpenTherm controller without a room sensor of its own, running ESPHome with [`thermostat.yaml`](hardware.md#esphome-opentherm-thermostat-thermostatyaml). Two ready ways:
-  - a [DIYLess OpenTherm thermostat](https://diyless.com/product/opentherm-thermostat) board, which this integration is built and tested on;
-  - any OpenTherm adapter with an ESP32, with the same config and your own pins in `opentherm:`.
+- **A heat source Home Assistant can control.** Any of these:
+  - an OpenTherm controller you run yourself (see Recommended below);
+  - an **on/off relay** on the boiler: full multi-room control, but the boiler only knows on and off, so no gentle low flow heating;
+  - a **smart room thermostat** or an **OpenTherm Gateway** with its room thermostat: *target only*. The boiler follows the room where that thermostat hangs, so a cold bedroom can't start it while that room is warm, and the PID advice has nothing to tune. [How it works](how-it-works.md) explains why.
+- **A temperature sensor in every room.** Any sensor Home Assistant can see. A room without TRVs still tells the boiler it needs heat.
 
-  A few euros, two wires to the boiler, no cloud and no account. This gives full multi-room control, and it is what the learning features and the PID advice are made for. It replaces the thermostat on your wall.
-- **Also works:**
-  - An **on/off relay**: full multi-room control, but the boiler only knows on and off, so no gentle low flow heating.
-  - A **smart room thermostat** or an **OpenTherm Gateway** with its room thermostat: *target only*. The integration still runs every room's TRVs, but the boiler follows the room where that thermostat hangs. A cold bedroom can't start the boiler while that room is warm, and the PID advice has nothing to tune. [How it works](how-it-works.md) explains why.
+### Recommended
 
-[Hardware](hardware.md) has the details and the setup this was built on; [Thermostat requirements](thermostat.md) what the thermostat must offer.
+What this integration is built and tested on, and what the learning features are made for:
+
+- **Thermostat:** a [DIYLess OpenTherm thermostat](https://diyless.com/product/opentherm-thermostat) running ESPHome with [`thermostat.yaml`](hardware.md#esphome-opentherm-thermostat-thermostatyaml). A few euros, two wires to the boiler, no cloud and no account. It replaces the thermostat on your wall and gives full multi-room control. Any OpenTherm adapter with an ESP32 works too, with your own pins in `opentherm:`. Building your own config: [Thermostat requirements](thermostat.md).
+- **TRVs**, so a room that doesn't need heat closes while another one heats:
+  - [Sonoff TRVZB](https://sonoff.tech/en-nl/products/sonoff-zigbee-thermostatic-radiator-valve): cheaper, fully local over Zigbee (Zigbee2MQTT or ZHA). The first choice where it fits.
+  - [Shelly BLU TRV](https://www.shelly.com/products/shelly-blu-trv-single-pack): small, for radiators where space is tight. Bluetooth, through a Shelly BLU gateway.
+- **Room sensors:** Xiaomi [LYWSD03MMC](https://www.zigbee2mqtt.io/devices/LYWSD03MMC-z.html), reflashed with Zigbee firmware ([how to flash](https://www.zigbee2mqtt.io/devices/LYWSD03MMC-z.html)). Cheap, tiny, battery powered, on the same Zigbee network as the TRVs, and they report in steps of 0.01 °C, which the [heat-up model](experimental.md#heat-up-model-per-room) needs.
+- **Boiler sensors** for the learning features: flame, flow and return temperature and the requested flow come with `thermostat.yaml`; a gas meter (a P1 smart meter reader, for example) for gas per degree-day and costs.
+
+### Optional
+
+- **Radiator booster fans:** DBE boards that blow air across the radiator fins while the radiator still gives off heat, so the same water temperature heats the room faster. Open hardware and ESPHome configs: [BarBaar44/ESPHome/DBE](https://github.com/BarBaar44/ESPHome/tree/main/DBE), board files in [BarBaar44/EasyEDA](https://github.com/BarBaar44/EasyEDA). They work on their own, next to the integration.
+
+[Hardware](hardware.md) has the details and compares the TRVs.
 
 ## Install
 
