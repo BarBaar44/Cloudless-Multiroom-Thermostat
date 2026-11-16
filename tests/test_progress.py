@@ -38,8 +38,8 @@ def test_gas_progress() -> None:
 def test_night_progress_counts_and_errors() -> None:
     nights = [_night(1, 0.5, 4.0), _night(2, -0.2, 10.0), {"valid": False, "prediction_error": 3.0}]
     p = progress.night_progress(nights)
-    assert "2 of 30 predicted nights, 2 of 3 outdoor bands" in p["text"]
-    assert "average error 0.35" in p["text"] and "worst 0.5" in p["text"]
+    assert "2 of 30 predicted nights, 0 of 0 outdoor bands confirmed" in p["text"]
+    assert "0 to 8 °C: 1 of 5 nights (not confirmed yet)" in p["text"]
     assert not p["done"]
     assert "0 of 30" in progress.night_progress([])["text"]
 
@@ -48,6 +48,21 @@ def test_night_progress_done() -> None:
     temps = (-2.0, 4.0, 10.0)
     nights = [_night(1 + i % 28, 0.1, temps[i % 3]) for i in range(30)]
     assert progress.night_progress(nights)["done"]
+
+
+def test_night_progress_only_the_bands_that_occur() -> None:
+    """#139: a mild autumn confirms on its own bands; a rare band isn't waited for."""
+    nights = [_night(1 + i % 28, 0.1, 4.0 if i % 2 else 10.0) for i in range(28)]
+    nights += [_night(28, 0.9, -3.0), _night(28, 0.2, -2.0)]  # two frost nights, one off
+    p = progress.night_progress(nights)
+    assert p["done"], "0 to 8 and 8 to 15 hold; below 0 has too few nights to need confirming"
+    assert "2 of 2 outdoor bands confirmed" in p["text"]
+    assert "below 0 °C: 2 of 5 nights (not confirmed yet)" in p["text"]
+    assert p["bands"]["below_0"]["ok"] is False and p["bands"]["0_8"]["ok"] is True
+    # A band that occurs and doesn't hold blocks stable
+    bad = nights[:-2] + [_night(28, 0.7, 4.0)] * 2
+    p = progress.night_progress(bad)
+    assert not p["done"] and "(a night off by more than 0.6)" in p["text"]
 
 
 def test_pid_progress_needs_change_by_hand() -> None:

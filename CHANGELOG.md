@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Night model judged on the weather it gets (#139):** the night model no longer needs 3 fixed outdoor bands to become stable. The errors must hold in every band that occurs (5 or more of the last 30 predicted nights); a band with fewer nights shows as not confirmed yet, and optimum start won't act in it. The evening report lists every band with its nights and errors.
 - **Cooling per room (#102):** the night model now also samples every room and fits each room's cooling, keyed on the room id. The time constant per room is in the `cooling_per_room` attribute of the night prediction sensor and in the evening report. See [Cooling per room](docs/experimental.md#cooling-per-room). Observe only: the prediction still uses the room to follow.
 
 ## 1.9.0
