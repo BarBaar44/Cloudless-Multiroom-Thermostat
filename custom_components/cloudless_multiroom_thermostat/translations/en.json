@@ -17,7 +17,7 @@
           "hysteresis": "Hysteresis"
         },
         "data_description": {
-          "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see Which temperature the heat source regulates on in the README.",
+          "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see Which temperature the heat source regulates on in the README. What the thermostat must offer: [Thermostat requirements](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/blob/main/docs/thermostat.md).",
           "ch_switch": "Optional. On while a room that drives the heat source is heating; off while none is (rooms off or paused, or only rooms that heat along).",
           "hysteresis": "Switch only: start when a room is this far below its target, stop when it reaches it."
         }
@@ -57,7 +57,7 @@
           "experimental": "Enable learning features (observe only)"
         },
         "data_description": {
-          "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see Which temperature the heat source regulates on in the README.",
+          "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see Which temperature the heat source regulates on in the README. What the thermostat must offer: [Thermostat requirements](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/blob/main/docs/thermostat.md).",
           "ch_switch": "Optional. On while a room that drives the heat source is heating; off while none is (rooms off or paused, or only rooms that heat along).",
           "hysteresis": "Switch only: start when a room is this far below its target, stop when it reaches it.",
           "off_temperature": "Sent to the heat source and TRVs when nothing should heat (frost protection).",
@@ -111,7 +111,7 @@
           "exp_flow_request": "Optional: the flow temperature the thermostat asks the boiler for (with thermostat.yaml the Central heating requested flow temperature sensor). Stored with each warm-up next to the real flow, to check that the flow stays at the limit; collected for a heating curve later.",
           "exp_min_power": "Leave empty: measured from warm-ups where the boiler cycles because the room needs less than its smallest flame. Set it only to pin the value from the boiler manual (minimum load, in kW). Shown in the evening report; buffer rooms will use it later.",
           "exp_dhw_setpoint": "Optional: a sensor that shows the boiler's hot water temperature setting. Pick a sensor, not a number or slider you can change: if Home Assistant can change this value, the thermostat may send it to the boiler, and some boilers stop working when that happens. Only read, never written. Stored with each gas day; a change shows in the evening report.",
-          "exp_kp": "Kp, Ki and Kd of a firmware PID (for example ESPHome). With all three set, warm-ups get tuning advice.",
+          "exp_kp": "Kp, Ki and Kd of a firmware PID (for example ESPHome). With all three set, warm-ups get tuning advice. See [Thermostat requirements](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/blob/main/docs/thermostat.md).",
           "exp_integral": "Optional PID integral sensor (ESPHome reports it x100).",
           "exp_auto_apply": "Off by default. On: after each warm-up the advice is written to the Kp or Ki number (one value, 10% at most, within the limits); after 2 more warm-ups in the same outdoor band the change stays only when the problem got smaller, otherwise it is reverted and never tried again. Every change shows in the evening report. Needs all three PID numbers.",
           "exp_notify": "The 21:00 report always goes to the Learning features report sensor (show it with a Markdown card). Events only: a notification only when something happened that day (a PID change applied, kept or reverted, a boiler setting changed, a feature became ready for stable, an unreadable file moved aside). Summary: three lines every evening, plus events. Full report: the whole report, as before 1.7.0.",

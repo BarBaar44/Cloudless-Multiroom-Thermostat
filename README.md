@@ -55,6 +55,8 @@ Add a card of type `custom:heating-control-card` to a dashboard; it finds the ro
   - a [DIYLess OpenTherm thermostat](https://diyless.com/product/opentherm-thermostat) board, which this integration is built and tested on;
   - any OpenTherm adapter with an ESP32, with the same config and your own pins in `opentherm:`.
 
+  What the thermostat must offer, and how to add it to your own ESPHome config: **[docs/thermostat.md](docs/thermostat.md)**.
+
   A few euros, two wires to the boiler, no cloud and no account. This gives full multi-room control, and it is what the learning features and the PID advice are made for. It replaces the thermostat on your wall.
 - **Also works:**
   - An **on/off relay**: full multi-room control, but the boiler only knows on and off, so no gentle low flow heating.
@@ -192,7 +194,7 @@ Sonoff is the better choice where it fits: cheaper, fully local and well support
 
 ## ESPHome OpenTherm thermostat (`thermostat.yaml`)
 
-[`thermostat.yaml`](thermostat.yaml) is the ESPHome config for the DIYLess OpenTherm thermostat, from `opentherm:` on. Use it with the **Climate entity** heat source: the integration sets the PID climate's target to the winner's target, and the firmware reads the winner's temperature as its process value.
+[`thermostat.yaml`](thermostat.yaml) is the ESPHome config for the DIYLess OpenTherm thermostat, from `opentherm:` on. Building your own config instead: [docs/thermostat.md](docs/thermostat.md) lists what each part is for and the minimal YAML. Use it with the **Climate entity** heat source: the integration sets the PID climate's target to the winner's target, and the firmware reads the winner's temperature as its process value.
 
 - **`opentherm:`** OpenTherm master on GPIO 21 (in) and 22 (out), central heating enabled. The hot water enable flag is sent as off; this combi boiler still makes hot water on demand, at the setpoint set on its own panel.
 - **`output:`** `t_set` is the boiler's target flow temperature on a fixed 0 to 100 °C range (`zero_means_zero`, so 0 means boiler off). The PID drives `ch_flow_request`, which writes its output times the flow limit to `t_set`. The limit is the **Central heating max flow temperature** number (default 40 °C), set from Home Assistant without reflashing. Don't rely on the boiler's panel maximum or `auto_max_value` instead: on the ATAG here `auto_max_value` left the range at 0 to 100, and the boiler followed requests up to its own bound of 50 °C with its panel maximum at 40. Point the learning features' **Boiler maximum flow temperature** field at this number.
