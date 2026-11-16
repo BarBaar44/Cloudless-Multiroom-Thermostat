@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Docs: Thermostat requirements (#146):** new page [docs/thermostat.md](docs/thermostat.md): every capability the integration reads or writes on the thermostat (required, recommended, optional, never), the field it feeds and what you lose without it; a step by step guide to add it to your own ESPHome config; and what other thermostats cover, including DIYLess with its stock firmware (#108). Linked from the README and the heat source and PID field help texts.
 - **Night model judged on the weather it gets (#139):** the night model no longer needs 3 fixed outdoor bands to become stable. The errors must hold in every band that occurs (5 or more of the last 30 predicted nights); a band with fewer nights shows as not confirmed yet, and optimum start won't act in it. The evening report lists every band with its nights and errors.
 - **Cooling per room (#102):** the night model now also samples every room and fits each room's cooling, keyed on the room id. The time constant per room is in the `cooling_per_room` attribute of the night prediction sensor and in the evening report. See [Cooling per room](docs/experimental.md#cooling-per-room). Observe only: the prediction still uses the room to follow.
 
