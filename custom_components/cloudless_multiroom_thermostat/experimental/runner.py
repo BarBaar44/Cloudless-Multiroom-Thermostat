@@ -87,7 +87,7 @@ from ..const import (
     WINNER_OFF,
     signal_update,
 )
-from . import autotune, gas_core, night_core, progress, store, tuner_core
+from . import autotune, gas_core, heatup_core, night_core, progress, store, tuner_core
 
 if TYPE_CHECKING:
     from ..controller import HeatingController, Room
@@ -164,6 +164,7 @@ class ExperimentalRunner:
         self.f_episodes = f"{self.dir}/episodes.jsonl"
         self.f_state = f"{self.dir}/state.json"
         self.f_nights = f"{self.dir}/nights.jsonl"
+        self.f_heatup = f"{self.dir}/heatup.jsonl"
         self.f_night_state = f"{self.dir}/night_state.json"
         self.f_gas_days = f"{self.dir}/gas_days.jsonl"
         self.f_episode_state = f"{self.dir}/episode_state.json"
@@ -289,6 +290,30 @@ class ExperimentalRunner:
             await self._io(store.write_samples, self.dir, record["start"], data)
         except Exception:  # noqa: BLE001 - samples are extra; the episode is already recorded
             _LOGGER.warning("Could not keep the samples of the episode started %s", record["start"], exc_info=True)
+
+    def _update_heatup(self) -> list[dict[str, Any]]:
+        """
+        Heat-up records (#152) for every warm-up that has none yet, oldest
+        first, so each is predicted from the ones before it. Also picks up
+        the samples kept before this existed. Runs in the executor.
+        """
+        records = store.read_episodes(self.f_heatup)
+        done = {r["start"] for r in records}
+        for ep in store.read_episodes(self.f_episodes):
+            if ep["start"] in done or tuner_core.episode_kind(ep) != "warm_up":
+                continue
+            rec = heatup_core.record(ep, store.read_samples(self.dir, ep["start"]), records)
+            store.append_episode(self.f_heatup, rec)
+            records.append(rec)
+        return records
+
+    async def _async_update_heatup(self) -> list[dict[str, Any]]:
+        """Never blocks the rest: the heat-up model is extra."""
+        try:
+            return await self._io(self._update_heatup)
+        except Exception:  # noqa: BLE001 - observe only; the episode is already recorded
+            _LOGGER.warning("Could not update the heat-up model", exc_info=True)
+            return []
 
     async def _async_write_param(self, name: str, value: float) -> bool:
         entity_id = self._entity(self._param_key(name))
@@ -550,6 +575,7 @@ class ExperimentalRunner:
         )
         await self._io(store.append_episode, self.f_episodes, record)
         await self._async_keep_samples(record, ep)
+        await self._async_update_heatup()
         history = await self._io(store.read_episodes, self.f_episodes)
         room = self.room
         tuner_state = await self._io(store.read_state, self.f_state)
@@ -1106,6 +1132,10 @@ class ExperimentalRunner:
         night_lines = [night_core.night_line(n) for n in nights if n["end"][:10] == today] or ["- no night recorded"]
         if prediction:
             night_lines.append(night_core.prediction_line(prediction))
+        heatup = heatup_core.summary(
+            await self._async_update_heatup(), [(r.room_id, r.name) for r in self.ctl.rooms.values()]
+        )
+        heatup_line = heatup_core.summary_line(heatup)
         cooling = night_core.cooling_line(self._cooling_per_room(nights))
         if cooling:
             night_lines.append(cooling)
@@ -1170,6 +1200,8 @@ class ExperimentalRunner:
         message += f"\n\n{gas_line}"
         if curve_line:
             message += f"\n\n{curve_line}"
+        if heatup_line:
+            message += f"\n\n{heatup_line}"
         if low_load or min_power["source"] != "measuring":
             message += f"\n\n{tuner_core.min_power_line(min_power)}"
         if identity_line:
@@ -1204,6 +1236,12 @@ class ExperimentalRunner:
             "gas": gas_line,
             "heating_curve": curve_line,
             "min_power": min_power,
+            "heatup": [
+                {"room": r["room"], "bands": {
+                    b: {"fits": v["fits"], "model": v["model"], "errors": v["errors"]} for b, v in r["bands"].items()
+                }}
+                for r in heatup
+            ],
             "boiler_identity": identity,
             "progress": progress_lines,
             "text": message,
