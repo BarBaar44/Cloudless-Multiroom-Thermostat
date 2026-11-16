@@ -245,6 +245,13 @@ Things really took off when I started using Claude Code for the programming, a s
 
 In design, not built yet. Plans can still change.
 
+**What changes for you when you upgrade** (Home Assistant's log says it too):
+
+- **Every room needs a schedule.** A room without one holds 15 °C until you make a schedule (one block for the whole day is enough) or turn scheduling off for that room. Automations that set a target on a room without a schedule get a clear error.
+- **The evening report goes:** the 21:00 report, the Learning features report sensor, the Evening notification option and the `experimental_report` service. The same information becomes live sensors with long-term statistics, events you can notify from in an automation, and a learning view in the card. If a dashboard or automation uses the report sensor or the service, plan to replace it.
+
+What it brings:
+
 - **Schedules in the integration:** a week schedule per room, with switch points at 15 minute steps that set a preset. Heating follows it without a dashboard open, so no schedule automations are needed. Copy a day to other days or a week to other rooms, switch a room's schedule off, or suspend all schedules at once.
 - **Your own presets:** Eco and Warm plus presets you add (Sleep, for example), each with its own temperature per room. Change what "warm" means in one place.
 - **Manual changes that expire:** a target set by hand holds until the next switch point, for 1 or 3 hours, or until you go back to the schedule.

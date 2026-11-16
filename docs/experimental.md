@@ -322,6 +322,8 @@ Turning it on doesn't change the 21:00 report's other parts or any other feature
 
 ## Evening report
 
+> **Removed in v2.0.0:** the 21:00 report, this report sensor, the Evening notification option and the `experimental_report` service. The information moves to live sensors (with long-term statistics), events and a learning view in the card ([#119](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/119)). Don't build new dashboards or automations on the report.
+
 Every evening at 21:00 the report is written to **`sensor.<system>_learning_features_report`**. It lists today's warm-up episodes, the current PID values and advice, a line when the boiler's maximum flow temperature or hot water setpoint changed since the last report, the last night, tonight's prediction, gas per degree-day and the progress of each feature towards stable, with a link to this page. Call the service `cloudless_multiroom_thermostat.experimental_report` to get it on demand as a notification (it then shows the stored prediction instead of making a new one). "Since the last report" means since the last 21:00 report: a report on demand shows a boiler change but doesn't count as a report, so the evening report still shows it.
 
 ### The report sensor
