@@ -65,6 +65,9 @@ from ..const import (
     CONF_EXP_OUTDOOR,
     CONF_EXP_PEOPLE,
     CONF_EXP_FLOW_REQUEST,
+    CONF_EXP_MAX_CAPACITY,
+    CONF_EXP_MEMBER_ID,
+    CONF_EXP_MIN_MODULATION,
     CONF_EXP_MIN_POWER,
     CONF_EXP_RETURN,
     CONF_EXP_ROOM,
@@ -1141,7 +1144,16 @@ class ExperimentalRunner:
             gas_core.summary_line(gas) if gas else "Gas per degree-day: set a gas meter and an outdoor sensor to enable"
         )
         curve_line = tuner_core.curve_line(episodes)
-        min_power = tuner_core.min_power(episodes, _num(self._s.get(CONF_EXP_MIN_POWER)))
+        identity = {
+            "member_id": self._float(CONF_EXP_MEMBER_ID),
+            "max_capacity": self._float(CONF_EXP_MAX_CAPACITY),
+            "min_modulation": self._float(CONF_EXP_MIN_MODULATION),
+        }
+        min_power = tuner_core.min_power(
+            episodes, _num(self._s.get(CONF_EXP_MIN_POWER)),
+            tuner_core.boiler_min_power(identity["max_capacity"], identity["min_modulation"]),
+        )
+        identity_line = tuner_core.boiler_identity_line(identity)
         low_load = [e for e in episodes if e.get("low_load")]
         status = progress.statuses(
             gas, nights, episodes, room.room_id if room else None, room.name if room else None,
@@ -1160,6 +1172,8 @@ class ExperimentalRunner:
             message += f"\n\n{curve_line}"
         if low_load or min_power["source"] != "measuring":
             message += f"\n\n{tuner_core.min_power_line(min_power)}"
+        if identity_line:
+            message += f"\n\n{identity_line}"
         message += "\n\nProgress to stable:\n" + "\n".join(progress_lines)
         message += f"\n\n[What these mean]({DOCS_EXPERIMENTAL_URL})"
 
@@ -1190,6 +1204,7 @@ class ExperimentalRunner:
             "gas": gas_line,
             "heating_curve": curve_line,
             "min_power": min_power,
+            "boiler_identity": identity,
             "progress": progress_lines,
             "text": message,
             "docs": DOCS_EXPERIMENTAL_URL,

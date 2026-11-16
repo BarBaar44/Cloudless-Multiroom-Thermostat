@@ -187,11 +187,18 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 - **Required:** no. Without it the warm-ups still record how long the real flow ran above the limit.
 - **Where from:** with [`thermostat.yaml`](../thermostat.yaml) the **Central heating requested flow temperature** sensor. Other thermostats: whatever shows the control setpoint (OpenTherm ID 1), for example an OpenTherm Gateway.
 
+### Boiler member ID, Boiler maximum capacity, Boiler minimum modulation
+
+- **What:** sensors with what the boiler reports about itself over OpenTherm: its member ID (a number per manufacturer, ID 3), its maximum capacity in kW and its minimum modulation in % (ID 15). Only read.
+- **Why:** the evening report shows them on a "Boiler:" line. Capacity times minimum modulation gives the [boiler minimum power](#boiler-minimum-power) without measuring. The member ID is groundwork for boiler profiles (v2.2): it will only ever *suggest* a make, which you confirm ([#107](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/107)).
+- **Required:** no. Not every boiler answers these messages; an unknown value is skipped, and a minimum modulation of 0 % (often "not supported") is ignored.
+- **Where from:** with [`thermostat.yaml`](../thermostat.yaml) the **Boiler member ID**, **Boiler maximum capacity** and **Boiler minimum modulation** sensors (read once at boot). An OpenTherm Gateway shows the member ID in its own integration. See [Thermostat requirements](thermostat.md).
+
 ### Boiler minimum power
 
 - **What:** the boiler's smallest burner power in kW (the minimum load in its manual).
 - **Why:** below it the boiler can only cycle. Shown in the evening report; buffer rooms (#80, after v2.0) will use it.
-- **Required:** no. Leave it empty and it is [measured](#low-load-detection). Set it only to pin the value from the manual.
+- **Required:** no. Leave it empty and it comes from the boiler (maximum capacity times minimum modulation, when it reports them), otherwise it is [measured](#low-load-detection). Set it only to pin the value from the manual.
 
 ### PID Kp, PID Ki, PID Kd
 
@@ -399,7 +406,7 @@ Samples are one a minute, so burns and pauses are rounded to whole minutes. Burn
 
 **What it changes:** a low-load warm-up never gets the verdict "swinging or short-cycling", so the advice never lowers Kp for it and **Apply PID advice automatically** never acts on it. Overshoot and a slow rise still count. The evening report marks it: "low load: 6.5 starts/h, burns 3.4 min, off 5.1 min (not a PID problem)".
 
-**Boiler minimum power:** measured from low-load warm-ups without hot water, where the boiler burns at its minimum: gas used over burner minutes, converted with the calorific value of Dutch gas (9.77 kWh/m³). It needs a gas meter and 60 burner minutes in low-load warm-ups; until then the report says "measuring". A gas meter that reports every few minutes makes this an estimate. The [setting](#boiler-minimum-power) replaces it. The report shows the line once there is a low-load warm-up or a value.
+**Boiler minimum power:** measured from low-load warm-ups without hot water, where the boiler burns at its minimum: gas used over burner minutes, converted with the calorific value of Dutch gas (9.77 kWh/m³). It needs a gas meter and 60 burner minutes in low-load warm-ups; until then the report says "measuring". A gas meter that reports every few minutes makes this an estimate. The [setting](#boiler-minimum-power) replaces it, and so does what the boiler reports ([maximum capacity and minimum modulation](#boiler-member-id-boiler-maximum-capacity-boiler-minimum-modulation)): setting first, then the boiler, then measured. The report shows the line once there is a low-load warm-up or a value.
 
 **Why alpha:** observe only; nothing changes in the heating. What helps against low load (buffer rooms, a fixed burn and pause in the firmware) comes after v2.0 (#80).
 

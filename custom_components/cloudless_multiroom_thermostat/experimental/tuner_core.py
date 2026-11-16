@@ -501,15 +501,38 @@ def summary_line(e):
     return line
 
 
-def min_power(episodes, setting_kw=None):
+def boiler_min_power(max_capacity, min_modulation):
+    """Minimum power the boiler reports (OpenTherm ID 15): capacity times minimum modulation (#107)."""
+    if not max_capacity or min_modulation is None or not 0 < min_modulation <= 100:
+        return None
+    kw = max_capacity * min_modulation / 100
+    return round(kw, 1) if MIN_POWER_RANGE[0] <= kw <= MIN_POWER_RANGE[1] else None
+
+
+def boiler_identity_line(boiler):
+    """Evening report line with what the boiler says about itself (#107); None when it says nothing."""
+    parts = []
+    if boiler.get("member_id") is not None:
+        parts.append(f"OpenTherm member ID {boiler['member_id']:g}")
+    if boiler.get("max_capacity"):
+        parts.append(f"maximum capacity {boiler['max_capacity']:g} kW")
+    if boiler.get("min_modulation") is not None:
+        parts.append(f"minimum modulation {boiler['min_modulation']:g}%")
+    return "Boiler: " + ", ".join(parts) if parts else None
+
+
+def min_power(episodes, setting_kw=None, boiler_kw=None):
     """
-    The boiler's smallest burner power (#103): the setting when set,
-    otherwise measured from low-load warm-ups without hot water, where the
-    boiler burns at its minimum: gas used over burner minutes. Returns
-    {source, kw, minutes} with source setting, measured or measuring.
+    The boiler's smallest burner power (#103): the setting when set, then
+    what the boiler reports (#107), otherwise measured from low-load
+    warm-ups without hot water, where the boiler burns at its minimum: gas
+    used over burner minutes. Returns {source, kw, minutes} with source
+    setting, boiler, measured or measuring.
     """
     if setting_kw:
         return {"source": "setting", "kw": round(setting_kw, 1), "minutes": None}
+    if boiler_kw:
+        return {"source": "boiler", "kw": boiler_kw, "minutes": None}
     low = [
         e for e in episodes
         if e.get("low_load") and not e.get("dhw_min") and e.get("gas_used") and e.get("flame_on_min")
@@ -527,6 +550,8 @@ def min_power_line(mp):
     """Boiler minimum power for the evening report."""
     if mp["source"] == "setting":
         return f"Boiler minimum power: {mp['kw']:g} kW (setting)"
+    if mp["source"] == "boiler":
+        return f"Boiler minimum power: {mp['kw']:g} kW (reported by the boiler)"
     if mp["source"] == "measured":
         return f"Boiler minimum power: about {mp['kw']:g} kW, measured over {mp['minutes']} burner minutes in low-load warm-ups"
     return f"Boiler minimum power: measuring ({mp['minutes']}/{MIN_POWER_MINUTES} burner minutes in low-load warm-ups)"

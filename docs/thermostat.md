@@ -39,6 +39,8 @@ What the integration needs from the thermostat that drives your boiler, what eac
 | Return water temperature | read | recommended | **Return water temperature**: [condensing share](experimental.md#condensing-share) | No condensing share | `sensor: platform: opentherm` `t_ret` |
 | Hot water setpoint as a **read only** sensor | read | optional | **Boiler hot water setpoint** | Setting changes don't show in the report | `sensor: platform: opentherm` `t_dhw_set` |
 | Modulation, CH pressure, fault indication | read (card) | optional | [Heating Control Card](card.md) | The card shows less | `rel_mod_level`, `ch_pressure`, `fault_indication` |
+| OpenTherm member ID (who made the boiler) | read | optional | **Boiler member ID**: evening report; later a boiler profile you confirm | You pick the boiler by hand when profiles arrive | `sensor: platform: opentherm` `device_id` |
+| Maximum capacity and minimum modulation | read | optional | **Boiler maximum capacity**, **Boiler minimum modulation**: [boiler minimum power](experimental.md#low-load-detection) | Minimum power is measured or set by hand | `max_capacity`, `min_mod_level` |
 
 ### Never
 
@@ -189,6 +191,15 @@ sensor:
       name: "Relative modulation level"
     ch_pressure:
       name: "Water pressure in CH circuit"
+    device_id:                 # OpenTherm member ID, read once
+      name: "Boiler member ID"
+      disabled_by_default: false
+    max_capacity:
+      name: "Boiler maximum capacity"
+      disabled_by_default: false
+    min_mod_level:
+      name: "Boiler minimum modulation"
+      disabled_by_default: false
 
 binary_sensor:
   - platform: opentherm
@@ -266,6 +277,7 @@ What the stock firmware (v2.x, closed source, MQTT with Home Assistant discovery
 - **Fail safe:** built in. Without a valid MQTT temperature for 2 minutes it goes into sensor failure mode and, by default, shuts the boiler down (`heatOnSensorFailure` off).
 - **Flow limit:** `chMax` (0 to 80, set through MQTT or its web page). Whether Home Assistant gets it as an entity the integration can read is not confirmed.
 - **PID:** a PI loop with its own gains (`pidKp` default 30, `pidKi` default 0.01) on a different scale than ESPHome's. They are set through its web page or a JSON `config` command, not as number entities, so there is **no PID advice** and no automatic apply.
+- **Boiler identity:** its member ID setting emulates the *thermostat's* vendor code; whether it publishes the boiler's own member ID is not confirmed.
 - **Requested flow, telemetry:** which boiler values the stock firmware publishes as Home Assistant entities (flame, flow, return, requested flow) is not confirmed yet. If you run it, an issue with the entities it creates is welcome.
 
 **Recommendation:** for anything beyond heating, flash ESPHome. The board is the same; the config above is all it needs.
