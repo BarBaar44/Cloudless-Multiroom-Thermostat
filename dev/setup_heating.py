@@ -208,6 +208,8 @@ LEARNING_FIELDS = {
     "exp_return": "sensor.sim_boiler_return_water_temperature",
     # The number that sets the limit, as with thermostat.yaml
     "exp_max_ch": "number.sim_central_heating_max_flow_temperature",
+    # What the thermostat asks for, as thermostat.yaml's flow_request sensor
+    "exp_flow_request": "sensor.sim_boiler_flow_request",
     # A sensor, never a writable number
     "exp_dhw_setpoint": "sensor.sim_boiler_hot_water_setpoint",
     "exp_kp": "number.sim_central_heating_kp",
