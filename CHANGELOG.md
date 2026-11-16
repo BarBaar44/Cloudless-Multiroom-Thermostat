@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Cooling per room (#102):** the night model now also samples every room and fits each room's cooling, keyed on the room id. The time constant per room is in the `cooling_per_room` attribute of the night prediction sensor and in the evening report. See [Cooling per room](docs/experimental.md#cooling-per-room). Observe only: the prediction still uses the room to follow.
+
 ## 1.9.0
 
 **Behaviour change, only with Apply PID advice automatically on:** a warm-up that short-cycles because the room needs less heat than the boiler's smallest flame is now marked *low load* and no longer counts as "short-cycling". The advice, and so the automatic changes, leave Kp alone for it. With the advice in observe mode nothing changes in the heating.

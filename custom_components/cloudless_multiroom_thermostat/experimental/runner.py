@@ -179,6 +179,7 @@ class ExperimentalRunner:
         # restart (an update) doesn't lose a warm-up; a long gap drops it.
         self._episode: dict[str, Any] | None = None
         self._per_room: list[dict[str, Any]] = []
+        self._cooling: list[dict[str, Any]] = []
         self._last_target: float | None = None
         # The night in progress is saved every sample (long, restarts likely).
         self._night: dict[str, Any] | None = None
@@ -372,6 +373,10 @@ class ExperimentalRunner:
             "garden_open": bool(room and room.window_open),
             "sun_up": sun is not None and sun.state == "above_horizon",
             "people": self._float(CONF_EXP_PEOPLE),
+            # Every room, for cooling per room (#102)
+            "rooms": {
+                rid: {"t": r.current, "open": r.window_open} for rid, r in self.ctl.rooms.items()
+            },
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -665,6 +670,7 @@ class ExperimentalRunner:
         )
         prediction = (await self._io(store.read_state, self.f_night_state)).get("prediction")
         if prediction:
+            self._cooling = self._cooling_per_room(await self._io(store.read_episodes, self.f_nights))
             self._publish_prediction(prediction)
         report = await self._io(store.read_state, self.f_report)
         if report.get("at") and report.get("attrs"):
@@ -749,6 +755,7 @@ class ExperimentalRunner:
             samples, end_reason, prediction, n.get("gas_start"), self._float(CONF_EXP_GAS)
         )
         record["room_id"] = n.get("room_id")
+        record["rooms"] = night_core.room_nights(samples)
         await self._io(store.append_episode, self.f_nights, record)
         _LOGGER.info(
             "Night %s valid=%s tau_h=%s error=%s",
@@ -802,8 +809,12 @@ class ExperimentalRunner:
             morning_target=room.warm_temp,
         )
         await self._async_update_night_state(prediction=prediction)
+        self._cooling = self._cooling_per_room(await self._io(store.read_episodes, self.f_nights))
         self._publish_prediction(prediction)
         return prediction
+
+    def _cooling_per_room(self, nights: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return night_core.cooling_per_room(nights, [(r.room_id, r.name) for r in self.ctl.rooms.values()])
 
     def _publish_prediction(self, prediction: dict[str, Any]) -> None:
         room = self.room
@@ -823,6 +834,9 @@ class ExperimentalRunner:
                 "warmups_used": prediction["warmups_used"],
                 "gas_before6": prediction["gas_before6"],
                 "gas_after6": prediction["gas_after6"],
+                "cooling_per_room": [
+                    {"room": r["room"], "tau_h": r["tau_h"], "nights": r["nights"]} for r in self._cooling
+                ],
             },
         )
 
@@ -1089,6 +1103,9 @@ class ExperimentalRunner:
         night_lines = [night_core.night_line(n) for n in nights if n["end"][:10] == today] or ["- no night recorded"]
         if prediction:
             night_lines.append(night_core.prediction_line(prediction))
+        cooling = night_core.cooling_line(self._cooling_per_room(nights))
+        if cooling:
+            night_lines.append(cooling)
         gas = await self._async_gas_summary()
 
         pid_lines = []

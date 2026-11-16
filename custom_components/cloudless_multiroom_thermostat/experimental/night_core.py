@@ -200,6 +200,75 @@ def analyse(samples, end_reason, prediction=None, gas_start=None, gas_end=None):
     return record
 
 
+def room_nights(samples, start_iso=None):
+    """
+    Cooling per room (#102, observe only): fit k for every room in the
+    samples' "rooms" ({room_id: {"t": temperature, "open": window open}}),
+    by the same rules as the followed room. Returns {room_id: record}.
+    """
+    start_iso = start_iso or samples[0]["t"]
+    ids = []
+    for s in samples:
+        for rid in s.get("rooms") or {}:
+            if rid not in ids:
+                ids.append(rid)
+    out = {}
+    for rid in ids:
+        view = [
+            {**s, "room": (s.get("rooms") or {}).get(rid, {}).get("t"),
+             "garden_open": bool((s.get("rooms") or {}).get(rid, {}).get("open"))}
+            for s in samples
+        ]
+        k, n_quiet, mean_delta = fit_k(view, start_iso)
+        reasons = []
+        if any(v["garden_open"] for v in view):
+            reasons.append("window")
+        if n_quiet < MIN_QUIET_SAMPLES:
+            reasons.append("too_short")
+        if mean_delta is not None and mean_delta < MIN_DELTA:
+            reasons.append("small_delta")
+        if k is None or k <= 0:
+            reasons.append("no_fit")
+        temps = [v["room"] for v in view if v["room"] is not None]
+        out[rid] = {
+            "k": round(k, 5) if k is not None else None,
+            "tau_h": round(1 / k, 1) if k else None,
+            "quiet_samples": n_quiet,
+            "mean_delta": mean_delta,
+            "drop": round(temps[0] - temps[-1], 2) if len(temps) > 1 else None,
+            "valid": not reasons,
+            "invalid_reasons": reasons,
+        }
+    return out
+
+
+def cooling_per_room(nights, rooms):
+    """
+    Median cooling time constant per room over its last K_NIGHTS valid
+    nights (#102). rooms is a list of (room_id, name). Rooms with fewer than
+    MIN_NIGHTS valid nights are left out. Returns a list of
+    {room_id, room, tau_h, nights}.
+    """
+    out = []
+    for room_id, name in rooms:
+        ks = [
+            n["rooms"][room_id]["k"] for n in nights
+            if room_id in (n.get("rooms") or {}) and n["rooms"][room_id]["valid"] and n["rooms"][room_id]["k"]
+        ][-K_NIGHTS:]
+        if len(ks) < MIN_NIGHTS:
+            continue
+        out.append({"room_id": room_id, "room": name, "tau_h": round(1 / _median(ks), 1), "nights": len(ks)})
+    return out
+
+
+def cooling_line(per_room):
+    """Evening report line: how fast each room cools."""
+    if not per_room:
+        return None
+    return "- Cooling per room (time constant, higher keeps heat longer): " + ", ".join(
+        f"{r['room']} {r['tau_h']:g} h ({r['nights']} nights)" for r in per_room)
+
+
 def _avg(values):
     values = [v for v in values if v is not None]
     return round(sum(values) / len(values), 1) if values else None
