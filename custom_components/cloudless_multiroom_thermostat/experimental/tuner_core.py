@@ -31,11 +31,18 @@ UNDERSHOOT_LIMIT = 0.4     # degC below target after the first reach
 FLAME_STARTS_PER_HOUR = 6  # more than this is short-cycling
 CONSISTENT_EPISODES = 2    # this many valid episodes in a row must agree
 STEP = 0.10                # 10 % parameter step
+CONDENSING_RETURN = 55.0   # degC: below this return temperature a condensing boiler condenses (#105)
+FLOW_MARGIN = 2.0          # degC the real flow may run above the flow limit before it counts (#104)
+LOW_LOAD_END_MARGIN = 1.0  # degC above the requested flow at the end of a burn: the boiler stopped on its own (#103)
+MIN_POWER_MINUTES = 60     # burner minutes in low-load warm-ups before the minimum power is measured
+MIN_POWER_RANGE = (1.0, 40.0)  # kW; a measured minimum outside this is ignored
+GAS_KWH_PER_M3 = 9.77      # gross calorific value of Dutch natural gas (35.17 MJ/m3)
+REQUEST_MARGIN = 0.5       # degC: a requested flow above the limit by more than this is a firmware fault
 
 # Only episodes led by the followed room (the "Room to follow" option, matched
 # by room id) are used for tuning. Other rooms' episodes are still recorded
-# (reason "other_room") so we can judge later whether they need parameters of
-# their own. The class name "living" is what the records store for the
+# (reason "other_room") and get advice of their own in per_room(), observe
+# only, to judge whether they need parameters of their own (#101, #82). The class name "living" is what the records store for the
 # followed room; it is kept so older records group with new ones.
 
 # Advice limits for an ESPHome PID whose output spans a 0 to 100 degC flow
@@ -204,6 +211,20 @@ def analyse(samples, params, start_reason, extra_reasons=(), *, room_id, followe
     # The boiler's own flow limit (maximum CH setpoint): it caps what the PID
     # can ask for, so warm-ups with a different limit are not comparable
     caps = [s.get("max_ch") for s in samples if s.get("max_ch") is not None]
+    # Heating curve data (#104): requested and real flow while the burner
+    # heats (not hot water), against the flow limit of that minute
+    burning = [s for s in samples if s["flame"] and not s["dhw"]]
+    requests = [s.get("flow_req") for s in samples if not s["dhw"] and s.get("flow_req") is not None]
+    burn_waters = [s["water"] for s in burning if s["water"] is not None]
+    burn_requests = [s.get("flow_req") for s in burning if s.get("flow_req") is not None]
+
+    burns, offs = _burns(samples)
+    ends = [hot for _, hot in burns if hot is not None]
+    burns_end_hot = len([1 for hot in ends if hot]) if ends else None
+
+    def _above(key, margin):
+        hits = [s for s in samples if not s["dhw"] and s.get(key) is not None and s.get("max_ch") is not None]
+        return len([1 for s in hits if s[key] > s["max_ch"] + margin]) if hits else None
 
     if len(samples) < MIN_EPISODE_MIN:
         reasons.append("too_short")
@@ -245,10 +266,28 @@ def analyse(samples, params, start_reason, extra_reasons=(), *, room_id, followe
         "flame_starts": flame_starts,
         "flame_starts_per_hour": round(flame_starts / hours, 1),
         "flame_on_min": len([1 for s in samples if s["flame"]]),
+        "dhw_min": len([1 for s in samples if s["dhw"]]),
+        # Low-load detection (#103): burn and off length in minutes (one
+        # sample a minute, so short ones round), and how many burns ended
+        # with the flow above what was asked: the boiler stopping on its own
+        "burn_avg_min": _avg([n for n, _ in burns]),
+        "burn_min_min": min((n for n, _ in burns), default=None),
+        "off_avg_min": _avg(offs),
+        "off_min_min": min(offs, default=None),
+        "burns_end_hot": burns_end_hot,
         "water_peak": max(waters, default=None),
         "max_ch": caps[0] if caps else None,
+        "water_avg": _avg(burn_waters),
+        "flow_req_max": max(requests, default=None),
+        "flow_req_avg": _avg(burn_requests),
+        "flow_above_limit_min": _above("water", FLOW_MARGIN),
+        "req_above_limit_min": _above("flow_req", REQUEST_MARGIN),
         "gas_used": round(gas[-1] - gas[0], 3) if gas else None,
         "return_avg": round(sum(returns) / len(returns), 1) if returns else None,
+        # Share of burning minutes (not hot water) with the return below
+        # CONDENSING_RETURN, in %: lets a lower flow be judged on gas (#105)
+        "condensing_pct": round(100 * len([r for r in returns if r < CONDENSING_RETURN]) / len(returns))
+        if returns else None,
         "return_max": max(returns) if returns else None,
         "people_avg": _avg([s.get("people") for s in samples]),
         "integral_min": min(integrals, default=None),
@@ -258,7 +297,47 @@ def analyse(samples, params, start_reason, extra_reasons=(), *, room_id, followe
         "invalid_reasons": reasons,
     }
     record["kind"] = episode_kind(record)
+    record["low_load"] = (
+        None if burns_end_hot is None
+        else record["flame_starts_per_hour"] > FLAME_STARTS_PER_HOUR and 2 * burns_end_hot >= len(ends)
+    )
     return record
+
+
+def _burns(samples):
+    """
+    Burns for heating as (minutes, ended_hot), and the off periods between
+    two burns in minutes. A burn with a hot water minute is left out, and so
+    are a burn already running at the first sample and one still running at
+    the last (their length is unknown). ended_hot:
+    the flow at the burn's last minute was above the request by
+    LOW_LOAD_END_MARGIN (or, without a request, at the flow limit); None
+    without the data to tell.
+    """
+    burns, offs = [], []
+    run, off = [], None
+    for s in [*samples, None]:
+        if s is not None and s["flame"]:
+            if off is not None and not run:
+                offs.append(off)
+                off = None
+            run.append(s)
+            continue
+        if run:
+            if s is not None and run[0] is not samples[0] and not any(r["dhw"] for r in run):
+                last = run[-1]
+                req, cap, water = last.get("flow_req"), last.get("max_ch"), last["water"]
+                if water is None or (req is None and cap is None):
+                    hot = None
+                elif req is not None:
+                    hot = water > req + LOW_LOAD_END_MARGIN
+                else:
+                    hot = water >= cap
+                burns.append((len(run), hot))
+            run, off = [], 0
+        if s is not None and off is not None:
+            off += 1
+    return burns, offs
 
 
 def _avg(values):
@@ -270,8 +349,11 @@ def verdict(episode):
     """What a single valid episode (see judged_valid) asks for, or None when it is within limits."""
     if episode["overshoot"] is not None and episode["overshoot"] > OVERSHOOT_LIMIT:
         return "overshoot"
-    if episode["flame_starts_per_hour"] > FLAME_STARTS_PER_HOUR or (
-        episode["undershoot"] is not None and episode["undershoot"] > UNDERSHOOT_LIMIT
+    # A low-load warm-up cycles because the boiler's smallest flame is more
+    # than the room can take: no PID value changes that (#103)
+    if not episode.get("low_load") and (
+        episode["flame_starts_per_hour"] > FLAME_STARTS_PER_HOUR
+        or (episode["undershoot"] is not None and episode["undershoot"] > UNDERSHOOT_LIMIT)
     ):
         return "oscillating"
     if episode["rise_min"] is not None and episode["rise_min"] > SLOW_RISE_MIN:
@@ -333,6 +415,61 @@ def recommend(episodes, params, *, room_id=None, room_name=None):
     return {**rec, "new": new}
 
 
+def per_room(episodes, params, rooms):
+    """
+    PID advice for every room with at least CONSISTENT_EPISODES valid warm-ups
+    (#101, observe only). rooms is a list of (room_id, name). Each room is
+    judged on its own warm-ups, the same way as the followed room; nothing is
+    applied. Returns a list of {room_id, room, warm_ups, rec}.
+    """
+    out = []
+    for room_id, name in rooms:
+        n = sum(1 for e in episodes if for_advice(e, room_id, name))
+        if n < CONSISTENT_EPISODES:
+            continue
+        out.append({
+            "room_id": room_id, "room": name, "warm_ups": n,
+            "rec": recommend(episodes, params, room_id=room_id, room_name=name),
+        })
+    return out
+
+
+BAND_NAMES = {"below_0": "below 0", "0_8": "0 to 8", "8_15": "8 to 15", "above_15": "above 15"}
+
+
+def curve_line(episodes):
+    """
+    Heating curve data (#104, observe only): how many warm-ups there are at
+    the current flow limit per outdoor band, and whether the flow stayed at
+    that limit. Warm-ups of every room count, of the latest schema; the
+    flow limit is the latest warm-up's. None without a warm-up with a limit.
+    """
+    ups = [
+        e for e in episodes
+        if episode_kind(e) == "warm_up" and e.get("max_ch") is not None
+        and all(r == "other_room" for r in e.get("invalid_reasons") or [])
+    ]
+    if not ups:
+        return None
+    last = ups[-1]
+    ups = [e for e in ups if e["max_ch"] == last["max_ch"] and schema_of(e) == schema_of(last)]
+    bands = ", ".join(
+        f"{label}: {len([1 for e in ups if e.get('outdoor_band') == band])}" for band, label in BAND_NAMES.items()
+    )
+    line = f"Heating curve data at flow limit {last['max_ch']:g} °C: {len(ups)} warm-ups (outdoor {bands} °C)"
+    flow = [e for e in ups if e.get("flow_above_limit_min") is not None]
+    if flow:
+        over = [e for e in flow if e["flow_above_limit_min"] > 0]
+        line += f". Flow more than {FLOW_MARGIN:g} °C above the limit in {len(over)} of {len(flow)}"
+        peak = max((e["water_peak"] for e in over if e.get("water_peak") is not None), default=None)
+        if peak is not None:
+            line += f" (highest {peak:g} °C)"
+    req = [e for e in ups if e.get("req_above_limit_min") is not None]
+    if req:
+        line += f"; requested flow above the limit in {len([1 for e in req if e['req_above_limit_min'] > 0])} of {len(req)}"
+    return line
+
+
 def _or_dash(value):
     """A value for a report line, "-" when it is missing (sensor not set or no data)."""
     return "-" if value is None else value
@@ -345,17 +482,79 @@ def summary_line(e):
         return "- {} {}: skipped ({})".format(start, e["area"], ", ".join(e["invalid_reasons"]))
     line = (
         "- {} {} -> {:.1f} degC (outside {} degC): target after {} min, "
-        "overshoot {:+.1f}, dip {:.1f}, {} flame starts, water max {}, return avg {}".format(
+        "overshoot {:+.1f}, dip {:.1f}, {} flame starts, water max {}, return avg {}, condensing {}".format(
             start, e["area"], e["target"], _or_dash(e["outdoor_avg"]), e["rise_min"],
             e["overshoot"], e["undershoot"], e["flame_starts"], _or_dash(e.get("water_peak")),
             _or_dash(e.get("return_avg")),
+            "-" if e.get("condensing_pct") is None else f"{e['condensing_pct']}%",
         )
     )
     if e.get("max_ch") is not None:
         line += f", flow limit {e['max_ch']:g}"
+    if e.get("cost") is not None:
+        line += f", gas {e['gas_used']:g} m3 cost {e['cost']:.2f}"
     if episode_kind(e) == "top_up":
         line += ", top-up (not used for advice)"
+    if e.get("low_load"):
+        line += ", low load: {} starts/h, burns {} min, off {} min (not a PID problem)".format(
+            e["flame_starts_per_hour"], _or_dash(e.get("burn_avg_min")), _or_dash(e.get("off_avg_min")))
     return line
+
+
+def boiler_min_power(max_capacity, min_modulation):
+    """Minimum power the boiler reports (OpenTherm ID 15): capacity times minimum modulation (#107)."""
+    if not max_capacity or min_modulation is None or not 0 < min_modulation <= 100:
+        return None
+    kw = max_capacity * min_modulation / 100
+    return round(kw, 1) if MIN_POWER_RANGE[0] <= kw <= MIN_POWER_RANGE[1] else None
+
+
+def boiler_identity_line(boiler):
+    """Evening report line with what the boiler says about itself (#107); None when it says nothing."""
+    parts = []
+    if boiler.get("member_id") is not None:
+        parts.append(f"OpenTherm member ID {boiler['member_id']:g}")
+    if boiler.get("max_capacity"):
+        parts.append(f"maximum capacity {boiler['max_capacity']:g} kW")
+    if boiler.get("min_modulation") is not None:
+        parts.append(f"minimum modulation {boiler['min_modulation']:g}%")
+    return "Boiler: " + ", ".join(parts) if parts else None
+
+
+def min_power(episodes, setting_kw=None, boiler_kw=None):
+    """
+    The boiler's smallest burner power (#103): the setting when set, then
+    what the boiler reports (#107), otherwise measured from low-load
+    warm-ups without hot water, where the boiler burns at its minimum: gas
+    used over burner minutes. Returns {source, kw, minutes} with source
+    setting, boiler, measured or measuring.
+    """
+    if setting_kw:
+        return {"source": "setting", "kw": round(setting_kw, 1), "minutes": None}
+    if boiler_kw:
+        return {"source": "boiler", "kw": boiler_kw, "minutes": None}
+    low = [
+        e for e in episodes
+        if e.get("low_load") and not e.get("dhw_min") and e.get("gas_used") and e.get("flame_on_min")
+    ]
+    minutes = sum(e["flame_on_min"] for e in low)
+    if minutes < MIN_POWER_MINUTES:
+        return {"source": "measuring", "kw": None, "minutes": minutes}
+    kw = sum(e["gas_used"] for e in low) / minutes * 60 * GAS_KWH_PER_M3
+    if not MIN_POWER_RANGE[0] <= kw <= MIN_POWER_RANGE[1]:
+        return {"source": "measuring", "kw": None, "minutes": minutes}
+    return {"source": "measured", "kw": round(kw, 1), "minutes": minutes}
+
+
+def min_power_line(mp):
+    """Boiler minimum power for the evening report."""
+    if mp["source"] == "setting":
+        return f"Boiler minimum power: {mp['kw']:g} kW (setting)"
+    if mp["source"] == "boiler":
+        return f"Boiler minimum power: {mp['kw']:g} kW (reported by the boiler)"
+    if mp["source"] == "measured":
+        return f"Boiler minimum power: about {mp['kw']:g} kW, measured over {mp['minutes']} burner minutes in low-load warm-ups"
+    return f"Boiler minimum power: measuring ({mp['minutes']}/{MIN_POWER_MINUTES} burner minutes in low-load warm-ups)"
 
 
 BOILER_SETTINGS = (("max_ch", "max flow"), ("dhw_setpoint", "hot water"))

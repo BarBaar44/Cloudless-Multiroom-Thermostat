@@ -14,12 +14,13 @@ GAS_DAYS = 365             # a full year of data holds a whole heating season
 
 # Night cooldown model
 NIGHTS = 30                # predicted nights judged
-NIGHT_BANDS = 3            # spread over this many outdoor bands
+NIGHT_BAND_MIN = 5         # nights among them for an outdoor band to need confirming (#139)
 NIGHT_MEAN_ERROR = 0.3     # degC, average absolute error
 NIGHT_MAX_ERROR = 0.6      # degC, worst night
 
 # Warm-up episodes and PID advice
-PID_BANDS = 2              # outdoor bands with a confirmed change
+PID_RECENT = 30            # warm-ups looked at for the bands that occur
+PID_BAND_MIN = 5           # warm-ups among them for a band to need confirming
 PID_EPISODES_AFTER = 5     # valid episodes in that band after the change
 PID_COMPARE_BEFORE = 5     # episodes before the change to compare with
 # Nothing comparable before a change (schema or flow limit changed with it):
@@ -51,25 +52,55 @@ def gas_progress(summary):
     return {"done": days >= GAS_DAYS and rate_ok, "text": text}
 
 
+def night_bands(nights):
+    """
+    Per outdoor band over the last NIGHTS valid nights with a prediction:
+    {band: {nights, mean, worst, ok}}. ok: the band has NIGHT_BAND_MIN
+    nights and its errors hold (#139). A band with fewer nights has
+    occurred but isn't confirmed: optimum start must not act in it yet.
+    """
+    judged = [n for n in nights if n.get("valid") and n.get("prediction_error") is not None][-NIGHTS:]
+    bands = {}
+    for n in judged:
+        band = tuner_core.outdoor_band(n.get("outdoor_avg"))
+        if band != "unknown":
+            bands.setdefault(band, []).append(abs(n["prediction_error"]))
+    out = {}
+    for band, errors in bands.items():
+        mean, worst = sum(errors) / len(errors), max(errors)
+        out[band] = {
+            "nights": len(errors), "mean": round(mean, 2), "worst": round(worst, 2),
+            "ok": len(errors) >= NIGHT_BAND_MIN and mean <= NIGHT_MEAN_ERROR and worst <= NIGHT_MAX_ERROR,
+        }
+    return out
+
+
 def night_progress(nights):
-    """The last NIGHTS valid nights with a prediction: count, bands and errors."""
+    """
+    Stable after NIGHTS predicted nights, when the errors hold in every
+    outdoor band that occurs (NIGHT_BAND_MIN of them), with at least one.
+    Bands that don't occur aren't waited for (#139).
+    """
     judged = [n for n in nights if n.get("valid") and n.get("prediction_error") is not None][-NIGHTS:]
     if not judged:
-        return {"done": False, "text": f"Night model: 0 of {NIGHTS} predicted nights"}
-    errors = [abs(n["prediction_error"]) for n in judged]
-    bands = {tuner_core.outdoor_band(n.get("outdoor_avg")) for n in judged} - {"unknown"}
-    mean, worst = sum(errors) / len(errors), max(errors)
-    done = (
-        len(judged) >= NIGHTS
-        and len(bands) >= NIGHT_BANDS
-        and mean <= NIGHT_MEAN_ERROR
-        and worst <= NIGHT_MAX_ERROR
-    )
-    text = (
-        f"Night model: {len(judged)} of {NIGHTS} predicted nights, {min(len(bands), NIGHT_BANDS)} of {NIGHT_BANDS} outdoor bands, "
-        f"average error {mean:.2f} (max {NIGHT_MEAN_ERROR}), worst {worst:.1f} (max {NIGHT_MAX_ERROR})"
-    )
-    return {"done": done, "text": text}
+        return {"done": False, "text": f"Night model: 0 of {NIGHTS} predicted nights", "bands": {}}
+    bands = night_bands(nights)
+    seen = [b for b in tuner_core.BAND_NAMES if b in bands and bands[b]["nights"] >= NIGHT_BAND_MIN]
+    done = len(judged) >= NIGHTS and bool(seen) and all(bands[b]["ok"] for b in seen)
+    parts = []
+    for band in [b for b in tuner_core.BAND_NAMES if b in bands]:
+        v, label = bands[band], tuner_core.BAND_NAMES[band] + " °C"
+        if v["nights"] < NIGHT_BAND_MIN:
+            parts.append(f"{label}: {v['nights']} of {NIGHT_BAND_MIN} nights (not confirmed yet)")
+            continue
+        verdict = "holds" if v["ok"] else (
+            f"average error above {NIGHT_MEAN_ERROR}" if v["mean"] > NIGHT_MEAN_ERROR else f"a night off by more than {NIGHT_MAX_ERROR}")
+        parts.append(f"{label}: {v['nights']} nights, average error {v['mean']:.2f}, worst {v['worst']:.1f} ({verdict})")
+    good = len([b for b in seen if bands[b]["ok"]])
+    text = f"Night model: {len(judged)} of {NIGHTS} predicted nights, {good} of {len(seen)} outdoor bands confirmed"
+    if parts:
+        text += ". " + "; ".join(parts)
+    return {"done": done, "text": text, "bands": bands}
 
 
 def _mean(values):
@@ -102,18 +133,64 @@ def _steady(baseline, after):
     return compared
 
 
+def output_scale(record):
+    """
+    What the PID output (0 to 1) is multiplied by to give the flow request, in degC.
+
+    With thermostat.yaml (schema 3 on) that is the flow limit (max_ch). Before
+    schema 3 a recorded limit was not what the thermostat asked for: the PID
+    output went to a 0 to 100 range and the boiler stopped at its own maximum.
+    Without a limit the 0 to 100 range applies, as in tuner_core.limits().
+    """
+    cap = record.get("max_ch")
+    if tuner_core.schema_of(record) >= 3 and cap and cap > 0:
+        return float(cap)
+    return 100.0
+
+
+def effective_gains(record):
+    """
+    Kp, Ki and Kd times the output scale: degC of flow request per degC of error.
+
+    A firmware change that rescales the PID output (thermostat.yaml 2026-11-07:
+    output times the flow limit instead of 0 to 100, Kp and Ki times 2.5) keeps
+    these the same, so it is no PID change (#132).
+    """
+    scale = output_scale(record)
+    return {k: round(v * scale, 6) for k, v in sorted(record["params"].items())}
+
+
+def _why_nothing_before(earlier, cap, schema):
+    """Why no warm-up of a band before a change can be compared with the ones after it."""
+    if not earlier:
+        return "no warm-ups in this band before it"
+    reasons = []
+    if not any(tuner_core.schema_of(e) == schema for e in earlier):
+        reasons.append("the record format")
+    if not any(e.get("max_ch") == cap for e in earlier):
+        reasons.append("the flow limit")
+    if not reasons:  # each matches on one, none on both
+        reasons = ["the flow limit or the record format"]
+    return " and ".join(reasons) + " changed with it"
+
+
 def pid_changes(episodes, room_id=None, room_name=None):
     """
-    PID values changed (by hand or by autotune) between valid episodes of the followed room
-    (judged against the room followed now: tuner_core.judged_valid).
-    Returns per outdoor band the last change: the episodes before it and after it.
+    PID values changed (by hand or by autotune) between valid warm-ups of the followed room
+    (judged against the room followed now: tuner_core.for_advice).
+    Returns per outdoor band the last change: the warm-ups before it and after it,
+    when it was and what changed.
+
+    A change is a change of effective gains (effective_gains), not of the
+    stored numbers: rescaling Kp and Ki along with the PID output is the same
+    controller.
 
     There is one set of PID values for all weather, so a change counts in
-    every band with an episode on the new values after it, not only in the
-    band of the first episode after it.
+    every band with a warm-up on the new values after it, not only in the
+    band of the first warm-up after it.
 
-    Before and after only hold episodes with the boiler flow limit (max_ch) of
-    the band's first episode after the change: a lower limit alone slows a
+    Before and after only hold warm-ups with the boiler flow limit (max_ch) of
+    the band's first warm-up after the change: a lower limit alone slows a
     warm-up and cuts its overshoot, which would otherwise be credited to the
     PID. Records without max_ch (older ones, or the field not set) only
     compare with each other. The same goes for the schema: schema 2 ends the
@@ -125,17 +202,18 @@ def pid_changes(episodes, room_id=None, room_name=None):
         if tuner_core.for_advice(e, room_id, room_name)
         and e.get("params") and None not in e["params"].values()
     ]
+    gains = [effective_gains(e) for e in followed]
     by_band = {}
     for i in range(1, len(followed)):
-        if followed[i]["params"] == followed[i - 1]["params"]:
+        if gains[i] == gains[i - 1]:
             continue
-        params = followed[i]["params"]
-        # Episodes on the new values, until the next change
+        # Warm-ups on the new values, until the next change
         run = []
-        for e in followed[i:]:
-            if e["params"] != params:
+        for j in range(i, len(followed)):
+            if gains[j] != gains[i]:
                 break
-            run.append(e)
+            run.append(followed[j])
+        old, new = followed[i - 1]["params"], followed[i]["params"]
         for band in dict.fromkeys(e["outdoor_band"] for e in run):
             first = next(e for e in run if e["outdoor_band"] == band)
             cap, schema = first.get("max_ch"), tuner_core.schema_of(first)
@@ -148,8 +226,37 @@ def pid_changes(episodes, room_id=None, room_name=None):
 
             before = [e for e in followed[:i] if comparable(e)][-PID_COMPARE_BEFORE:]
             after = [e for e in run if comparable(e)]
-            by_band[band] = {"before": before, "after": after}
+            change = {
+                "before": before, "after": after,
+                "date": str(followed[i].get("start", ""))[:10],
+                "old": old, "new": new,
+            }
+            if not before:
+                earlier = [e for e in followed[:i] if e["outdoor_band"] == band]
+                change["why"] = _why_nothing_before(earlier, cap, schema)
+            by_band[band] = change
     return by_band
+
+
+def _what_changed(change):
+    """Kp 0.7 -> 1.75, Ki 0.003 -> 0.0075: the values that changed."""
+    old, new = change.get("old") or {}, change.get("new") or {}
+    parts = [
+        f"{k.capitalize()} {old[k]:g} → {new[k]:g}"
+        for k in ("kp", "ki", "kd")
+        if k in old and k in new and old[k] != new[k]
+    ]
+    return ", ".join(parts)
+
+
+def _change_label(change):
+    label = "the change of {}".format(change.get("date") or "unknown date")
+    what = _what_changed(change)
+    return f"{label} ({what})" if what else label
+
+
+def _more(n):
+    return "{} more warm-up{} needed".format(n, "" if n == 1 else "s")
 
 
 def _band_progress(band, change):
@@ -158,50 +265,101 @@ def _band_progress(band, change):
     if before:
         n = len(after)
         better = n > 0 and _better(before, after)
-        text = "{} {}/{}{}".format(
-            band, min(n, PID_EPISODES_AFTER), PID_EPISODES_AFTER,
-            " better" if better else (" not better" if n else ""),
-        )
-        return n >= PID_EPISODES_AFTER and better, text
+        confirmed = n >= PID_EPISODES_AFTER and better
+        text = f"{band}: {min(n, PID_EPISODES_AFTER)} of {PID_EPISODES_AFTER} warm-ups after the change"
+        if n:
+            text += ", better" if better else ", not better"
+            text += "" if n >= PID_EPISODES_AFTER else " so far"
+        if n < PID_EPISODES_AFTER:
+            text += f" ({_more(PID_EPISODES_AFTER - n)})"
+        return confirmed, text
     # Nothing comparable before the change: judge against a baseline taken after it
+    why = change.get("why") or "nothing comparable before it"
     baseline, rest = after[:PID_COMPARE_BEFORE], after[PID_COMPARE_BEFORE:]
     if len(baseline) < PID_COMPARE_BEFORE:
-        return False, f"{band} {len(baseline)}/{PID_COMPARE_BEFORE} for a baseline, nothing comparable before the change"
+        needed = PID_COMPARE_BEFORE - len(baseline) + PID_EPISODES_AFTER
+        return False, f"{band}: {len(baseline)} of {PID_COMPARE_BEFORE} warm-ups for a baseline ({_more(needed)}; nothing to compare with: {why})"
     n = len(rest)
     steady = n > 0 and _steady(baseline, rest)
-    text = "{} {}/{} after a baseline{}".format(
-        band, min(n, PID_EPISODES_AFTER), PID_EPISODES_AFTER,
-        " steady" if steady else (" not steady" if n else ""),
-    )
+    text = f"{band}: {min(n, PID_EPISODES_AFTER)} of {PID_EPISODES_AFTER} warm-ups after a baseline of {PID_COMPARE_BEFORE}"
+    if n:
+        text += ", steady" if steady else ", not steady"
+        text += "" if n >= PID_EPISODES_AFTER else " so far"
+    if n < PID_EPISODES_AFTER:
+        text += f" ({_more(PID_EPISODES_AFTER - n)})"
     return n >= PID_EPISODES_AFTER and steady, text
 
 
-def pid_progress(episodes, room_id=None, room_name=None):
+def bands_seen(episodes, room_id=None, room_name=None):
+    """
+    Outdoor bands with at least PID_BAND_MIN of the last PID_RECENT warm-ups of
+    the followed room: the weather the house actually gets. A band that doesn't
+    occur isn't waited for (#132); one that comes back with the season needs
+    confirming again.
+    """
+    recent = [e for e in episodes if tuner_core.for_advice(e, room_id, room_name)][-PID_RECENT:]
+    counts = {}
+    for e in recent:
+        if e.get("outdoor_band") not in (None, "unknown"):
+            counts[e["outdoor_band"]] = counts.get(e["outdoor_band"], 0) + 1
+    return sorted(band for band, n in counts.items() if n >= PID_BAND_MIN)
+
+
+def pid_progress(episodes, room_id=None, room_name=None, optimum=None):
+    """
+    Confirmed in every outdoor band that occurs (bands_seen), by a change that
+    helped or by probing (optimum: {band: date} from autotune.optimum_bands):
+    neither a step up nor a step down was better, so the values there were
+    already right. A band counts once.
+    """
     changes = pid_changes(episodes, room_id, room_name)
-    good, parts = 0, []
+    optimum = optimum or {}
+    seen = bands_seen(episodes, room_id, room_name)
+    confirmed_bands, parts = set(), []
+    labels = {band: _change_label(c) for band, c in changes.items()}
+    shared = len(set(labels.values())) == 1
     for band, c in sorted(changes.items()):
         confirmed, part = _band_progress(band, c)
-        good += confirmed
-        parts.append(part)
-    text = f"PID advice: {min(good, PID_BANDS)} of {PID_BANDS} outdoor bands confirmed"
-    if parts:
-        text += " (episodes after a change: {})".format(", ".join(parts))
+        if confirmed:
+            confirmed_bands.add(band)
+        elif band in optimum:
+            continue  # said below
+        parts.append(part if shared else f"{part}, for {labels[band]}")
+    for band, day in sorted(optimum.items()):
+        if band not in confirmed_bands:
+            confirmed_bands.add(band)
+            parts.append(f"{band}: confirmed by probing on {day} (no better value up or down)")
+    if seen:
+        good = len(confirmed_bands & set(seen))
+        text = "PID advice: {} of {} outdoor bands confirmed ({} seen in the last {} warm-ups)".format(
+            good, len(seen), ", ".join(seen), PID_RECENT,
+        )
     else:
-        text += " (no change applied yet)"
-    text += "; check gas per degree-day did not get worse"
-    return {"done": good >= PID_BANDS, "text": text}
+        good = 0
+        text = f"PID advice: no outdoor band with {PID_BAND_MIN} of the last {PID_RECENT} warm-ups yet"
+    done = bool(seen) and good == len(seen)
+    if not parts:
+        return {"done": False, "text": text + ", no change applied yet. Check gas per degree-day did not get worse"}
+    if changes and shared:
+        text += ", for " + next(iter(labels.values()))
+    text += ". " + "; ".join(parts)
+    text += ". Check gas per degree-day did not get worse"
+    return {"done": done, "text": text}
 
 
 FEATURES = (("gas", "Gas per degree-day"), ("night", "Night model"), ("pid", "PID advice"))
 
 
-def statuses(gas_summary, nights, episodes, room_id=None, room_name=None):
-    """{feature key: progress} for each feature; nights and episodes of the followed room."""
+def statuses(gas_summary, nights, episodes, room_id=None, room_name=None, optimum=None):
+    """{feature key: progress} for each feature; nights and episodes of the followed room.
+
+    optimum: {band: date} of the PID values confirmed by probing (autotune.optimum_bands).
+    """
     nights = night_core.for_room(nights, room_id) if room_id else nights
     return {
         "gas": gas_progress(gas_summary),
         "night": night_progress(nights),
-        "pid": pid_progress(episodes, room_id, room_name),
+        "pid": pid_progress(episodes, room_id, room_name, optimum),
     }
 
 

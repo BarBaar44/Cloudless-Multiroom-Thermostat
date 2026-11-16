@@ -55,6 +55,7 @@ Set a room to Heat and give it a target above its temperature: it becomes the wi
 | [Heating Control Card](docs/card.md) | The dashboard card and its options |
 | [Learning features](docs/experimental.md) | Optional features that learn how your house heats |
 | [Hardware](docs/hardware.md) | Heat sources, DIYLess, `thermostat.yaml`, TRVs and sensors |
+| [Thermostat requirements](docs/thermostat.md) | What the thermostat must offer, and how to add it to your own ESPHome config |
 | [Boiler notes](docs/boiler-notes.md) | Known problems with specific boilers |
 | [Upgrading](docs/upgrading.md) | Updates, release notes, what to do after one |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and how to find the cause |

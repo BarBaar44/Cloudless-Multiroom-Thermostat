@@ -41,6 +41,11 @@ from .const import (
     CONF_EXP_KP,
     CONF_EXP_OUTDOOR,
     CONF_EXP_PEOPLE,
+    CONF_EXP_FLOW_REQUEST,
+    CONF_EXP_MAX_CAPACITY,
+    CONF_EXP_MEMBER_ID,
+    CONF_EXP_MIN_MODULATION,
+    CONF_EXP_MIN_POWER,
     CONF_EXP_RETURN,
     CONF_EXP_MAX_CH,
     CONF_EXP_DHW_SETPOINT,
@@ -246,6 +251,15 @@ def experimental_schema(rooms: dict[str, str]) -> vol.Schema:
             vol.Optional(CONF_EXP_WATER): _entities("sensor"),
             vol.Optional(CONF_EXP_RETURN): _entities("sensor"),
             vol.Optional(CONF_EXP_MAX_CH): _entities(["sensor", "number", "input_number"]),
+            vol.Optional(CONF_EXP_FLOW_REQUEST): _entities("sensor"),
+            vol.Optional(CONF_EXP_MEMBER_ID): _entities("sensor"),
+            vol.Optional(CONF_EXP_MAX_CAPACITY): _entities("sensor"),
+            vol.Optional(CONF_EXP_MIN_MODULATION): _entities("sensor"),
+            vol.Optional(CONF_EXP_MIN_POWER): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=40, step=0.1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="kW",
+                )
+            ),
             vol.Optional(CONF_EXP_DHW_SETPOINT): _entities("sensor"),
             vol.Optional(CONF_EXP_KP): _entities(["number", "input_number"]),
             vol.Optional(CONF_EXP_KI): _entities(["number", "input_number"]),

@@ -64,6 +64,11 @@ from ..const import (
     CONF_EXP_NOTIFY,
     CONF_EXP_OUTDOOR,
     CONF_EXP_PEOPLE,
+    CONF_EXP_FLOW_REQUEST,
+    CONF_EXP_MAX_CAPACITY,
+    CONF_EXP_MEMBER_ID,
+    CONF_EXP_MIN_MODULATION,
+    CONF_EXP_MIN_POWER,
     CONF_EXP_RETURN,
     CONF_EXP_ROOM,
     CONF_EXP_WATER,
@@ -82,7 +87,7 @@ from ..const import (
     WINNER_OFF,
     signal_update,
 )
-from . import autotune, gas_core, night_core, progress, store, tuner_core
+from . import autotune, gas_core, heatup_core, night_core, progress, store, tuner_core
 
 if TYPE_CHECKING:
     from ..controller import HeatingController, Room
@@ -159,6 +164,7 @@ class ExperimentalRunner:
         self.f_episodes = f"{self.dir}/episodes.jsonl"
         self.f_state = f"{self.dir}/state.json"
         self.f_nights = f"{self.dir}/nights.jsonl"
+        self.f_heatup = f"{self.dir}/heatup.jsonl"
         self.f_night_state = f"{self.dir}/night_state.json"
         self.f_gas_days = f"{self.dir}/gas_days.jsonl"
         self.f_episode_state = f"{self.dir}/episode_state.json"
@@ -176,6 +182,8 @@ class ExperimentalRunner:
         # The episode in progress is saved every few samples and on stop, so a
         # restart (an update) doesn't lose a warm-up; a long gap drops it.
         self._episode: dict[str, Any] | None = None
+        self._per_room: list[dict[str, Any]] = []
+        self._cooling: list[dict[str, Any]] = []
         self._last_target: float | None = None
         # The night in progress is saved every sample (long, restarts likely).
         self._night: dict[str, Any] | None = None
@@ -263,6 +271,50 @@ class ExperimentalRunner:
             return {**rec, "new": rec["old"], "at_limit": True}
         return {**rec, "new": new}
 
+    async def _async_keep_samples(self, record: dict[str, Any], ep: dict[str, Any]) -> None:
+        """Keep the episode's minute samples next to its record, for a model of how rooms heat up (#135).
+
+        The record in episodes.jsonl only holds a summary; Home Assistant's
+        recorder keeps the raw history for about 10 days. Never blocks the
+        rest: a failed write is logged and the episode is still recorded.
+        """
+        data = {
+            "start": record["start"],
+            "room_id": record.get("room_id"),
+            "kind": record.get("kind"),
+            "valid": record.get("valid"),
+            "params": record.get("params"),
+            "samples": ep["samples"],
+        }
+        try:
+            await self._io(store.write_samples, self.dir, record["start"], data)
+        except Exception:  # noqa: BLE001 - samples are extra; the episode is already recorded
+            _LOGGER.warning("Could not keep the samples of the episode started %s", record["start"], exc_info=True)
+
+    def _update_heatup(self) -> list[dict[str, Any]]:
+        """
+        Heat-up records (#152) for every warm-up that has none yet, oldest
+        first, so each is predicted from the ones before it. Also picks up
+        the samples kept before this existed. Runs in the executor.
+        """
+        records = store.read_episodes(self.f_heatup)
+        done = {r["start"] for r in records}
+        for ep in store.read_episodes(self.f_episodes):
+            if ep["start"] in done or tuner_core.episode_kind(ep) != "warm_up":
+                continue
+            rec = heatup_core.record(ep, store.read_samples(self.dir, ep["start"]), records)
+            store.append_episode(self.f_heatup, rec)
+            records.append(rec)
+        return records
+
+    async def _async_update_heatup(self) -> list[dict[str, Any]]:
+        """Never blocks the rest: the heat-up model is extra."""
+        try:
+            return await self._io(self._update_heatup)
+        except Exception:  # noqa: BLE001 - observe only; the episode is already recorded
+            _LOGGER.warning("Could not update the heat-up model", exc_info=True)
+            return []
+
     async def _async_write_param(self, name: str, value: float) -> bool:
         entity_id = self._entity(self._param_key(name))
         if not entity_id:
@@ -280,13 +332,14 @@ class ExperimentalRunner:
         self, history: list[dict[str, Any]], params: dict[str, float | None], rec: dict[str, Any] | None,
         tuner_state: dict[str, Any],
     ) -> None:
-        """Apply, keep or revert a PID change after a finished warm-up (autotune.decide)."""
+        """Apply, probe, keep or revert a PID change after a finished warm-up (autotune.decide)."""
         room = self.room
         before = tuner_state.get("auto") or {}
         now = dt_util.now().isoformat(timespec="seconds")
         action, after = autotune.decide(
             history, params, rec, before, now,
             room_id=room.room_id if room else None, room_name=room.name if room else None,
+            probe=True, round_value=self._round_to_step,
         )
         if action and not await self._async_write_param(action["param"], action["value"]):
             # Keep the old state, so the same step is tried after the next warm-up
@@ -320,6 +373,7 @@ class ExperimentalRunner:
             "water": self._float(CONF_EXP_WATER),
             "ret": self._float(CONF_EXP_RETURN),
             "max_ch": self._float(CONF_EXP_MAX_CH),
+            "flow_req": self._float(CONF_EXP_FLOW_REQUEST),
             "people": self._float(CONF_EXP_PEOPLE),
             "outdoor": self._float(CONF_EXP_OUTDOOR),
             # ESPHome reports the PID terms x100
@@ -328,6 +382,10 @@ class ExperimentalRunner:
             # so records match older ones; it means any window of the followed room
             "garden_paused": bool(room and self.ctl.pause_reason(room) == PAUSE_WINDOW),
             "gas": self._float(CONF_EXP_GAS),
+            # Every room, for a model of rooms that heat along (#135); not used by analyse()
+            "rooms": {
+                rid: [r.current, self.ctl.effective_target(r)] for rid, r in self.ctl.rooms.items()
+            },
         }
 
     def _night_sample(self) -> dict[str, Any]:
@@ -343,6 +401,10 @@ class ExperimentalRunner:
             "garden_open": bool(room and room.window_open),
             "sun_up": sun is not None and sun.state == "above_horizon",
             "people": self._float(CONF_EXP_PEOPLE),
+            # Every room, for cooling per room (#102)
+            "rooms": {
+                rid: {"t": r.current, "open": r.window_open} for rid, r in self.ctl.rooms.items()
+            },
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -504,7 +566,16 @@ class ExperimentalRunner:
             room_id=ep.get("room_id"),
             followed_room_id=self.room.room_id if self.room else None,
         )
+        # Cost per warm-up (#109): its gas at the price of its start
+        prices = await self._async_prices(record["start"][:10])
+        price = gas_core.price_at(prices, int(record["start"][11:13]))
+        record["gas_price"] = price
+        record["cost"] = (
+            round(record["gas_used"] * price, 2) if price is not None and record.get("gas_used") is not None else None
+        )
         await self._io(store.append_episode, self.f_episodes, record)
+        await self._async_keep_samples(record, ep)
+        await self._async_update_heatup()
         history = await self._io(store.read_episodes, self.f_episodes)
         room = self.room
         tuner_state = await self._io(store.read_state, self.f_state)
@@ -522,20 +593,23 @@ class ExperimentalRunner:
         tuner_state["last_episode"] = record["start"]
         tuner_state["recommendation"] = rec
         await self._io(store.write_state, self.f_state, tuner_state)
+        self._per_room = self._advice_per_room(history)
         self._publish_episode(record, rec, tuner_state.get("auto"))
         _LOGGER.info(
             "Episode %s valid=%s overshoot=%s rec=%s",
             record["start"], record["valid"], record["overshoot"], rec,
         )
 
-    def _rec_text(self, rec: dict[str, Any] | None, auto_state: dict[str, Any] | None = None) -> str:
+    def _rec_text(
+        self, rec: dict[str, Any] | None, auto_state: dict[str, Any] | None = None, *, applied: bool = True
+    ) -> str:
         if not self._pid_configured:
             return "no PID numbers configured"
         if not all(v is not None for v in self._params().values()):
             return "PID numbers unavailable"
         if rec is None:
             return "no change"
-        if self._auto_on and autotune.is_reverted(auto_state, rec):
+        if applied and self._auto_on and autotune.is_reverted(auto_state, rec):
             return f"{rec['param']} {rec['old']} -> {rec['new']} ({rec['why']}): tried before and reverted, not applied again"
         if rec.get("outside_range"):
             return (
@@ -561,6 +635,10 @@ class ExperimentalRunner:
                     "undershoot": record.get("undershoot"),
                     "flame_starts": record.get("flame_starts"),
                     "water_peak": record.get("water_peak"),
+                    "return_avg": record.get("return_avg"),
+                    "condensing_pct": record.get("condensing_pct"),
+                    "gas_used": record.get("gas_used"),
+                    "cost": record.get("cost"),
                     "outdoor_avg": record.get("outdoor_avg"),
                     "valid": record.get("valid"),
                     "invalid_reasons": record.get("invalid_reasons"),
@@ -568,8 +646,33 @@ class ExperimentalRunner:
             )
         self._publish_advice(rec, auto_state)
 
+    def _advice_per_room(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Advice for every room with enough warm-ups (#101); observe only, never applied."""
+        params = self._params()
+        if not all(v is not None for v in params.values()):
+            return []
+        rooms = [(r.room_id, r.name) for r in self.ctl.rooms.values()]
+        return tuner_core.per_room(history, params, rooms)
+
+    def _per_room_attr(self) -> list[dict[str, Any]]:
+        followed = self.room.room_id if self.room else None
+        return [
+            {
+                "room": r["room"],
+                "followed": r["room_id"] == followed,
+                "warm_ups": r["warm_ups"],
+                # Never with the automatic-revert note: per room advice is not applied
+                "advice": self._rec_text(r["rec"], applied=False),
+            }
+            for r in self._per_room
+        ]
+
     def _publish_advice(self, rec: dict[str, Any] | None, auto_state: dict[str, Any] | None = None) -> None:
-        self._set("recommendation", self._rec_text(rec, auto_state)[:255], {"mode": "auto" if self._auto_on else "observe"})
+        self._set(
+            "recommendation",
+            self._rec_text(rec, auto_state)[:255],
+            {"mode": "auto" if self._auto_on else "observe", "per_room": self._per_room_attr()},
+        )
 
     @callback
     def _on_pid_number_change(self, _event: Event) -> None:
@@ -578,6 +681,7 @@ class ExperimentalRunner:
     async def _async_publish_stored_advice(self) -> None:
         """Show the stored advice again, for instance once the PID numbers have values after a restart."""
         tuner_state = await self._io(store.read_state, self.f_state)
+        self._per_room = self._advice_per_room(await self._io(store.read_episodes, self.f_episodes))
         self._publish_advice(tuner_state.get("recommendation"), tuner_state.get("auto"))
 
     async def _async_publish_stored(self) -> None:
@@ -586,13 +690,16 @@ class ExperimentalRunner:
         Without this the sensors stay unknown until the next episode, or
         until 21:00 for the prediction, although the values are on disk.
         """
-        episodes = await self._io(store.read_episodes, self.f_episodes, 1)
+        history = await self._io(store.read_episodes, self.f_episodes)
+        episodes = history[-1:]
         tuner_state = await self._io(store.read_state, self.f_state)
+        self._per_room = self._advice_per_room(history)
         self._publish_episode(
             episodes[-1] if episodes else None, tuner_state.get("recommendation"), tuner_state.get("auto")
         )
         prediction = (await self._io(store.read_state, self.f_night_state)).get("prediction")
         if prediction:
+            self._cooling = self._cooling_per_room(await self._io(store.read_episodes, self.f_nights))
             self._publish_prediction(prediction)
         report = await self._io(store.read_state, self.f_report)
         if report.get("at") and report.get("attrs"):
@@ -677,6 +784,7 @@ class ExperimentalRunner:
             samples, end_reason, prediction, n.get("gas_start"), self._float(CONF_EXP_GAS)
         )
         record["room_id"] = n.get("room_id")
+        record["rooms"] = night_core.room_nights(samples)
         await self._io(store.append_episode, self.f_nights, record)
         _LOGGER.info(
             "Night %s valid=%s tau_h=%s error=%s",
@@ -730,8 +838,12 @@ class ExperimentalRunner:
             morning_target=room.warm_temp,
         )
         await self._async_update_night_state(prediction=prediction)
+        self._cooling = self._cooling_per_room(await self._io(store.read_episodes, self.f_nights))
         self._publish_prediction(prediction)
         return prediction
+
+    def _cooling_per_room(self, nights: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return night_core.cooling_per_room(nights, [(r.room_id, r.name) for r in self.ctl.rooms.values()])
 
     def _publish_prediction(self, prediction: dict[str, Any]) -> None:
         room = self.room
@@ -751,6 +863,9 @@ class ExperimentalRunner:
                 "warmups_used": prediction["warmups_used"],
                 "gas_before6": prediction["gas_before6"],
                 "gas_after6": prediction["gas_after6"],
+                "cooling_per_room": [
+                    {"room": r["room"], "tau_h": r["tau_h"], "nights": r["nights"]} for r in self._cooling
+                ],
             },
         )
 
@@ -801,6 +916,25 @@ class ExperimentalRunner:
             )
         )
 
+    async def _async_prices(self, date: str) -> tuple[float, float] | None:
+        """
+        Gas prices (before 06:00, after 06:00) that applied on `date`: the
+        "tomorrow" price sensors as they were at EXP_SUMMARY_HOUR the evening
+        before, when the night prediction reads them too. None unless both
+        are set and known.
+        """
+        ids = [self._entity(CONF_EXP_GAS_BEFORE6), self._entity(CONF_EXP_GAS_AFTER6)]
+        if not all(ids):
+            return None
+        when = _day_start(date) - timedelta(days=1) + timedelta(hours=EXP_SUMMARY_HOUR)
+        try:
+            states = await self._async_history(ids, when - timedelta(hours=1), when + timedelta(minutes=1))
+        except Exception as err:  # noqa: BLE001 - no cost only means less detail
+            _LOGGER.debug("No gas prices for %s: %s", date, err)
+            return None
+        values = tuple(_value_at(states.get(eid, []), when) for eid in ids)
+        return values if all(v is not None for v in values) else None
+
     def _away(self, people: list[tuple[datetime, float | None]], date: str) -> bool:
         """True if nobody was home the whole of `date`."""
         if not self._entity(CONF_EXP_PEOPLE):
@@ -849,6 +983,7 @@ class ExperimentalRunner:
                 h1 = h0 + timedelta(hours=1)
                 hours.append(
                     {
+                        "hour": dt_util.as_local(h0).hour,
                         "gas": r.get("change"),
                         "ch": gas_core.on_minutes(changes[ch], h0, h1),
                         "dhw": gas_core.on_minutes(changes[dhw], h0, h1),
@@ -870,6 +1005,11 @@ class ExperimentalRunner:
             split["date"] = date
             split["gas"] = round(gas, 3)
             split["away"] = self._away(people, date)
+            # Cost per day (#109): the prices read the evening before, like the night prediction
+            prices = await self._async_prices(date)
+            if prices:
+                split["gas_price_before6"], split["gas_price_after6"] = prices
+                split["cost"] = gas_core.day_cost(hours, prices)
             day_end = _day_start(date) + timedelta(days=1)
             for key, eid in settings.items():
                 split[key] = _value_at(states.get(eid, []), day_end)
@@ -992,6 +1132,13 @@ class ExperimentalRunner:
         night_lines = [night_core.night_line(n) for n in nights if n["end"][:10] == today] or ["- no night recorded"]
         if prediction:
             night_lines.append(night_core.prediction_line(prediction))
+        heatup = heatup_core.summary(
+            await self._async_update_heatup(), [(r.room_id, r.name) for r in self.ctl.rooms.values()]
+        )
+        heatup_line = heatup_core.summary_line(heatup)
+        cooling = night_core.cooling_line(self._cooling_per_room(nights))
+        if cooling:
+            night_lines.append(cooling)
         gas = await self._async_gas_summary()
 
         pid_lines = []
@@ -1014,12 +1161,34 @@ class ExperimentalRunner:
         else:
             rec_text = self._rec_text(rec)
             pid_lines.append(f"Would change (observe mode, nothing applied): {rec_text}")
+        self._per_room = self._advice_per_room(episodes)
+        if self._per_room:
+            pid_lines.append("Per room (observe only, never applied):")
+            pid_lines += [
+                f"- {r['room']}{' (followed)' if r['followed'] else ''}, {r['warm_ups']} warm-ups: {r['advice']}"
+                for r in self._per_room_attr()
+            ]
         room = self.room
         night_title = f"Night, {room.name if room else 'no room'} (observe mode):"
         gas_line = (
             gas_core.summary_line(gas) if gas else "Gas per degree-day: set a gas meter and an outdoor sensor to enable"
         )
-        status = progress.statuses(gas, nights, episodes, room.room_id if room else None, room.name if room else None)
+        curve_line = tuner_core.curve_line(episodes)
+        identity = {
+            "member_id": self._float(CONF_EXP_MEMBER_ID),
+            "max_capacity": self._float(CONF_EXP_MAX_CAPACITY),
+            "min_modulation": self._float(CONF_EXP_MIN_MODULATION),
+        }
+        min_power = tuner_core.min_power(
+            episodes, _num(self._s.get(CONF_EXP_MIN_POWER)),
+            tuner_core.boiler_min_power(identity["max_capacity"], identity["min_modulation"]),
+        )
+        identity_line = tuner_core.boiler_identity_line(identity)
+        low_load = [e for e in episodes if e.get("low_load")]
+        status = progress.statuses(
+            gas, nights, episodes, room.room_id if room else None, room.name if room else None,
+            optimum=autotune.optimum_bands(tuner_state.get("auto")),
+        )
         progress_lines = progress.lines_from(status)
 
         message = "\n".join(lines) + "\n\n" + "\n".join(pid_lines)
@@ -1029,6 +1198,14 @@ class ExperimentalRunner:
             message += f"\n\n{boiler_line}"
         message += f"\n\n{night_title}\n" + "\n".join(night_lines)
         message += f"\n\n{gas_line}"
+        if curve_line:
+            message += f"\n\n{curve_line}"
+        if heatup_line:
+            message += f"\n\n{heatup_line}"
+        if low_load or min_power["source"] != "measuring":
+            message += f"\n\n{tuner_core.min_power_line(min_power)}"
+        if identity_line:
+            message += f"\n\n{identity_line}"
         message += "\n\nProgress to stable:\n" + "\n".join(progress_lines)
         message += f"\n\n[What these mean]({DOCS_EXPERIMENTAL_URL})"
 
@@ -1057,6 +1234,15 @@ class ExperimentalRunner:
             "boiler": boiler_line,
             "night": [night_title, *night_lines],
             "gas": gas_line,
+            "heating_curve": curve_line,
+            "min_power": min_power,
+            "heatup": [
+                {"room": r["room"], "bands": {
+                    b: {"fits": v["fits"], "model": v["model"], "errors": v["errors"]} for b, v in r["bands"].items()
+                }}
+                for r in heatup
+            ],
+            "boiler_identity": identity,
             "progress": progress_lines,
             "text": message,
             "docs": DOCS_EXPERIMENTAL_URL,

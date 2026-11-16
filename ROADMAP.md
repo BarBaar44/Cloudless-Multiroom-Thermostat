@@ -35,7 +35,7 @@ v1.8.0 is the last feature release of v1. The integration does what the v1 scope
 
 ### v1.8.x: small updates, and the PID advice judged right
 
-Fixes and upkeep, plus one thing that has to be right before v2: how the PID advice is judged ([#132](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/132)). Milestone [v1.8.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/1).
+Done. Fixes and upkeep, plus one thing that has to be right before v2: how the PID advice is judged ([#132](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/132)). Milestone [v1.8.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/1).
 
 - Fixes from daily use and issue reports.
 - Keep up with Home Assistant: deprecations, new minimum versions, the pinned test version.
@@ -46,16 +46,18 @@ Fixes and upkeep, plus one thing that has to be right before v2: how the PID adv
 
 ### v1.9.x: preparing v2
 
-Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestone [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2).
+Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestones [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2) (released) and [v1.9.1](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/4).
 
 - **Learning per room** ([#101](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/101)): warm-up episodes and PID advice for every room, not only the room to follow. Shows whether rooms really need their own PID values before v2 builds it.
-- **A heat-up model per room** ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)): from the kept samples, fit how each room heats up (delay, speed, and how much a degree of flow does) against outdoor temperature, predict every warm-up and report how far off it was. Observe only: the model has to predict well before any gains are calculated from it. Replaces trial and error with a model; probing becomes the check on it.
+- **A heat-up model per room** ([#152](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/152), step 2 of [#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)): from the kept samples, fit how each room heats up (delay, speed, and how much a degree of flow does) against outdoor temperature, predict every warm-up and report how far off it was. Observe only: the model has to predict well before any gains are calculated from it. Replaces trial and error with a model; probing becomes the check on it.
 - **Cooling per room** ([#102](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/102)): the night model learns each room's cooling rate, not only the followed room's. Needed to know how early each room has to start, and later how long the house can coast on cheap heat.
 - **Low-load detection** ([#103](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/103)): burn and off times per warm-up, an estimate of the boiler's minimum output, and `low_load` warm-ups kept out of the `oscillating` advice so automatic PID changes don't act on them.
 - **Data for the heating curve** ([#104](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/104)): prove the flow really stays at the flow limit, and collect warm-ups at one fixed limit across cold and mild mornings.
 - **Return water and condensing** ([#105](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/105)): record the share of each warm-up with return water below about 55 °C, so a lower flow can be judged on gas, not only on comfort.
-- **Long-term statistics everywhere** ([#106](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/106)): every numeric learning sensor gets a state class and a unit, so trends are kept from now on (statistics start the day this ships).
+- **Long-term statistics everywhere** ([#106](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/106)): the numbers worth following over a season get a sensor of their own with a state class and a unit, so trends are kept from now on (statistics start the day this ships).
+- **The night model judged on the weather it gets** ([#139](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/139)): confirmed in the outdoor bands that occur, like the PID advice.
 - **Boiler identity** ([#107](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/107)): read the OpenTherm manufacturer code where the firmware exposes it, and check which adapters can (ESPHome, DIYLess, OTGW). Groundwork for the boiler profile.
+- **Thermostat requirements** ([#146](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/146)): one page with everything the integration needs from the thermostat, and how to add it to your own ESPHome config.
 - **DIYLess on par with `thermostat.yaml`** ([#108](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/108)): check which DIYLess firmware features (flow setpoint, flow limit, room temperature as process value, fail safe) match what the ESPHome config does, document the gaps, and test both in the simulated house.
 - **Cost per warm-up** ([#109](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/109)): the gas prices already on the learning features page feed a cost per warm-up and per day in the records, so v2 starts with a cost history.
 - **Docs you can read** ([#110](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/110)): the README shrinks to what it is, why, install and running in 10 minutes. Everything else moves to one page per feature in `docs/`, all with the same layout (in one sentence, when you want it, how to turn it on, settings, what you see on the card, common questions), plus getting started, hardware, upgrading, troubleshooting and a reference of every entity and service.
@@ -81,13 +83,15 @@ Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/m
 
 ### v2.1: warm when you need it
 
-The step from "switch on at" to "be warm at". Built on the per room cooling and warm-up data from v1.9.
+The step from "switch on at" to "be warm at". Built on the per room cooling and warm-up data from v1.9. Milestone [v2.1.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/5).
 
-- **Comfort times:** a switch point to a warmer preset means "be at this temperature by then". The room starts as late as its learned warm-up time allows, given the outdoor temperature and how far it cooled. Off by default per room until the room has enough warm-ups; the plain switch time stays the fallback.
+- **Comfort times** ([#155](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/155)): a switch point to a warmer preset means "be at this temperature by then". The room starts as late as its learned warm-up time allows, given the outdoor temperature and how far it cooled. Off by default per room until the room has enough warm-ups; the plain switch time stays the fallback.
 - **Early stop:** before a switch point to a cooler preset, stop heating when the room will coast to the end within a set margin.
 - **Show it:** the card and the room attributes show the planned start and why ("starts 06:20, needs 40 min at 3 °C outside").
 
 ### v2.2: a controller per room, cooler water, a safe boiler
+
+Milestone [v2.2.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/6).
 
 - **PID per room** ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82), option B, if v1.9 shows rooms differ enough): each room calculates the flow it needs, the heat source gets the highest request, and each room's PID values are calculated from its own heat-up model ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)) for today's weather and tomorrow's forecast, set before a warm-up, and checked by probing. `thermostat.yaml` and DIYLess get a flow setpoint mode with the same fail safe as today. Existing installs keep the firmware PID until they switch. This is also the base for v3: the integration knows each room's demand, not only who wins.
 - **Heating curve from Home Assistant** ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)): the flow limit follows the outdoor temperature in fixed steps, chosen from measured warm-ups, never changed during a warm-up. With a PID per room it is the upper bound for every room's flow request.

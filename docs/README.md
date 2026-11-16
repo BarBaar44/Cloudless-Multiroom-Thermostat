@@ -10,6 +10,7 @@
 | [Heating Control Card](card.md) | The dashboard card and its options |
 | [Learning features](experimental.md) | Optional features that learn how your house heats |
 | [Hardware](hardware.md) | Heat sources, DIYLess, `thermostat.yaml`, TRVs and sensors |
+| [Thermostat requirements](thermostat.md) | What the thermostat must offer, and how to add it to your own ESPHome config |
 | [Boiler notes](boiler-notes.md) | Known problems with specific boilers |
 | [Upgrading](upgrading.md) | Updates, release notes, what to do after one |
 | [Troubleshooting](troubleshooting.md) | Common problems and how to find the cause |

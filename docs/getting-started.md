@@ -15,7 +15,7 @@ From nothing to a heating system with rooms on your dashboard. Every step can be
   - An **on/off relay**: full multi-room control, but the boiler only knows on and off, so no gentle low flow heating.
   - A **smart room thermostat** or an **OpenTherm Gateway** with its room thermostat: *target only*. The integration still runs every room's TRVs, but the boiler follows the room where that thermostat hangs. A cold bedroom can't start the boiler while that room is warm, and the PID advice has nothing to tune. [How it works](how-it-works.md) explains why.
 
-[Hardware](hardware.md) has the details and the setup this was built on.
+[Hardware](hardware.md) has the details and the setup this was built on; [Thermostat requirements](thermostat.md) what the thermostat must offer.
 
 ## Install
 

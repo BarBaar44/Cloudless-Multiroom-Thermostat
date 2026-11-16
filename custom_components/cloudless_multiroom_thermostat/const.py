@@ -75,6 +75,11 @@ CONF_EXP_DHW_RATE: Final = "exp_dhw_rate"  # m³ of gas per burner minute on hot
 CONF_EXP_WATER: Final = "exp_water"
 CONF_EXP_RETURN: Final = "exp_return"
 CONF_EXP_MAX_CH: Final = "exp_max_ch"  # boiler maximum CH (flow) setpoint, read only
+CONF_EXP_MIN_POWER: Final = "exp_min_power"  # kW, boiler minimum burner power; measured when empty (#103)
+CONF_EXP_MEMBER_ID: Final = "exp_member_id"  # boiler OpenTherm member ID (ID 3), read only (#107)
+CONF_EXP_MAX_CAPACITY: Final = "exp_max_capacity"  # boiler maximum capacity in kW (ID 15), read only (#107)
+CONF_EXP_MIN_MODULATION: Final = "exp_min_modulation"  # boiler minimum modulation in % (ID 15), read only (#107)
+CONF_EXP_FLOW_REQUEST: Final = "exp_flow_request"  # flow temperature the thermostat asks for (#104)
 CONF_EXP_DHW_SETPOINT: Final = "exp_dhw_setpoint"  # boiler hot water setpoint, read only
 CONF_EXP_PEOPLE: Final = "exp_people"
 CONF_EXP_KP: Final = "exp_kp"
@@ -93,7 +98,7 @@ CONF_EXP_GAS_BEFORE6: Final = "exp_gas_price_before6"
 CONF_EXP_GAS_AFTER6: Final = "exp_gas_price_after6"
 EXP_ENTITY_KEYS: Final = (
     CONF_EXP_OUTDOOR, CONF_EXP_WEATHER, CONF_EXP_GAS, CONF_EXP_FLAME, CONF_EXP_DHW,
-    CONF_EXP_CH_ACTIVE, CONF_EXP_WATER, CONF_EXP_RETURN, CONF_EXP_MAX_CH, CONF_EXP_DHW_SETPOINT, CONF_EXP_PEOPLE, CONF_EXP_KP,
+    CONF_EXP_CH_ACTIVE, CONF_EXP_WATER, CONF_EXP_RETURN, CONF_EXP_MAX_CH, CONF_EXP_FLOW_REQUEST, CONF_EXP_MEMBER_ID, CONF_EXP_MAX_CAPACITY, CONF_EXP_MIN_MODULATION, CONF_EXP_DHW_SETPOINT, CONF_EXP_PEOPLE, CONF_EXP_KP,
     CONF_EXP_KI, CONF_EXP_KD, CONF_EXP_INTEGRAL, CONF_EXP_GAS_BEFORE6, CONF_EXP_GAS_AFTER6,
 )
 DEFAULT_COMFORT_WEEKDAY: Final = "07:30:00"

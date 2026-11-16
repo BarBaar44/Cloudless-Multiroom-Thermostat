@@ -17,7 +17,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.cloudless_multiroom_thermostat.const import DOCS_EXPERIMENTAL_URL, DOMAIN
-from custom_components.cloudless_multiroom_thermostat.experimental import night_core, tuner_core
+from custom_components.cloudless_multiroom_thermostat.experimental import gas_core, night_core, tuner_core
 from custom_components.cloudless_multiroom_thermostat.experimental import runner as runner_mod
 from custom_components.cloudless_multiroom_thermostat.experimental import store
 
@@ -212,6 +212,40 @@ async def test_warm_up_episode_recorded(hass: HomeAssistant) -> None:
     state = hass.states.get("sensor.heating_last_warm_up_overshoot")
     assert state.attributes["room"] == "Living" and state.attributes["experimental"] is True
     assert hass.states.get("sensor.heating_pid_advice").state != "unknown"
+
+    # The minute samples are kept next to the summary (#135)
+    kept = store.read_samples(runner.dir, record["start"])
+    assert kept["start"] == record["start"] and kept["room_id"] == record["room_id"]
+    assert kept["kind"] == "warm_up" and kept["params"] == record["params"]
+    assert len(kept["samples"]) > 40
+    first = kept["samples"][0]
+    assert first["room"] is not None and "flame" in first
+    assert set(first["rooms"]) == set(entry.runtime_data.rooms), "every room's temperature and target"
+
+
+async def test_samples_write_failure_never_blocks_the_episode(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, {**EXP, "exp_room": None})
+    runner = await _start_episode(hass, entry, 35)
+    with patch.object(store, "write_samples", side_effect=OSError("disk full")):
+        await runner._async_finish([])
+        await hass.async_block_till_done()
+    assert len(store.read_episodes(runner.f_episodes)) == 1
+
+
+def test_samples_round_trip(tmp_path) -> None:
+    start = "2026-11-14T07:30:11+01:00"
+    data = {"start": start, "samples": [{"t": start, "room": 16.2}] * 3}
+    store.write_samples(str(tmp_path), start, data)
+    path = store.samples_path(str(tmp_path), start)
+    assert path.endswith(os.path.join("samples", "2026-11", "2026-11-14T073011+0100.json.gz"))
+    assert store.read_samples(str(tmp_path), start) == data
+    store.write_samples(str(tmp_path), start, {**data, "samples": []})  # finished twice: replaced
+    assert store.read_samples(str(tmp_path), start)["samples"] == []
+    assert store.read_samples(str(tmp_path), "2026-11-15T07:30:00+01:00") is None
+    with open(path, "wb") as f:
+        f.write(b"not gzip")
+    assert store.read_samples(str(tmp_path), start) is None
+    assert os.listdir(os.path.dirname(path)) == [os.path.basename(path)], "no temp files left"
 
 
 async def test_episode_saved_while_running(hass: HomeAssistant) -> None:
@@ -618,6 +652,147 @@ def _samples(area: str = "Living", minutes: int = 40) -> list[dict]:
     ]
 
 
+def test_flow_against_the_limit() -> None:
+    """#104: requested and real flow are recorded against the flow limit."""
+    samples = [
+        {**s, "max_ch": 40.0, "flow_req": 40.0, "water": 49.0 if i < 5 else 41.0}
+        for i, s in enumerate(_samples())
+    ]
+    samples[10]["dhw"] = True  # a hot water minute counts for neither
+    samples[10]["water"] = 60.0
+    samples[10]["flow_req"] = 60.0
+    rec = tuner_core.analyse(samples, {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert rec["flow_above_limit_min"] == 5 and rec["req_above_limit_min"] == 0
+    assert rec["flow_req_max"] == 40.0 and rec["flow_req_avg"] == 40.0 and rec["water_peak"] == 49.0
+    # Without the sensors nothing is claimed
+    bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert bare["flow_above_limit_min"] is None and bare["req_above_limit_min"] is None
+    assert bare["flow_req_max"] is None
+
+
+def test_condensing_share() -> None:
+    """#105: share of burning minutes with the return below 55 degC."""
+    samples = [{**s, "ret": 50.0 if i < 30 else 58.0} for i, s in enumerate(_samples())]
+    samples[0]["dhw"] = True  # hot water minutes don't count
+    samples[1]["flame"] = False  # nor minutes without a flame
+    rec = tuner_core.analyse(samples, {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert rec["condensing_pct"] == round(100 * 28 / 38)
+    assert "condensing 74%" in tuner_core.summary_line({**rec, "valid": True})
+    bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert bare["condensing_pct"] is None
+    assert "condensing -" in tuner_core.summary_line({**bare, "valid": True})
+
+
+def test_cost() -> None:
+    """#109: gas times the price of its hour; 06:00 switches to the new price."""
+    prices = (1.20, 1.40)
+    assert gas_core.price_at(prices, 5) == 1.20 and gas_core.price_at(prices, 6) == 1.40
+    assert gas_core.price_at(None, 7) is None
+    hours = [{"hour": h, "gas": g} for h, g in ((4, 0.5), (5, 0.0), (6, 1.0), (7, None))]
+    assert gas_core.day_cost(hours, prices) == round(0.5 * 1.20 + 1.0 * 1.40, 2)
+    assert gas_core.day_cost(hours, None) is None
+    assert gas_core.day_cost([{"hour": 3, "gas": 0.0}], None) == 0.0
+    line = tuner_core.summary_line({**tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a",
+                                                         followed_room_id="a"), "valid": True,
+                                    "gas_used": 0.8, "cost": 1.12})
+    assert line.endswith(", gas 0.8 m3 cost 1.12")
+    s = gas_core.summary(gas_core.build_days(
+        {"2026-11-01": 3.0}, {"2026-11-01": 8.0}, "2026-11-02",
+        {"2026-11-01": {"dhw_gas": 1.0, "heating_gas": 2.0, "cost": 4.05}}))
+    assert s["last"]["cost"] == 4.05
+
+
+def _cycling(minutes: int = 100, water_end: float = 47.0, flow_req: float | None = 40.0) -> list[dict]:
+    """Bedroom case of #80: 3 minute burns, 5 minutes off, flow above the request at each burn end."""
+    return [
+        {
+            **s,
+            "flame": 1 <= i % 8 <= 3,
+            "water": water_end if i % 8 == 3 else 38.0,
+            "max_ch": 40.0,
+            "flow_req": flow_req,
+        }
+        for i, s in enumerate(_samples(minutes=minutes))
+    ]
+
+
+def test_low_load_detected_and_kept_out_of_oscillating() -> None:
+    """#103: short-cycling with burns ending above the request is low load, not a PID problem."""
+    rec = tuner_core.analyse(_cycling(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert rec["flame_starts_per_hour"] > tuner_core.FLAME_STARTS_PER_HOUR
+    assert rec["burn_avg_min"] == 3.0 and rec["off_avg_min"] == 5.0 and rec["off_min_min"] == 5
+    assert rec["low_load"] is True and rec["burns_end_hot"] > 0
+    calm = {**rec, "overshoot": 0.1, "undershoot": 0.1, "rise_min": 30}
+    assert tuner_core.verdict(calm) is None
+    assert tuner_core.verdict({**calm, "overshoot": 0.6}) == "overshoot"  # still counts for overshoot
+    assert "low load: " in tuner_core.summary_line({**rec, "valid": True})
+    # Burns that end at the request: the PID stopped them, so it stays oscillating
+    pid = tuner_core.analyse(_cycling(water_end=40.0), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert pid["low_load"] is False and tuner_core.verdict({**pid, "overshoot": 0.1}) == "oscillating"
+    # Without flow data nothing is claimed and the verdict is as before
+    bare = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert bare["low_load"] is None
+    # Without a request the flow limit is the reference
+    limit = tuner_core.analyse(_cycling(flow_req=None), {}, "cooled_down", room_id="a", followed_room_id="a")
+    assert limit["low_load"] is True
+
+
+def test_burns_skip_hot_water_and_cut_burns() -> None:
+    samples = [{**s, "flame": i in (0, 1, 5, 6, 10, 11, 12, 20, 21), "dhw": i in (10, 11, 12)}
+               for i, s in enumerate(_samples(minutes=22))]
+    burns, offs = tuner_core._burns(samples)
+    # 0-1 runs at the first sample, 10-12 is hot water, 20-21 runs at the end
+    assert [n for n, _ in burns] == [2]
+    assert offs == [3, 3, 7]
+
+
+def test_min_power() -> None:
+    low = {"low_load": True, "dhw_min": 0, "gas_used": 0.4, "flame_on_min": 40}
+    assert tuner_core.min_power([low])["source"] == "measuring"
+    mp = tuner_core.min_power([low, low])
+    assert mp["source"] == "measured" and mp["minutes"] == 80 and mp["kw"] == round(0.01 * 60 * 9.77, 1)
+    # Hot water or normal-load warm-ups don't count; a setting wins
+    assert tuner_core.min_power([low, {**low, "dhw_min": 2}, {**low, "low_load": False}])["minutes"] == 40
+    assert tuner_core.min_power([low, low], 6.1) == {"source": "setting", "kw": 6.1, "minutes": None}
+    assert "about 5.9 kW" in tuner_core.min_power_line(mp)
+
+
+def test_boiler_identity_and_reported_min_power() -> None:
+    """#107: what the boiler reports about itself; its minimum power ranks between setting and measured."""
+    assert tuner_core.boiler_min_power(24.0, 25.0) == 6.0
+    assert tuner_core.boiler_min_power(24.0, 0.0) is None  # 0 % is "not supported" on many boilers
+    assert tuner_core.boiler_min_power(None, 25.0) is None
+    assert tuner_core.boiler_min_power(400.0, 50.0) is None  # outside the plausible range
+    low = {"low_load": True, "dhw_min": 0, "gas_used": 0.4, "flame_on_min": 40}
+    assert tuner_core.min_power([low, low], None, 6.0) == {"source": "boiler", "kw": 6.0, "minutes": None}
+    assert tuner_core.min_power([low, low], 6.1, 6.0)["source"] == "setting"
+    assert tuner_core.min_power([low, low], None, None)["source"] == "measured"
+    assert "(reported by the boiler)" in tuner_core.min_power_line({"source": "boiler", "kw": 6.0, "minutes": None})
+    assert tuner_core.boiler_identity_line({"member_id": 4.0, "max_capacity": 24.0, "min_modulation": 25.0}) == (
+        "Boiler: OpenTherm member ID 4, maximum capacity 24 kW, minimum modulation 25%")
+    assert tuner_core.boiler_identity_line({"member_id": None, "max_capacity": None, "min_modulation": None}) is None
+
+
+def test_curve_line() -> None:
+    assert tuner_core.curve_line([]) is None
+    up = {"schema": 3, "target": 20.0, "start_temp": 18.0, "invalid_reasons": [], "max_ch": 40.0,
+          "outdoor_band": "0_8", "flow_above_limit_min": 0, "req_above_limit_min": 0, "water_peak": 41.0}
+    episodes = [
+        {**up, "max_ch": 47.5},  # another limit: not counted
+        up,
+        {**up, "outdoor_band": "below_0", "flow_above_limit_min": 6, "water_peak": 49.0},
+        {**up, "invalid_reasons": ["other_room"]},  # other rooms count
+        {**up, "invalid_reasons": ["hot_water"]},  # disturbed: not counted
+        {**up, "start_temp": 19.8},  # a top-up: not counted
+    ]
+    assert tuner_core.curve_line(episodes) == (
+        "Heating curve data at flow limit 40 °C: 3 warm-ups "
+        "(outdoor below 0: 1, 0 to 8: 2, 8 to 15: 0, above 15: 0 °C). "
+        "Flow more than 2 °C above the limit in 1 of 3 (highest 49 °C); "
+        "requested flow above the limit in 0 of 3"
+    )
+
+
 def test_episode_room_matched_by_id() -> None:
     """other_room follows the room id of the "Room to follow" option, not a room name."""
     followed = tuner_core.analyse(_samples(), {}, "cooled_down", room_id="a", followed_room_id="a")
@@ -884,6 +1059,21 @@ def test_recommend_follows_the_room_followed_now() -> None:
     assert tuner_core.recommend(old, params, room_id="b", room_name="b")["param"] == "ki"
 
 
+def test_advice_per_room() -> None:
+    """#101: every room with enough warm-ups gets its own advice, observe only."""
+    params = {"kp": 0.7, "ki": 0.003, "kd": 0.0}
+    history = [_led_by("b", "a"), _led_by("b", "a"), _led_by("a", "a"), _led_by("c", "a")]
+    rooms = [("a", "A"), ("b", "B"), ("c", "C")]
+    out = tuner_core.per_room(history, params, rooms)
+    # a and c have one warm-up each: not enough, left out
+    assert [r["room_id"] for r in out] == ["b"]
+    assert out[0]["room"] == "B" and out[0]["warm_ups"] == 2 and out[0]["rec"]["param"] == "ki"
+    # A room with enough warm-ups that agree on nothing still shows up, without advice
+    calm = {**_led_by("a", "a"), "overshoot": 0.1}
+    out = tuner_core.per_room([*history, calm], params, rooms)
+    assert {r["room_id"]: r["rec"] for r in out}["a"] is None
+
+
 def test_for_room_keeps_nights_without_a_room() -> None:
     nights = [{"room_id": "a"}, {"room_id": "b"}, {}]
     assert night_core.for_room(nights, "a") == [{"room_id": "a"}, {}]
@@ -898,6 +1088,29 @@ def _night_samples(start: str, hours: float, room0: float = 20.0) -> list[dict]:
         }
         for i in range(int(hours * 6) + 1)
     ]
+
+
+def test_cooling_per_room() -> None:
+    """#102: every room gets its own cooling fit, by the followed room's rules."""
+    samples = _night_samples("2026-11-05T00:30:00+01:00", 6)
+    for i, smp in enumerate(samples):
+        smp["rooms"] = {
+            "a": {"t": smp["room"], "open": False},
+            "b": {"t": round(18.0 - 0.1 * i, 2), "open": False},  # cools twice as fast
+            "c": {"t": 19.0, "open": i == 20},  # window open for a moment
+        }
+    rooms = night_core.room_nights(samples)
+    followed = night_core.analyse(samples, "heating_on")
+    assert rooms["a"]["k"] == followed["k"] and rooms["a"]["valid"]
+    assert rooms["b"]["valid"] and rooms["b"]["tau_h"] < rooms["a"]["tau_h"]
+    assert not rooms["c"]["valid"] and "window" in rooms["c"]["invalid_reasons"]
+    # Older nights without rooms are skipped; MIN_NIGHTS valid nights are needed
+    nights = [{"rooms": rooms}, {"valid": True}, {"rooms": rooms}]
+    per_room = night_core.cooling_per_room(nights, [("a", "A"), ("b", "B"), ("c", "C"), ("d", "D")])
+    assert [r["room_id"] for r in per_room] == ["a", "b"]
+    assert per_room[0]["nights"] == 2 and per_room[0]["tau_h"] == rooms["a"]["tau_h"]
+    assert night_core.cooling_line(per_room).startswith("- Cooling per room")
+    assert night_core.cooling_line([]) is None
 
 
 def test_night_after_midnight_can_be_valid() -> None:
@@ -956,7 +1169,17 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
 
     entry = await _setup(hass, EXP)
     runner = entry.runtime_data.experimental
-    store.append_episode(runner.f_episodes, {"start": "2026-11-04T06:30:00+01:00", "area": "Living", "overshoot": 0.3})
+    office = next(sid for sid, sub in entry.subentries.items() if sub.title == "Office")
+    for start in ("2026-11-03T17:00:00+01:00", "2026-11-03T21:00:00+01:00"):
+        # Overshooting Office warm-ups while Living is followed (#101)
+        store.append_episode(runner.f_episodes, {
+            **_judged(None), "start": start, "room_id": office, "area": "Office", "room_class": "other",
+            "valid": False, "invalid_reasons": ["other_room"], "kind": "warm_up",
+        })
+    store.append_episode(runner.f_episodes, {
+        "start": "2026-11-04T06:30:00+01:00", "area": "Living", "overshoot": 0.3,
+        "rise_min": 34, "undershoot": 0.1, "flame_starts": 3, "condensing_pct": 80,
+    })
     store.write_state(
         runner.f_state,
         {"recommendation": {"param": "ki", "old": 0.003, "new": 0.0027, "why": "overshoot", "at_limit": False}},
@@ -975,6 +1198,22 @@ async def test_stored_values_shown_after_reload(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.heating_pid_advice").state == "ki 0.003 -> 0.0027 (overshoot)"
     night = hass.states.get("sensor.heating_night_prediction")
     assert night.state == "06:41" and night.attributes["warmup_min"] == 49
+    per_room = hass.states.get("sensor.heating_pid_advice").attributes["per_room"]
+    assert per_room == [
+        {"room": "Office", "followed": False, "warm_ups": 2, "advice": "ki 0.003 -> 0.0027 (overshoot above 0.4 degC)"}
+    ]
+    # Attribute numbers promoted to their own sensors for long-term statistics (#106)
+    for name, value in (
+        ("last_warm_up_rise_time", "34"), ("last_warm_up_undershoot", "0.1"), ("last_warm_up_flame_starts", "3"),
+        ("last_warm_up_condensing_share", "80"),
+        ("predicted_warm_up_time", "49"), ("night_cooling_time_constant", "40.0"), ("evening_drop", "-0.8"),
+    ):
+        state = hass.states.get(f"sensor.heating_{name}")
+        assert state.state == value, name
+        assert state.attributes["state_class"] == "measurement", name
+    assert hass.states.get("sensor.heating_last_warm_up_rise_time").attributes["unit_of_measurement"] == "min"
+    for name in ("gas_per_degree_day_28_days", "hot_water_gas_rate", "base_gas_use_per_day"):
+        assert hass.states.get(f"sensor.heating_{name}") is not None, name
 async def test_unreadable_learning_file_does_not_block_heating(hass: HomeAssistant) -> None:
     entry = await _setup(hass, {})
     folder = os.path.join(hass.config.config_dir, DOMAIN, entry.entry_id)
