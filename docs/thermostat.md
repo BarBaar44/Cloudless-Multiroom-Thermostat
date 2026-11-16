@@ -46,7 +46,7 @@ What the integration needs from the thermostat that drives your boiler, what eac
 
 | Capability | Why |
 |---|---|
-| A **writable** hot water setpoint (OpenTherm ID 56) | Writing it locks some boilers out: the Atag E325EC stops heating and hot water with C1 51. Set the hot water temperature on the boiler; read it with a sensor. See the README section on the Atag. |
+| A **writable** hot water setpoint (OpenTherm ID 56) | Writing it locks some boilers out: the Atag E325EC stops heating and hot water with C1 51. Set the hot water temperature on the boiler; read it with a sensor. See [Boiler notes](boiler-notes.md). |
 
 ## Build your own ESPHome config
 

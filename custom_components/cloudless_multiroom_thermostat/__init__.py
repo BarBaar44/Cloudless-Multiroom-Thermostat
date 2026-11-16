@@ -27,13 +27,13 @@ _LOGGER = logging.getLogger(__name__)
 V2_SCHEDULE_NOTICE = (
     "Cloudless Multiroom Thermostat v2.0.0 will need a schedule for every room: "
     "a room without one holds 15 °C until you make a schedule or turn scheduling off for it. "
-    "See Coming in v2.0.0 in the README"
+    "See Coming: v2.0 in the upgrading docs (docs/upgrading.md)"
 )
 V2_REPORT_NOTICE = (
     "Cloudless Multiroom Thermostat v2.0.0 removes the 21:00 evening report, the Learning features "
     "report sensor, the Evening notification option and the experimental_report service; "
     "the learning features move to live sensors and a learning view in the card. "
-    "See Coming in v2.0.0 in the README"
+    "See Coming: v2.0 in the upgrading docs (docs/upgrading.md)"
 )
 _NOTICES_LOGGED: set[str] = set()
 
