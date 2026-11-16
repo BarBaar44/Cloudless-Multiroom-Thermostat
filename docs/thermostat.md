@@ -263,22 +263,23 @@ Without it the heartbeat keeps feeding the PID the last room temperature, so it 
 | Thermostat | Heat source covered | Learning features | In practice |
 |---|---|---|---|
 | ESPHome with `thermostat.yaml` (DIYLess or any ESP32 OpenTherm adapter) | Full | All | The tested path |
-| DIYLess with its stock firmware | Full, with a Home Assistant automation (below) | Telemetry only, see below | Works for heating; no PID advice |
+| DIYLess with its stock firmware | Full, with a Home Assistant automation (below) | Gas, night model; no boiler sensors, no PID | Works for heating; no PID advice |
 | On/off relay | Full (the integration switches on and off) | Gas, night model; no PID, no flow data | No gentle low flow heating |
 | Smart room thermostat with its own sensor | Target only | Gas, night model | A cold bedroom can't start the boiler while the room with the thermostat is warm |
 | OpenTherm Gateway with its room thermostat | Target only | Gas, night model, telemetry | Same: the room thermostat decides |
 
 ### DIYLess with its stock firmware
 
-What the stock firmware (v2.x, closed source, MQTT with Home Assistant discovery) offers against the table above ([#108](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/108)):
+What the stock firmware (v2.x, closed source, MQTT with Home Assistant discovery) offers against the table above, from DIYLess's own [configuration overview](https://diyless.com/blog/opentherm-thermostat-cfg-overview) ([#108](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/108)):
 
-- **Regulating on the winning room:** possible. Set its temperature source to *MQTT sensor* and publish the **Winning room temperature** to its `.../properties/temperature` topic from an automation, at least every minute. It is the only way the stock firmware can follow the winning room.
-- **Target:** its Home Assistant climate entity accepts the target; pick it as the **Heat source**.
-- **Fail safe:** built in. Without a valid MQTT temperature for 2 minutes it goes into sensor failure mode and, by default, shuts the boiler down (`heatOnSensorFailure` off).
-- **Flow limit:** `chMax` (0 to 80, set through MQTT or its web page). Whether Home Assistant gets it as an entity the integration can read is not confirmed.
-- **PID:** a PI loop with its own gains (`pidKp` default 30, `pidKi` default 0.01) on a different scale than ESPHome's. They are set through its web page or a JSON `config` command, not as number entities, so there is **no PID advice** and no automatic apply.
-- **Boiler identity:** its member ID setting emulates the *thermostat's* vendor code; whether it publishes the boiler's own member ID is not confirmed.
-- **Requested flow, telemetry:** which boiler values the stock firmware publishes as Home Assistant entities (flame, flow, return, requested flow) is not confirmed yet. If you run it, an issue with the entities it creates is welcome.
+- **Entities in Home Assistant:** climate entities only. Discovery creates two devices, *Diyless Thermostat* and *Diyless DHW*, with climates for heating, hot water and manual mode. No sensor entities for flame, flow, return or modulation are documented; the thermostat publishes its state as one JSON message whose fields aren't documented ([#157](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/157)).
+- **Regulating on the winning room:** possible. Set its temperature source to *MQTT sensor* and publish the **Winning room temperature** to its `.../properties/temperature` topic from an automation, at least every minute. It is the only way the stock firmware can follow the winning room. It ignores a single change of more than 50 %.
+- **Target:** its heating climate entity accepts the target; pick it as the **Heat source**.
+- **Fail safe:** built in. Without a valid MQTT temperature for 2 minutes it goes into sensor failure mode and, by default, shuts the boiler down (*Heat on sensor failure* off).
+- **Flow limit:** *CH Max* (0 to 80 °C, through the `chmax` MQTT command or its web page). Not an entity the integration can read. DIYLess's own advice matches ours: with another limit in place (a boiler service menu maximum, for example), set CH Max to the same value.
+- **PID:** a PI loop with its own gains (Kp default 30, Ki default 0.01) on a different scale than ESPHome's. They can be set through its web page or a JSON `config` message over MQTT, but not as number entities, so there is **no PID advice** and no automatic apply.
+- **Boiler identity:** its *Member ID* setting emulates a vendor code for the thermostat itself, to fix compatibility; reading the boiler's own member ID isn't documented.
+- **Boiler sensors for the learning features:** not available as entities, as far as the documentation goes. Only the gas meter and outdoor based features work.
 
 **Recommendation:** for anything beyond heating, flash ESPHome. The board is the same; the config above is all it needs.
 
