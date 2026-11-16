@@ -757,6 +757,22 @@ def test_min_power() -> None:
     assert "about 5.9 kW" in tuner_core.min_power_line(mp)
 
 
+def test_boiler_identity_and_reported_min_power() -> None:
+    """#107: what the boiler reports about itself; its minimum power ranks between setting and measured."""
+    assert tuner_core.boiler_min_power(24.0, 25.0) == 6.0
+    assert tuner_core.boiler_min_power(24.0, 0.0) is None  # 0 % is "not supported" on many boilers
+    assert tuner_core.boiler_min_power(None, 25.0) is None
+    assert tuner_core.boiler_min_power(400.0, 50.0) is None  # outside the plausible range
+    low = {"low_load": True, "dhw_min": 0, "gas_used": 0.4, "flame_on_min": 40}
+    assert tuner_core.min_power([low, low], None, 6.0) == {"source": "boiler", "kw": 6.0, "minutes": None}
+    assert tuner_core.min_power([low, low], 6.1, 6.0)["source"] == "setting"
+    assert tuner_core.min_power([low, low], None, None)["source"] == "measured"
+    assert "(reported by the boiler)" in tuner_core.min_power_line({"source": "boiler", "kw": 6.0, "minutes": None})
+    assert tuner_core.boiler_identity_line({"member_id": 4.0, "max_capacity": 24.0, "min_modulation": 25.0}) == (
+        "Boiler: OpenTherm member ID 4, maximum capacity 24 kW, minimum modulation 25%")
+    assert tuner_core.boiler_identity_line({"member_id": None, "max_capacity": None, "min_modulation": None}) is None
+
+
 def test_curve_line() -> None:
     assert tuner_core.curve_line([]) is None
     up = {"schema": 3, "target": 20.0, "start_temp": 18.0, "invalid_reasons": [], "max_ch": 40.0,
