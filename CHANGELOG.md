@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.9.0
+
+**Behaviour change, only with Apply PID advice automatically on:** a warm-up that short-cycles because the room needs less heat than the boiler's smallest flame is now marked *low load* and no longer counts as "short-cycling". The advice, and so the automatic changes, leave Kp alone for it. With the advice in observe mode nothing changes in the heating.
+
+This release collects data for v2 and later: more numbers per warm-up, advice per room, costs, and long-term statistics so trends survive Home Assistant's 10 days of history. Everything below is observe only. New optional fields on the learning features page: **Requested flow temperature** and **Boiler minimum power**. With `thermostat.yaml`, copy the new `flow_request` sensor and its publish step in `ch_flow_request` into your device config and flash, to get the **Central heating requested flow temperature** sensor for the first one.
 
 - **Cost per warm-up and per day (#109):** with the gas price fields set, each warm-up stores its gas price and cost, and each split gas day its prices and cost (each hour at the price of that hour, switching at 06:00). Shown in the evening report and as attributes of the last warm-up overshoot sensor. The prices are the ones the sensors gave at 21:00 the evening before. See [Cost per warm-up and per day](docs/experimental.md#cost-per-warm-up-and-per-day). Observe only, nothing changes in the heating.
 - **Low-load detection (#103):** each warm-up records burn and pause lengths and how many burns ended with the flow above the requested flow. A warm-up that short-cycles because the room needs less than the boiler's smallest flame is marked low load: it is no longer advised as "short-cycling", so the PID advice and Apply PID advice automatically leave Kp alone for it. The evening report marks it and shows the boiler's minimum power, measured from those warm-ups or pinned with the new optional **Boiler minimum power** setting. See [Low-load detection](docs/experimental.md#low-load-detection). Changes nothing in the heating.
