@@ -171,6 +171,7 @@ class RoomClimate(ClimateEntity, RestoreEntity):
             "effective_target": ctl.effective_target(room),
             "is_winner": ctl.winner.room_id == room.room_id,
             "drives_heat_source": room.drives,
+            "external_sensor_ignored": bool(ctl.external_sensor_ignored(room)),
         }
 
     # -------------------------------------------------------------- commands
