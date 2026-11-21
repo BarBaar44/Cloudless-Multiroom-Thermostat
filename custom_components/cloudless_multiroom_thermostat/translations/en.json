@@ -176,6 +176,7 @@
             "temperature_sensor": "Room temperature sensor",
             "trvs": "Radiator valves (TRVs)",
             "external_temperature_inputs": "TRV external temperature inputs",
+            "external_sensor_selects": "TRV external sensor selects",
             "window_sensors": "Window and door sensors",
             "window_open_delay": "Window open delay",
             "window_close_delay": "Window close delay"
@@ -183,6 +184,7 @@
           "data_description": {
             "trvs": "Optional. A room without TRVs only adds heat demand.",
             "external_temperature_inputs": "Optional. Number entities that receive the room temperature (for example Sonoff TRVZB or Shelly BLU TRV).",
+            "external_sensor_selects": "Optional. Select entities that tell a TRV to use the external temperature (Sonoff TRVZB: temperature sensor select). Kept on the remote option while the room sensor works.",
             "window_sensors": "Optional. Heating in this room pauses while any of them is open."
           }
         }

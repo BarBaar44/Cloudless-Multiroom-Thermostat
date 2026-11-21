@@ -33,6 +33,7 @@ CONF_ROOM_NAME: Final = "name"
 CONF_TEMP_SENSOR: Final = "temperature_sensor"
 CONF_TRVS: Final = "trvs"
 CONF_EXT_TEMP: Final = "external_temperature_inputs"
+CONF_EXT_SELECT: Final = "external_sensor_selects"  # TRV "use external sensor" selects (#160)
 CONF_WINDOWS: Final = "window_sensors"
 CONF_WINDOW_OPEN_DELAY: Final = "window_open_delay"
 CONF_WINDOW_CLOSE_DELAY: Final = "window_close_delay"

@@ -2,6 +2,7 @@
 
 from custom_components.cloudless_multiroom_thermostat.logic import (
     RoomDemand,
+    remote_option,
     round_to_step,
     select_winner,
     switch_should_run,
@@ -77,3 +78,18 @@ def test_switch_rounds_the_gap_like_the_winner():
     rooms = [room("a", target=18, current=17.99)]
     assert select_winner(rooms, 10, None).room_id is None
     assert switch_should_run(rooms, currently_on=True, hysteresis=0.3) is False
+
+
+def test_remote_option_trvzb():
+    opts = ["local_temperature", "remote_temperature", "remote_source_offline"]
+    assert remote_option(opts) == "remote_temperature"
+
+
+def test_remote_option_external_names():
+    assert remote_option(["internal", "external"]) == "external"
+
+
+def test_remote_option_ambiguous_or_missing():
+    assert remote_option(["external", "external_2"]) is None
+    assert remote_option(["local_temperature"]) is None
+    assert remote_option(None) is None

@@ -21,7 +21,7 @@ Common problems, roughly in the order people run into them. Not listed? See [Fin
 
 **Rooms stay paused for away while someone is home.** Check the presence entity: `home`, `on` or a `zone.home` count above 0 means home. A person in another zone counts as away. See [Away](away.md).
 
-**A room reaches its target, but the TRV keeps the radiator cold or hot.** The TRV regulates on its own sensor on the radiator. Add its **TRV external temperature input** to the room, so it gets the room temperature: [Rooms](rooms.md#trv-external-temperature-inputs).
+**A room reaches its target, but the TRV keeps the radiator cold or hot.** The TRV regulates on its own sensor on the radiator. Add its **TRV external temperature input** to the room, so it gets the room temperature: [Rooms](rooms.md#trv-external-temperature-inputs). Already added? Check that the TRV is set to use it: on a Sonoff TRVZB its temperature sensor select must be on `remote_temperature`. Add that select to the room too, and the integration keeps it there: [TRV external sensor selects](rooms.md#trv-external-sensor-selects).
 
 **A TRV was switched off.** On the device or by another automation: a TRV that is off ignores every setpoint. The integration puts it back to heat by itself. If something keeps switching it off, find that automation.
 

@@ -62,6 +62,7 @@ from .const import (
     CONF_CH_SWITCH,
     CONF_DRIVES_SOURCE,
     CONF_ECO_TEMP,
+    CONF_EXT_SELECT,
     CONF_EXT_TEMP,
     CONF_HEARTBEAT_MIN,
     CONF_HEAT_SOURCE_ENTITY,
@@ -106,6 +107,7 @@ from .logic import (
     Winner,
     round_to_step,
     select_winner,
+    remote_option,
     switch_should_run,
     trv_target,
 )
@@ -172,6 +174,7 @@ class HeatingController:
         self._unsubs: list[CALLBACK_TYPE] = []
         self._sent: dict[str, tuple[Any, float]] = {}
         self._started = False
+        self._warned_selects: set[str] = set()
         self._debouncer = Debouncer(
             hass,
             _LOGGER,
@@ -331,6 +334,8 @@ class HeatingController:
                 watched[trv] = self._on_device_change
             for number in cfg.get(CONF_EXT_TEMP) or []:
                 watched[number] = self._make_ext_listener(room.room_id)
+            for select in cfg.get(CONF_EXT_SELECT) or []:
+                watched[select] = self._make_select_listener(room.room_id)
 
         presence = self.settings.get(CONF_PRESENCE)
         if presence:
@@ -357,6 +362,7 @@ class HeatingController:
         self._started = True
         for room in self.rooms.values():
             self._push_external(room, force=True)
+            self._enforce_external_sensor(room)
         await self._async_apply()
 
     async def async_stop(self) -> None:
@@ -377,6 +383,7 @@ class HeatingController:
             self._read_temperature(room)
             if self._started:
                 self._push_external(room, force=False)
+                self._enforce_external_sensor(room)
             self.request_recompute()
 
         return _listener
@@ -388,6 +395,16 @@ class HeatingController:
             # Only re-push when an input comes back, never fight normal updates
             if self._started and (old is None or old.state in _BAD_STATES):
                 self._push_external(self.rooms[room_id], force=False)
+
+        return _listener
+
+    def _make_select_listener(self, room_id: str):
+        @callback
+        def _listener(_event: Event[EventStateChangedData]) -> None:
+            # A button press, re-pair or factory reset can put the TRV back on its own sensor
+            if self._started:
+                self._enforce_external_sensor(self.rooms[room_id])
+            self._notify()
 
         return _listener
 
@@ -434,6 +451,7 @@ class HeatingController:
     async def _async_heartbeat(self, _now: Any) -> None:
         for room in self.rooms.values():
             self._push_external(room, force=True)
+            self._enforce_external_sensor(room)
         force = not self.settings.get(CONF_SKIP_UNCHANGED, DEFAULT_SKIP_UNCHANGED)
         await self._async_apply(force=force)
 
@@ -475,7 +493,7 @@ class HeatingController:
     ) -> None:
         """Issue a write; key tracks it in flight apart from other writes to the entity."""
         entity_id = data[ATTR_ENTITY_ID]
-        value = data.get(ATTR_TEMPERATURE, data.get("value", service))
+        value = data.get(ATTR_TEMPERATURE, data.get("value", data.get("option", service)))
         self._sent[key or entity_id] = (value, time.monotonic())
         try:
             await self.hass.services.async_call(domain, service, data, blocking=False)
@@ -502,6 +520,60 @@ class HeatingController:
                 continue
             self.hass.async_create_task(
                 self._call("number", "set_value", {ATTR_ENTITY_ID: entity_id, "value": value})
+            )
+
+    def external_sensor_ignored(self, room: Room) -> list[tuple[str, str]]:
+        """TRV sensor selects not on their remote option while the room sensor works.
+
+        Returns (select, remote option) pairs. A select that is unavailable, or
+        whose options don't show which one is remote, is never reported.
+        """
+        if room.current is None:
+            return []
+        ignored: list[tuple[str, str]] = []
+        for entity_id in room.config.get(CONF_EXT_SELECT) or []:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state == STATE_UNAVAILABLE:
+                continue
+            remote = remote_option(state.attributes.get("options"))
+            if remote is None:
+                if entity_id not in self._warned_selects:
+                    self._warned_selects.add(entity_id)
+                    _LOGGER.warning(
+                        "%s: none of its options %s is clearly the external sensor; left alone",
+                        entity_id,
+                        state.attributes.get("options"),
+                    )
+                continue
+            if state.state != remote:
+                ignored.append((entity_id, remote))
+        return ignored
+
+    def _enforce_external_sensor(self, room: Room) -> None:
+        """Put each configured TRV sensor select on its remote option (#160).
+
+        Only while the room sensor works: without it there is no value to use,
+        and a TRV like the Sonoff TRVZB falls back to its own sensor by itself.
+        """
+        for entity_id, remote in self.external_sensor_ignored(room):
+            key = f"{entity_id}#select"
+            if self._in_flight(key, remote):
+                continue
+            state = self.hass.states.get(entity_id)
+            _LOGGER.info(
+                "%s: %s is on %s, selecting %s so the TRV uses the room temperature",
+                room.name,
+                entity_id,
+                state.state if state else None,
+                remote,
+            )
+            self.hass.async_create_task(
+                self._call(
+                    "select",
+                    "select_option",
+                    {ATTR_ENTITY_ID: entity_id, "option": remote},
+                    key=key,
+                )
             )
 
     async def _async_apply(self, force: bool = False) -> None:

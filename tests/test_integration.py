@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
@@ -544,3 +545,106 @@ def test_v2_notices_logged_once(caplog) -> None:
         _log_v2_notice(V2_REPORT_NOTICE)
     assert caplog.text.count("will need a schedule for every room") == 1
     assert caplog.text.count("removes the 21:00 evening report") == 1
+
+
+SELECT_OPTS = {"options": ["local_temperature", "remote_temperature", "remote_source_offline"]}
+
+
+async def _setup_with_select(hass: HomeAssistant, select_state: str):
+    """Living with a TRV sensor select (#160)."""
+    _states(hass)
+    hass.states.async_set("select.trv_living_sensor", select_state, SELECT_OPTS)
+    calls = Calls()
+
+    async def _fake_call(self, domain, service, data, key=None):
+        # Keep the in-flight tracking of the real _call, so repeated writes are skipped
+        value = data.get("temperature", data.get("value", data.get("option", service)))
+        self._sent[key or data["entity_id"]] = (value, time.monotonic())
+        calls.items.append((domain, service, dict(data)))
+
+    living = {**LIVING, "external_sensor_selects": ["select.trv_living_sensor"]}
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Heating",
+        data=SYSTEM,
+        subentries_data=[ConfigSubentryData(data=living, subentry_type="room", title="Living", unique_id=None)],
+    )
+    entry.add_to_hass(hass)
+    patcher = patch(
+        "custom_components.cloudless_multiroom_thermostat.controller.HeatingController._call",
+        _fake_call,
+    )
+    patcher.start()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await _tick(hass)
+    return entry, calls, patcher
+
+
+async def test_select_on_local_is_put_on_remote(hass: HomeAssistant) -> None:
+    _, calls, patcher = await _setup_with_select(hass, "local_temperature")
+    try:
+        assert calls.last("select.trv_living_sensor") == (
+            "select_option", {"entity_id": "select.trv_living_sensor", "option": "remote_temperature"}
+        )
+        assert hass.states.get("climate.living").attributes["external_sensor_ignored"] is True
+        # The TRV follows: no more writes, warning gone
+        calls.clear()
+        hass.states.async_set("select.trv_living_sensor", "remote_temperature", SELECT_OPTS)
+        await _tick(hass)
+        assert calls.last("select.trv_living_sensor") is None
+        assert hass.states.get("climate.living").attributes["external_sensor_ignored"] is False
+    finally:
+        patcher.stop()
+
+
+async def test_select_change_on_the_valve_is_undone(hass: HomeAssistant) -> None:
+    _, calls, patcher = await _setup_with_select(hass, "remote_temperature")
+    try:
+        assert calls.last("select.trv_living_sensor") is None
+        hass.states.async_set("select.trv_living_sensor", "unknown", SELECT_OPTS)
+        await _tick(hass)
+        assert calls.last("select.trv_living_sensor")[1]["option"] == "remote_temperature"
+    finally:
+        patcher.stop()
+
+
+async def test_select_left_alone_without_room_sensor(hass: HomeAssistant) -> None:
+    _, calls, patcher = await _setup_with_select(hass, "remote_temperature")
+    try:
+        hass.states.async_set("sensor.living_temp", "unavailable")
+        await _tick(hass)
+        hass.states.async_set("select.trv_living_sensor", "remote_source_offline", SELECT_OPTS)
+        await _tick(hass)
+        assert calls.last("select.trv_living_sensor") is None
+        assert hass.states.get("climate.living").attributes["external_sensor_ignored"] is False
+        # Sensor back: the TRV is put back on remote
+        hass.states.async_set("sensor.living_temp", "18.5", {"device_class": "temperature"})
+        await _tick(hass)
+        assert calls.last("select.trv_living_sensor")[1]["option"] == "remote_temperature"
+    finally:
+        patcher.stop()
+
+
+async def test_select_without_clear_remote_option_is_left_alone(hass: HomeAssistant, caplog) -> None:
+    _states(hass)
+    hass.states.async_set("select.trv_living_sensor", "a", {"options": ["a", "b"]})
+    calls = Calls()
+
+    async def _fake_call(self, domain, service, data, key=None):
+        calls.items.append((domain, service, dict(data)))
+
+    living = {**LIVING, "external_sensor_selects": ["select.trv_living_sensor"]}
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Heating", data=SYSTEM,
+        subentries_data=[ConfigSubentryData(data=living, subentry_type="room", title="Living", unique_id=None)],
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.cloudless_multiroom_thermostat.controller.HeatingController._call",
+        _fake_call,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await _tick(hass)
+        assert calls.last("select.trv_living_sensor") is None
+        assert hass.states.get("climate.living").attributes["external_sensor_ignored"] is False
+        assert caplog.text.count("is clearly the external sensor") == 1

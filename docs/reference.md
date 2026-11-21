@@ -23,6 +23,7 @@ Each room is a device with these entities.
 | `effective_target` | The target actually sent to the TRVs and the heat source: the room's target, its eco temperature when away lowers rooms, or the off temperature while off or paused. The winner's TRVs get this plus the overshoot buffer |
 | `is_winner` | `true` while this room drives the heat source |
 | `drives_heat_source` | The room's **Drives the heat source** setting. See [Rooms](rooms.md#drives-the-heat-source) |
+| `external_sensor_ignored` | `true` while a TRV external sensor select is not on its remote option and the room sensor works. See [Rooms](rooms.md#trv-external-sensor-selects) |
 
 The room's `hvac_action` is heating while it is the winner or a passenger and the heat source runs, idle otherwise, and off while it is off or paused.
 

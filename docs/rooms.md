@@ -39,6 +39,7 @@ The gear next to a room edits it, with the same two steps. To put a room in an a
 | Room temperature sensor | | The room's temperature. Everything in the room works from this number |
 | Radiator valves (TRVs) | none | Optional. A room without TRVs only adds heat demand |
 | TRV external temperature inputs | none | Optional. Number entities that receive the room temperature, for example on a Sonoff TRVZB or Shelly BLU TRV |
+| TRV external sensor selects | none | Optional. Select entities that tell a TRV to use the external temperature, for example the Sonoff TRVZB temperature sensor select. See below |
 | Window and door sensors | none | Optional. See [Windows](windows.md) |
 | Window open delay | 120 s | See [Windows](windows.md) |
 | Window close delay | 60 s | See [Windows](windows.md) |
@@ -60,6 +61,14 @@ Turn it off for a room that may be heated but must never make the heat source ru
 ### TRV external temperature inputs
 
 A TRV's own sensor sits on the radiator and reads warm. The integration sends the room sensor's reading to the TRVs' external temperature inputs, so the room, the winner choice and the TRV all work from the same number. It resends the value every heartbeat (heating system settings, 60 minutes by default), because some TRVs, like the Sonoff TRVZB, fall back to their own sensor after 2 hours without an update.
+
+### TRV external sensor selects
+
+Sending the room temperature only helps when the TRV is set to use it. Some TRVs have a separate setting for that: on the Sonoff TRVZB in Zigbee2MQTT it is the temperature sensor select, with `local_temperature`, `remote_temperature` and `remote_source_offline`. On `local_temperature` the TRV silently ignores every value it gets. A factory reset, re-pairing or a press on the valve can put it there.
+
+Add these selects to the room and the integration keeps them on the remote option: at startup, whenever a select changes and every heartbeat. It picks the one option that says `remote` or `external` (an option with `offline` in it is a fallback state, not a choice); a select where that isn't clear is left alone, with a warning in the log. It only does this while the room sensor works. Without it there is nothing to send, and the TRVZB falls back to its own sensor by itself.
+
+The room's `external_sensor_ignored` attribute is `true` while one of its selects is not on the remote option and the room sensor works, so a dashboard or an automation can flag it. Shelly BLU TRVs only have the number and need no select.
 
 ## What you see on the card
 

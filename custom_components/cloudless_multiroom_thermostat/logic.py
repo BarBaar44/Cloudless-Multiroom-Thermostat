@@ -106,3 +106,20 @@ def trv_target(
     """Target to send to a TRV: buffer only for the winning room."""
     value = room_target + (buffer if is_winner else 0.0)
     return clamp(round_to_step(value, step), low, high)
+
+
+def remote_option(options: list[str] | None) -> str | None:
+    """The option of a TRV sensor select that makes it use the external temperature.
+
+    Sonoff TRVZB (Zigbee2MQTT): local_temperature / remote_temperature /
+    remote_source_offline. The last one is a fallback state, not a choice, so
+    options that mention offline or lost are skipped. None when no single option
+    fits: the select is then left alone.
+    """
+    candidates = [
+        opt
+        for opt in options or []
+        if any(word in opt.lower() for word in ("remote", "external"))
+        and not any(word in opt.lower() for word in ("offline", "lost", "fallback"))
+    ]
+    return candidates[0] if len(candidates) == 1 else None
