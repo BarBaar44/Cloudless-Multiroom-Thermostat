@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.9.1
+
+The last v1.9 update before v2.0.0. It finishes the v1.9 data work: a heat-up model and cooling per room, the night model judged on the weather it gets, and what the boiler says about itself. New for everyone: the integration can keep TRVs like the Sonoff TRVZB set to use the room temperature. Home Assistant's log now says once per start what v2.0.0 changes, so read it before upgrading to v2.
+
+New optional fields: **TRV external sensor selects** per room, and **Boiler member ID**, **Boiler maximum capacity** and **Boiler minimum modulation** on the learning features page. With `thermostat.yaml`, copy the new boiler identity sensors into your device config and flash to fill those three.
 
 - **TRV external sensor selects (#160):** a new optional room setting, next to the external temperature inputs. A TRV like the Sonoff TRVZB only uses the room temperature it gets when its temperature sensor select is on `remote_temperature`; on `local_temperature` it silently ignores it. Selects added to the room are kept on the remote option while the room sensor works: at startup, when a select changes and every heartbeat. New room attribute `external_sensor_ignored` shows when a TRV doesn't use the room temperature. See [TRV external sensor selects](docs/rooms.md#trv-external-sensor-selects).
 - **Docs: DIYLess stock firmware** (`docs/thermostat.md`): checked against DIYLess's own configuration overview. It creates climate entities only (no boiler sensors), its flow limit and PI gains are set over MQTT or its web page, not as entities. Learning features without boiler sensors: gas per degree-day and the night model.
