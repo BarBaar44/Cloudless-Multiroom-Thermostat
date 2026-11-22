@@ -21,6 +21,7 @@ from custom_components.cloudless_multiroom_thermostat.experimental import gas_co
 from custom_components.cloudless_multiroom_thermostat.experimental import runner as runner_mod
 from custom_components.cloudless_multiroom_thermostat.experimental import store
 
+from .test_hold import _top_up
 from .test_integration import HALLWAY, LIVING, OFFICE, SYSTEM, _states
 
 EXP = {
@@ -422,6 +423,27 @@ async def test_report_notification(hass: HomeAssistant) -> None:
     assert "Night model: 0 of 30 predicted nights" in message
     assert DOCS_EXPERIMENTAL_URL in message
     assert kw["notification_id"].endswith("_report")
+
+
+async def test_report_shows_the_hold_profile(hass: HomeAssistant) -> None:
+    """Top-ups with kept samples get a hold record (#163), also the ones from before, and a report line."""
+    entry = await _setup(hass, {**EXP, "exp_gas": None})
+    runner = entry.runtime_data.experimental
+    room_id = _living_id(entry)
+    for day in range(10, 16):
+        samples = _top_up(coast=0.3)
+        start = f"2026-11-{day}T11:00:00+01:00"
+        record = {"start": start, "room_id": room_id, "target": 18.0, "start_temp": 17.85, "outdoor_avg": 5.0,
+                  "params": {"kp": 1.9, "ki": 0.0075, "kd": 0.0}, "valid": True, "schema": 3}
+        store.append_episode(runner.f_episodes, record)
+        store.write_samples(runner.dir, start, {"start": start, "kind": "top_up", "samples": samples})
+    with patch.object(runner_mod.persistent_notification, "async_create"):
+        await hass.services.async_call(DOMAIN, "experimental_report", {}, blocking=True)
+    records = store.read_episodes(runner.f_hold)
+    assert len(records) == 6 and records[-1]["prediction"]["error"] == 0.0
+    attrs = hass.states.get("sensor.heating_learning_features_report").attributes
+    assert "Coast after top-ups" in attrs["text"] and "Living, 6 top-ups" in attrs["text"]
+    assert attrs["hold"][0]["blocks"]["10_13"]["median"] == 0.3
 
 
 async def test_evening_prediction_uses_forecast(hass: HomeAssistant) -> None:

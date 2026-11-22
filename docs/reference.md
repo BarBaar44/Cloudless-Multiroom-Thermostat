@@ -77,4 +77,4 @@ The integration serves the [Heating Control Card](card.md) at `/cloudless_multir
 
 ## Files
 
-Learning features data: `config/cloudless_multiroom_thermostat/<entry id>/`: warm-ups (`episodes.jsonl`, with the minute samples of each next to it), nights (`nights.jsonl`), gas days, heat-up model (`heatup.jsonl`) and state files. See [Data and privacy](experimental.md#data-and-privacy).
+Learning features data: `config/cloudless_multiroom_thermostat/<entry id>/`: warm-ups (`episodes.jsonl`, with the minute samples of each next to it), nights (`nights.jsonl`), gas days, heat-up model (`heatup.jsonl`), hold profile (`hold.jsonl`) and state files. See [Data and privacy](experimental.md#data-and-privacy).

@@ -409,6 +409,26 @@ The same is in the `heatup` attribute of the report sensor; the records are in `
 
 **Why alpha:** a first model, observe only.
 
+## Hold profile: coast after top-ups
+
+**Question it answers:** once the room is warm, how far does it keep rising after a reheat? ([#163](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/163).)
+
+During the day the burner reheats a warm room in short top-ups. The flame stops when the room is back at target, but the water in the radiators still carries heat, so the room keeps rising after the burner is off. That rise is the **coast**. In the house this was built in it is most of a top-up's overshoot (about 0.3 °C in the morning, up to 0.8 °C late in the afternoon), and it happens after the burner stopped, so PID values can't reach it.
+
+Each top-up with kept minute samples gets a record: the coast (room peak after the flame stopped minus the room when it stopped), the room against target when the flame stopped, the dip before the reheat, the burn length, the highest requested flow and the hour. A target change or an open window ends the data; it needs 10 minutes after the flame stops, and a burn with more than 2 minutes of hot water is left out. The kept samples from before this release are measured too.
+
+**Predicted against real:** the coast is modelled per room, time of day (before 10:00, 10:00 to 13:00, 13:00 to 15:00, after 15:00) and outdoor band. Once a cell has 5 coasts, the median of its last 9 is its model; until then the time of day block over all bands stands in, once it has 5. Every next top-up is first predicted and then compared. The evening report shows it per room and time of day, for example:
+
+```
+- Coast after top-ups (rise after the burner stops): Living Room, 38 top-ups: before 10:00 0.25 °C (10), predicted within 0.05; 10:00 to 13:00 0.39 °C (14), predicted within 0.15; 13:00 to 15:00 0.33 °C (9), predicted within 0.13; after 15:00 0.77 °C (5)
+```
+
+The same is in the `hold` attribute of the report sensor; the records are in `hold.jsonl`.
+
+**What it is for:** stopping a top-up early by the predicted coast, so the room lands on target instead of above it ([#164](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/164), after v2.0). That changes the heating, so this only learns and checks itself until then.
+
+**Why alpha:** a first model, observe only.
+
 ## Cost per warm-up and per day
 
 **Question it answers:** what did the heating cost? Kept now so v2 starts with a cost history ([#109](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/109)). Needs the [gas price sensors](#gas-price-tomorrow-before-0600--after-0600) and a gas meter.
@@ -494,7 +514,7 @@ The attributes stay where they are. Use a statistics graph card to see a trend, 
 
 Everything stays on your Home Assistant. Files are stored in `config/cloudless_multiroom_thermostat/<entry id>/`:
 
-- `episodes.jsonl`, `nights.jsonl`, `gas_days.jsonl`: append-only, one JSON record per line.
+- `episodes.jsonl`, `nights.jsonl`, `gas_days.jsonl`, `heatup.jsonl`, `hold.jsonl`: append-only, one JSON record per line.
 - `samples/<YYYY-MM>/<start>.json.gz`: the minute samples of each episode (warm-ups and top-ups, every room), gzipped, one file per episode. `episodes.jsonl` only keeps a summary of each, and Home Assistant keeps raw history for about 10 days, so these are what a future model of how each room heats up learns from ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)). Each sample also holds every room's temperature and target (`rooms`). Expect a few MB a year.
 - `state.json`, `night_state.json`, `episode_state.json`, `report.json`: small state files (`episode_state.json` holds the warm-up episode in progress, `report.json` the last report and what the next evening compares against for events).
 
