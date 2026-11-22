@@ -6,7 +6,7 @@
 
 ## 1.9.1
 
-The last v1.9 update before v2.0.0. It finishes the v1.9 data work: a heat-up model and cooling per room, the night model judged on the weather it gets, and what the boiler says about itself. New for everyone: the integration can keep TRVs like the Sonoff TRVZB set to use the room temperature. Home Assistant's log now says once per start what v2.0.0 changes, so read it before upgrading to v2.
+It finishes the planned v1.9 data work: a heat-up model and cooling per room, the night model judged on the weather it gets, and what the boiler says about itself. New for everyone: the integration can keep TRVs like the Sonoff TRVZB set to use the room temperature. Home Assistant's log now says once per start what v2.0.0 changes, so read it before upgrading to v2.
 
 New optional fields: **TRV external sensor selects** per room, and **Boiler member ID**, **Boiler maximum capacity** and **Boiler minimum modulation** on the learning features page. With `thermostat.yaml`, copy the new boiler identity sensors into your device config and flash to fill those three.
 
