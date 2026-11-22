@@ -4,6 +4,8 @@
 
 - **Hold profile: coast after top-ups (#163):** each daytime reheat (top-up) of a warm room now gets a record of its coast: how far the room keeps rising after the burner stopped, with the room against target at that moment, the dip before it, the burn and the hour. Modelled per room, time of day and outdoor band; every top-up is first predicted and then compared. Shown in the evening report and the report sensor's `hold` attribute; the kept samples from before are measured too. See [Hold profile](docs/experimental.md#hold-profile-coast-after-top-ups). Observe only: stopping a top-up early by the predicted coast comes after v2.0 (#164).
 
+- **Heating curve learned per outdoor band (#167):** two top-ups of the room followed in a row are a hold interval: the burner minutes over the time between them say how much heat the house needed to stay on target. Turned into the steady flow temperature that would hold the room (the hold flow), per outdoor band, every one first predicted and then compared. With warm-ups at the current flow limit this gives a suggested flow limit per band, never below what warm-ups already use in full. Shown in the evening report and the report sensor's `curve` attribute. See [Heating curve learned](docs/experimental.md#heating-curve-learned). Observe only: the flow limit is never written; applying the curve is #75 (v2.2.0).
+
 ## 1.9.1
 
 It finishes the planned v1.9 data work: a heat-up model and cooling per room, the night model judged on the weather it gets, and what the boiler says about itself. New for everyone: the integration can keep TRVs like the Sonoff TRVZB set to use the room temperature. Home Assistant's log now says once per start what v2.0.0 changes, so read it before upgrading to v2.

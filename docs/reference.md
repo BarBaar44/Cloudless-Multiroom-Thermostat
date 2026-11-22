@@ -58,7 +58,7 @@ Attributes added since v1.9:
 | PID advice | `per_room` | Advice per room with enough warm-ups, observe only. See [Advice per room](experimental.md#advice-per-room) |
 | Night prediction | `cooling_per_room` | Cooling time constant per room. See [Cooling per room](experimental.md#cooling-per-room) |
 | Last warm-up overshoot | `return_avg`, `condensing_pct`, `gas_used`, `cost` | Per warm-up: average return, [condensing share](experimental.md#condensing-share), gas and [cost](experimental.md#cost-per-warm-up-and-per-day) |
-| Learning features report | `heating_curve`, `min_power`, `boiler_identity`, `heatup` | [Heating curve data](experimental.md#heating-curve-data), [boiler minimum power](experimental.md#low-load-detection), what the boiler reports about itself, the [heat-up model](experimental.md#heat-up-model-per-room) |
+| Learning features report | `heating_curve`, `curve`, `min_power`, `boiler_identity`, `heatup` | [Heating curve data](experimental.md#heating-curve-data), the [heating curve learned](experimental.md#heating-curve-learned), [boiler minimum power](experimental.md#low-load-detection), what the boiler reports about itself, the [heat-up model](experimental.md#heat-up-model-per-room) |
 
 ## Services
 
@@ -77,4 +77,4 @@ The integration serves the [Heating Control Card](card.md) at `/cloudless_multir
 
 ## Files
 
-Learning features data: `config/cloudless_multiroom_thermostat/<entry id>/`: warm-ups (`episodes.jsonl`, with the minute samples of each next to it), nights (`nights.jsonl`), gas days, heat-up model (`heatup.jsonl`), hold profile (`hold.jsonl`) and state files. See [Data and privacy](experimental.md#data-and-privacy).
+Learning features data: `config/cloudless_multiroom_thermostat/<entry id>/`: warm-ups (`episodes.jsonl`, with the minute samples of each next to it), nights (`nights.jsonl`), gas days, heat-up model (`heatup.jsonl`), hold profile (`hold.jsonl`), heating curve (`curve.jsonl`) and state files. See [Data and privacy](experimental.md#data-and-privacy).

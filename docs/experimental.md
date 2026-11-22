@@ -491,6 +491,32 @@ It counts warm-ups (not top-ups) of every room that weren't disturbed, at the li
 
 **Why alpha:** data collection only.
 
+## Heating curve learned
+
+**Question it answers:** which flow limit does this house need per outdoor band? Learned from daily use, without a calibration run, so the heating curve ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)) starts from measured values ([#167](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/167)). Uses the room to follow.
+
+**Hold flow.** Once the room is warm, the burner reheats it in short top-ups. Two top-ups in a row are a hold interval: the burner minutes of the first (hot water minutes left out) over the time until the second starts is the share of time the house needed the burner to stay on target. A radiator gives off heat roughly in proportion to how much warmer its water is than the room, so burning 10% of the time with 40 °C water in a 20 °C room is about what a steady 22 °C would do. That steady value is the **hold flow**: what the house needs at that outdoor temperature, whichever flow limit was set when it was measured. The water temperature is taken when the burner stops, else the warm-up's peak, else the flow limit.
+
+Left out: intervals shorter than 10 minutes or longer than 3 hours, a target change in between, a burn with hot water, and low-load episodes (the boiler can't burn less than its smallest flame, so the burn time overstates what the house needed; see [Low-load detection](#low-load-detection)).
+
+**Predicted against real:** once a band has 5 hold flows, the median of its last 9 is its model, and every next one is first predicted and then compared.
+
+**Suggested limit.** Per band with 5 hold flows: the upper quartile of the last 18 hold flows plus 5 °C headroom for warm-ups, rounded up to the flow limit number's step (0.5 °C, inside 25 to 80 °C). The upper quartile keeps sunny hours, which need less, from pulling it down. When warm-ups at the current limit ask on average 90% of it or more, they already use it in full: then the suggestion is never below the current limit, as a lower one would make them slower.
+
+The evening report has a line for it, for example:
+
+```
+- Heating curve (learned, never applied): Living Room, now 40 °C. Outdoor 0 to 8 °C: holds at 26.5 °C (31), predicted within 1.2, warm-ups ask 72% of the limit (9), suggested limit 33 °C; 8 to 15 °C: holds at 24 °C (12), predicted within 0.9, warm-ups ask 55% of the limit (3), suggested limit 30.5 °C
+```
+
+The same is in the `curve` attribute of the report sensor; the records are in `curve.jsonl`. It sits next to [Heating curve data](#heating-curve-data), which checks that the flow stays at the limit.
+
+**Known limits:** treating radiator output as proportional to the water's temperature above the room is a simplification (radiators give off a bit more when hotter, fan convectors are closer to it). The 5 °C headroom is a first guess, to be checked against warm-ups once a limit is applied. Sun on holds lowers the burner time; only the upper quartile guards against that.
+
+**What it is for:** the starting values of the heating curve in v2.2.0 ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)). That changes the heating, so this only learns and checks itself until then. The integration never writes the flow limit.
+
+**Why alpha:** a first model, observe only.
+
 ## Long-term statistics
 
 Home Assistant keeps the history of a sensor's state for about 10 days, and keeps long-term statistics (hourly averages, forever) only for numeric sensors with a state class. It keeps neither for attributes. So the numbers worth following over a season also have a sensor of their own. They are diagnostic entities: on the device page, not on an auto-generated dashboard. Statistics start the day the sensor exists, so there is no history from before.
@@ -514,7 +540,7 @@ The attributes stay where they are. Use a statistics graph card to see a trend, 
 
 Everything stays on your Home Assistant. Files are stored in `config/cloudless_multiroom_thermostat/<entry id>/`:
 
-- `episodes.jsonl`, `nights.jsonl`, `gas_days.jsonl`, `heatup.jsonl`, `hold.jsonl`: append-only, one JSON record per line.
+- `episodes.jsonl`, `nights.jsonl`, `gas_days.jsonl`, `heatup.jsonl`, `hold.jsonl`, `curve.jsonl`: append-only, one JSON record per line.
 - `samples/<YYYY-MM>/<start>.json.gz`: the minute samples of each episode (warm-ups and top-ups, every room), gzipped, one file per episode. `episodes.jsonl` only keeps a summary of each, and Home Assistant keeps raw history for about 10 days, so these are what a future model of how each room heats up learns from ([#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)). Each sample also holds every room's temperature and target (`rooms`). Expect a few MB a year.
 - `state.json`, `night_state.json`, `episode_state.json`, `report.json`: small state files (`episode_state.json` holds the warm-up episode in progress, `report.json` the last report and what the next evening compares against for events).
 
