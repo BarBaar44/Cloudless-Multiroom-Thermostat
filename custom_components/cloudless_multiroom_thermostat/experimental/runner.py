@@ -87,7 +87,7 @@ from ..const import (
     WINNER_OFF,
     signal_update,
 )
-from . import autotune, gas_core, heatup_core, night_core, progress, store, tuner_core
+from . import autotune, gas_core, heatup_core, hold_core, night_core, progress, store, tuner_core
 
 if TYPE_CHECKING:
     from ..controller import HeatingController, Room
@@ -165,6 +165,7 @@ class ExperimentalRunner:
         self.f_state = f"{self.dir}/state.json"
         self.f_nights = f"{self.dir}/nights.jsonl"
         self.f_heatup = f"{self.dir}/heatup.jsonl"
+        self.f_hold = f"{self.dir}/hold.jsonl"
         self.f_night_state = f"{self.dir}/night_state.json"
         self.f_gas_days = f"{self.dir}/gas_days.jsonl"
         self.f_episode_state = f"{self.dir}/episode_state.json"
@@ -313,6 +314,30 @@ class ExperimentalRunner:
             return await self._io(self._update_heatup)
         except Exception:  # noqa: BLE001 - observe only; the episode is already recorded
             _LOGGER.warning("Could not update the heat-up model", exc_info=True)
+            return []
+
+    def _update_hold(self) -> list[dict[str, Any]]:
+        """
+        Hold records (#163) for every top-up that has none yet, oldest first,
+        so each is predicted from the ones before it. Also picks up the
+        samples kept before this existed. Runs in the executor.
+        """
+        records = store.read_episodes(self.f_hold)
+        done = {r["start"] for r in records}
+        for ep in store.read_episodes(self.f_episodes):
+            if ep["start"] in done or tuner_core.episode_kind(ep) != "top_up":
+                continue
+            rec = hold_core.record(ep, store.read_samples(self.dir, ep["start"]), records)
+            store.append_episode(self.f_hold, rec)
+            records.append(rec)
+        return records
+
+    async def _async_update_hold(self) -> list[dict[str, Any]]:
+        """Never blocks the rest: the hold profile is extra."""
+        try:
+            return await self._io(self._update_hold)
+        except Exception:  # noqa: BLE001 - observe only; the episode is already recorded
+            _LOGGER.warning("Could not update the hold profile", exc_info=True)
             return []
 
     async def _async_write_param(self, name: str, value: float) -> bool:
@@ -576,6 +601,7 @@ class ExperimentalRunner:
         await self._io(store.append_episode, self.f_episodes, record)
         await self._async_keep_samples(record, ep)
         await self._async_update_heatup()
+        await self._async_update_hold()
         history = await self._io(store.read_episodes, self.f_episodes)
         room = self.room
         tuner_state = await self._io(store.read_state, self.f_state)
@@ -1136,6 +1162,10 @@ class ExperimentalRunner:
             await self._async_update_heatup(), [(r.room_id, r.name) for r in self.ctl.rooms.values()]
         )
         heatup_line = heatup_core.summary_line(heatup)
+        hold = hold_core.summary(
+            await self._async_update_hold(), [(r.room_id, r.name) for r in self.ctl.rooms.values()]
+        )
+        hold_line = hold_core.summary_line(hold)
         cooling = night_core.cooling_line(self._cooling_per_room(nights))
         if cooling:
             night_lines.append(cooling)
@@ -1202,6 +1232,8 @@ class ExperimentalRunner:
             message += f"\n\n{curve_line}"
         if heatup_line:
             message += f"\n\n{heatup_line}"
+        if hold_line:
+            message += f"\n\n{hold_line}"
         if low_load or min_power["source"] != "measuring":
             message += f"\n\n{tuner_core.min_power_line(min_power)}"
         if identity_line:
@@ -1241,6 +1273,10 @@ class ExperimentalRunner:
                     b: {"fits": v["fits"], "model": v["model"], "errors": v["errors"]} for b, v in r["bands"].items()
                 }}
                 for r in heatup
+            ],
+            "hold": [
+                {"room": r["room"], "top_ups": r["top_ups"], "blocks": r["blocks"]}
+                for r in hold
             ],
             "boiler_identity": identity,
             "progress": progress_lines,
