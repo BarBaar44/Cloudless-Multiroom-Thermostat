@@ -46,7 +46,7 @@ Done. Fixes and upkeep, plus one thing that has to be right before v2: how the P
 
 ### v1.9.x: preparing v2
 
-Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestones [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2) (released) and [v1.9.1](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/4).
+Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestones [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2) and [v1.9.1](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/4) (released), and [v1.9.2](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/7).
 
 - **Learning per room** ([#101](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/101)): warm-up episodes and PID advice for every room, not only the room to follow. Shows whether rooms really need their own PID values before v2 builds it.
 - **A heat-up model per room** ([#152](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/152), step 2 of [#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)): from the kept samples, fit how each room heats up (delay, speed, and how much a degree of flow does) against outdoor temperature, predict every warm-up and report how far off it was. Observe only: the model has to predict well before any gains are calculated from it. Replaces trial and error with a model; probing becomes the check on it.
