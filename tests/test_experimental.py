@@ -14,7 +14,11 @@ from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+    async_mock_service,
+)
 
 from custom_components.cloudless_multiroom_thermostat.const import DOCS_EXPERIMENTAL_URL, DOMAIN
 from custom_components.cloudless_multiroom_thermostat.experimental import gas_core, night_core, tuner_core
@@ -444,6 +448,31 @@ async def test_report_shows_the_hold_profile(hass: HomeAssistant) -> None:
     attrs = hass.states.get("sensor.heating_learning_features_report").attributes
     assert "Coast after top-ups" in attrs["text"] and "Living, 6 top-ups" in attrs["text"]
     assert attrs["hold"][0]["blocks"]["10_13"]["median"] == 0.3
+
+
+async def test_report_shows_the_learned_heating_curve(hass: HomeAssistant) -> None:
+    """Hold intervals of the room followed become curve records (#167) and a report line; nothing is written."""
+    entry = await _setup(hass, {**EXP, "exp_gas": None})
+    runner = entry.runtime_data.experimental
+    room_id = _living_id(entry)
+    for day in (17, 18):
+        for hour in range(10, 15):
+            start = f"2026-11-{day}T{hour}:00:00+01:00"
+            record = {"start": start, "room_id": room_id, "target": 18.0, "start_temp": 17.85, "outdoor_avg": 5.0,
+                      "max_ch": 40.0, "flame_on_min": 6, "dhw_min": 0, "water_peak": 38.0, "low_load": False,
+                      "params": {"kp": 1.9, "ki": 0.0075, "kd": 0.0}, "valid": True, "schema": 3}
+            store.append_episode(runner.f_episodes, record)
+    writes = async_mock_service(hass, "number", "set_value")
+    with patch.object(runner_mod.persistent_notification, "async_create"):
+        await hass.services.async_call(DOMAIN, "experimental_report", {}, blocking=True)
+    assert writes == []
+    records = store.read_episodes(runner.f_curve)
+    holds = [r for r in records if "hold_flow" in r]
+    assert len(holds) == 8 and holds[0]["hold_flow"] == 20.0  # 18 + 0.1 x (38 - 18)
+    assert holds[-1]["prediction"]["error"] == 0.0
+    attrs = hass.states.get("sensor.heating_learning_features_report").attributes
+    assert "Heating curve (learned, never applied): Living" in attrs["text"]
+    assert attrs["curve"]["bands"]["0_8"]["suggested"] == 25.0  # 20 + 5 headroom, at the bottom of the range
 
 
 async def test_evening_prediction_uses_forecast(hass: HomeAssistant) -> None:
