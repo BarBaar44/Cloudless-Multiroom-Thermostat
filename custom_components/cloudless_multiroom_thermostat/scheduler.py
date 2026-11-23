@@ -196,8 +196,12 @@ class Scheduler:
         change = self.next_change(room)
         override = self.override(room)
         data = self.data
+        entry = None if data is None else data["rooms"].get(room.room_id)
         return {
             "schedule_state": self.state(room),
+            # The week for the card's today strip and editor (switch points, local time, Monday first)
+            "schedule": None if entry is None else entry.get("week"),
+            "schedules_suspended": bool(data and data["suspended"]),
             # The presets dialog and every schedule colour come from here (#113, #130)
             "presets": None
             if data is None

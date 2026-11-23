@@ -96,6 +96,10 @@ colors:
 | `warning` | pressure icon and warning line | `var(--error-color)` |
 | `room` | Heat buttons, Heating along, Paused, pending targets | `var(--state-climate-heat-color)` |
 | `water` | water flow text and line | `var(--light-blue-color)` |
+| `accent` | primary buttons, selection and focus in the card and its dialogs | `#ff8100` |
+| `override` | changes by hand that expire, on rows and the today strip | `#ffb26b` |
+
+Preset colours (Eco, Warm and your own) are not set here but per preset with the `set_presets` action (the card's presets dialog), so every card and the whole house view show the same colour for a preset. Without one, Eco is teal, Warm orange and Off grey.
 
 ## What you see on the card
 
@@ -106,6 +110,26 @@ It shows every room with its temperature, target, Heat/Off and [role](rooms.md#w
 With several rooms every room shows its role, and the room the boiler heats for is highlighted. On the right the hallway is below target but does not drive the boiler, so heating stays off:
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-roles.png" alt="Three Heating Control Cards showing every room role" width="900"></p>
+
+### Schedules
+
+Each room gets a schedule line and a thin strip for today in its presets' colours, with a now marker. See [Schedules](schedules.md).
+
+| The line says | Means |
+|---|---|
+| Eco · Warm at 16:00 | Follows its schedule: Eco now, Warm from 16:00 |
+| Manual 20.5° until 17:00 | A change by hand, hatched on the strip; *stays when away* when kept |
+| Sun assist · Warm waits, checks 08:00 | [Sun assist](sun-assist.md) holds while the sun warms the room |
+| Sleep → Off (not used here) | A preset this room doesn't use means Off |
+| Scheduling off · you control it | The room is yours, as before v2 |
+| Suspended · holds 15° | Schedules are suspended for the house |
+| No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (one preset all day; Eco is preselected) and **Scheduling off** |
+
+**Changing a target.** The − and + buttons change it until the next schedule change. Tap the target itself for **Keep this until**: next schedule change, 1 hour, 3 hours or until I change it, and **Keep when everyone is away**; **Back to schedule** ends a change by hand.
+
+**Header pills.** **Schedule** suspends every room's schedule (the pill then reads **Suspended**; tap to resume). **Guest mode** appears when the [Guest mode](away.md#guest-mode) feature is on: start it until you turn it off or until a set time.
+
+A refused change (a room without a schedule, for example) shows its reason at the bottom of the screen.
 
 The card writes only to the room climates, the single source of truth per room. Everything downstream (TRVs, the overshoot buffer for the winner, the boiler setpoint) is the integration's job, exactly as with any other change to a room. The rooms tell the card which one is the winner, each room's role and why a room is paused, so no extra sensor is needed.
 

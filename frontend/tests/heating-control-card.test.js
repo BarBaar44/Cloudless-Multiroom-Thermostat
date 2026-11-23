@@ -342,6 +342,158 @@ test("setpoint taps send one batched call", async () => {
   }, 900));
 });
 
+/* ---------------- v2 schedules ---------------- */
+
+// Objects made inside the simulated window come from another realm: compare as JSON.
+const same = (a, b) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b));
+
+const PRESETS = (warm = 19, sleep = null) => [
+  { id: "eco", name: "Eco", color: null, temperature: 15 },
+  { id: "warm", name: "Warm", color: "#ff5722", temperature: warm },
+  { id: "sleep", name: "Sleep", color: null, temperature: sleep },
+];
+const WEEK = Array.from({ length: 7 }, () => [{ time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }]);
+const todayAt = (h, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+const sched = (o = {}) => ({
+  schedule_state: "active", schedule: WEEK, schedules_suspended: false, presets: PRESETS(),
+  preset_mode: "warm", next_change: { at: todayAt(22), preset: "eco" }, override: null, sun_assist: null, ...o,
+});
+const schedLine = (c, name) => {
+  const r = [...c.shadowRoot.querySelectorAll(".row")].find((x) => x.querySelector(".rname").textContent === name);
+  return { el: r, text: r.querySelector(".stext").textContent, cls: r.querySelector(".rsched").className };
+};
+
+test("schedule line: preset now and the next change", () => {
+  const c = render(intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }));
+  assert.strictEqual(schedLine(c, "Living Room").text, "Warm · Eco at 22:00");
+  assert(schedLine(c, "Living Room").el.querySelector(".strip").classList.contains("show"));
+  assert.strictEqual(schedLine(c, "Living Room").el.querySelectorAll(".strip .blk").length, 3);
+});
+
+test("schedule line: change by hand, kept when away, and until you change it", () => {
+  const c = render(intHass({
+    [LIVING]: room("Living Room", 20, 21, sched({ override: { target: 21, preset: null, until: todayAt(17), keep_when_away: true } })),
+    [OFFICE]: room("Office", 19, 15, sched({ override: { target: 15, preset: "eco", until: null, keep_when_away: false } })),
+  }));
+  assert.strictEqual(schedLine(c, "Living Room").text, "Manual 21° until 17:00 · stays when away");
+  assert(schedLine(c, "Living Room").cls.includes("manual"));
+  assert.strictEqual(schedLine(c, "Office").text, "Eco until you change it");
+  assert(schedLine(c, "Living Room").el.querySelector(".strip .over"));
+});
+
+test("schedule line: sun assist, scheduling off, suspended, a preset not used", () => {
+  const c = render(intHass({
+    [LIVING]: room("Living Room", 16, 15, sched({ sun_assist: { status: "holding", hold: 15, check_at: todayAt(8) } })),
+    [OFFICE]: room("Office", 19, 19, sched({ schedule_state: "off", schedule: null })),
+    [HALL]: room("Hallway", 17, 15, sched({ schedule_state: "suspended" })),
+    "climate.gijs": room("Gijs", 17, 10, sched({ preset_mode: "sleep", next_change: { at: todayAt(7), preset: "warm" } })),
+  }));
+  assert.strictEqual(schedLine(c, "Living Room").text, "Sun assist · Warm waits, checks 08:00");
+  assert.strictEqual(schedLine(c, "Office").text, "Scheduling off · you control it");
+  assert.strictEqual(schedLine(c, "Hallway").text, "Suspended · holds 15°");
+  assert.strictEqual(schedLine(c, "Gijs").text, "Sleep → Off (not used here) · Warm at 07:00");
+});
+
+test("v1 rooms (no schedule attributes) show no schedule line or pills", () => {
+  const c = render(intHass({ [LIVING]: room("Living Room", 20, 19) }));
+  assert(!schedLine(c, "Living Room").cls.includes("show"));
+  assert.strictEqual(c._el.pills.style.display, "none");
+});
+
+test("room without a schedule: hatched, locked, two ways out, header count", () => {
+  const h = intHass({
+    [HALL]: room("Hallway", 14.8, 15, sched({ schedule_state: "none", schedule: null, preset_mode: "none", next_change: null })),
+    [LIVING]: room("Living Room", 20, 19, sched()),
+  });
+  const c = render(h);
+  const r = schedLine(c, "Hallway");
+  assert.strictEqual(r.text, "No schedule · holds 15°");
+  assert(r.el.classList.contains("nosched"));
+  assert(r.el.querySelector(".up").disabled && r.el.querySelector(".down").disabled);
+  assert(c._el.nosched.classList.contains("show"));
+  assert.strictEqual(c._el.noschedText.textContent, "1 room without a schedule · holds 15°");
+  r.el.querySelector(".mine").click();
+  same(h.calls.pop(), [INT, "set_schedule", { entity_id: HALL, scheduling: "off" }]);
+  r.el.querySelector(".make").click();
+  const d = c.shadowRoot.querySelector(".dlg");
+  assert(d.querySelector('input[value="eco"]').checked, "Eco is the default");
+  d.querySelector('input[value="warm"]').checked = true;
+  d.querySelector(".save").click();
+  const [dom, svc, data] = h.calls.pop();
+  assert.strictEqual(svc, "set_schedule");
+  assert.strictEqual(data.week.length, 7);
+  same(data.week[3], [{ time: "00:00", preset: "warm" }]);
+  assert(!c.shadowRoot.querySelector(".dlg"), "dialog closes");
+});
+
+test("tap the target: Keep this until sends set_override", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 18.7, 19, sched()) });
+  const c = render(h);
+  c.shadowRoot.querySelector(".row .rtgt").click();
+  const d = c.shadowRoot.querySelector(".dlg");
+  assert(d.querySelector('input[value="next_change"]').checked);
+  d.querySelector(".dup").click(); d.querySelector(".dup").click();
+  d.querySelector('input[value="3"]').checked = true;
+  d.querySelector(".keep").checked = true;
+  d.querySelector(".set").click();
+  same(h.calls.pop(), [INT, "set_override", { entity_id: LIVING, temperature: 20, keep_when_away: true, duration: { hours: 3 } }]);
+  c.shadowRoot.querySelector(".row .rtgt").click();
+  c.shadowRoot.querySelector('.dlg input[value="permanent"]').checked = true;
+  c.shadowRoot.querySelector(".dlg .set").click();
+  assert.strictEqual(h.calls.pop()[2].until, "permanent");
+  c.shadowRoot.querySelector(".row .rtgt").click();
+  c.shadowRoot.querySelector(".dlg .back").click();
+  same(h.calls.pop(), [INT, "resume_schedule", { entity_id: LIVING }]);
+});
+
+test("schedule pill suspends and resumes", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  assert.strictEqual(c._el.spillText.textContent, "Schedule");
+  c._el.spill.click();
+  same(h.calls.pop(), [INT, "suspend_schedules", {}]);
+  h.states[LIVING] = room("Living Room", 20, 15, sched({ schedule_state: "suspended", schedules_suspended: true }));
+  c.hass = h;
+  assert.strictEqual(c._el.spillText.textContent, "Suspended");
+  c._el.spill.click();
+  same(h.calls.pop(), [INT, "resume_schedules", {}]);
+});
+
+test("guest pill only with the guest switch; dialog starts and stops it", () => {
+  const GUEST = "switch.heating_someone_is_home_guest_mode";
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }, "idle", { extra: { [GUEST]: st("off", { until: null }) } });
+  const c0 = render(h);
+  assert.strictEqual(c0._el.gpill.style.display, "none", "not an integration entity yet");
+  h.entities[GUEST] = { entity_id: GUEST, platform: INT, translation_key: "guest_mode" };
+  const c = render(h);
+  assert.strictEqual(c._el.gpill.style.display, "");
+  c._el.gpill.click();
+  c.shadowRoot.querySelector(".dlg .start").click();
+  same(h.calls.pop(), [INT, "set_guest_mode", { on: true }]);
+  h.states[GUEST] = st("on", { until: todayAt(23) });
+  c.hass = h;
+  assert.strictEqual(c._el.gpillText.textContent, "Guest · until 23:00");
+  c._el.gpill.click();
+  c.shadowRoot.querySelector(".dlg .stop").click();
+  same(h.calls.pop(), [INT, "set_guest_mode", { on: false }]);
+});
+
+test("accent and override colours are configurable", () => {
+  const c = render(intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }), { colors: { accent: "#3366ff", override: "teal" } });
+  assert.strictEqual(c.style.getPropertyValue("--hc-accent"), "#3366ff");
+  assert.strictEqual(c.style.getPropertyValue("--hc-override"), "teal");
+});
+
+test("a refused call shows its message", async () => {
+  const h = intHass({ [HALL]: room("Hallway", 15, 15, sched({ schedule_state: "none" })) });
+  h.callService = () => Promise.reject(new Error("Hallway has no schedule: make one or turn scheduling off"));
+  const c = render(h);
+  let msg = null;
+  c.addEventListener("hass-notification", (ev) => { msg = ev.detail.message; });
+  await c._call(INT, "set_schedule", { entity_id: HALL, scheduling: "off" });
+  assert.strictEqual(msg, "Hallway has no schedule: make one or turn scheduling off");
+});
+
 test("registers once, also when another copy of the card loaded first", () => {
   const before = w.customCards.length;
   w.eval(fs.readFileSync(CARD, "utf8").replace(/^const /gm, "var "));

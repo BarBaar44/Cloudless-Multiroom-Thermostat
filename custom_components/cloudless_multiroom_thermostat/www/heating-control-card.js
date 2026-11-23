@@ -44,13 +44,25 @@
  *    sends only this one bit, not the code on the boiler display, so the
  *    card does not try to interpret it.
  *
+ * Schedules (v2.0, the integration runs them; the card shows and edits):
+ *  - Each row gets a schedule line and a today strip from the room's
+ *    attributes schedule_state, schedule (the week), next_change, override,
+ *    sun_assist and presets (names and colours). A room without a schedule is
+ *    hatched, holds the temperature without schedule and offers only Make
+ *    schedule and Scheduling off.
+ *  - Tapping the target opens "Keep this until" (next schedule change, 1 hour,
+ *    3 hours, until I change it, keep when everyone is away): set_override.
+ *    The - and + buttons set the target until the next schedule change.
+ *  - Header pills: Schedule / Suspended (suspend_schedules, resume_schedules)
+ *    and Guest mode (the integration's guest switch, set_guest_mode).
+ *
  * Setpoint taps are batched per room: the new target shows at once and one
  * climate.set_temperature goes out 0.8 s after the last tap.
  *
  * Originally https://github.com/BarBaar44/Heating-Control-Card  (MIT)
  */
 
-const VERSION = "1.0.1";
+const VERSION = "2.0.0";
 
 const INTEGRATION = "cloudless_multiroom_thermostat";
 // Room roles the integration sets (attribute `role`, thermostat v1.1.0+).
@@ -90,7 +102,16 @@ const COLORS = {
   warning: ["--hc-warn", "var(--error-color, #db4437)"],
   room: ["--hc-heat", "var(--state-climate-heat-color, #ff8100)"],
   water: ["--hc-water", "var(--light-blue-color, #03a9f4)"],
+  // v2 (#130): primary buttons, selection and focus in the card and its dialogs
+  accent: ["--hc-accent", "#ff8100"],
+  // Changes by hand that expire, on rows and the today strip
+  override: ["--hc-override", "#ffb26b"],
 };
+
+// Preset colours when a preset has none of its own (set in the presets dialog).
+const PRESET_COLORS = { eco: "#2f8f83", warm: "#ff8100", off: "#3d3d3d" };
+const PALETTE = ["#9b8bd6", "#5c9ded", "#d6a23a", "#c76fa8", "#6fbf73", "#e07a5f", "#8d99ae", "#4db6ac"];
+const SUN = "#f5c242";
 
 const cssColor = (v) => {
   if (Array.isArray(v) && v.length === 3 && v.every((n) => num(n) !== null)) return `rgb(${v.map(Number).join(",")})`;
@@ -101,6 +122,40 @@ const BAD = ["unknown", "unavailable", "none", ""];
 const num = (v) => (v === undefined || v === null || v === "" || isNaN(Number(v)) ? null : Number(v));
 const fmt = (v, d = 1) => (num(v) === null ? "--" : Number(v).toFixed(d));
 const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+const pad = (n) => String(n).padStart(2, "0");
+// Local wall time of an ISO time from the integration, e.g. 17:00
+const hhmm = (iso) => {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d) ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "";
+};
+const minutes = (t) => {
+  const [h, m] = String(t).split(":").map(Number);
+  return h * 60 + m;
+};
+
+// Presets of a room: id -> { name, color, temperature } (attribute presets).
+function presetMap(a) {
+  const out = { off: { name: "Off", color: PRESET_COLORS.off, temperature: null } };
+  (a.presets || []).forEach((p, i) => {
+    out[p.id] = { name: p.name, color: p.color || PRESET_COLORS[p.id] || PALETTE[(i - 2 + PALETTE.length) % PALETTE.length], temperature: p.temperature };
+  });
+  return out;
+}
+
+// Today's blocks [start, end, preset] in minutes from a week (Monday first),
+// with the point in force at midnight carried over from earlier days.
+function todayBlocks(week, now = new Date()) {
+  if (!Array.isArray(week) || week.length !== 7) return [];
+  const day = (now.getDay() + 6) % 7;
+  let carry = null;
+  for (let back = 1; back <= 7 && !carry; back++) {
+    const pts = week[(day - back + 7) % 7] || [];
+    if (pts.length) carry = pts[pts.length - 1].preset;
+  }
+  const pts = (week[day] || []).map((p) => [minutes(p.time), p.preset]);
+  if (!pts.length || pts[0][0] > 0) pts.unshift([0, carry || (pts[0] && pts[0][1])]);
+  return pts.map(([start, preset], i) => [start, i + 1 < pts.length ? pts[i + 1][0] : 1440, preset]);
+}
 
 const STYLE = `
   :host {
@@ -172,12 +227,69 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .flowhead .winner { color: var(--hc-water); }
   .flowhead.dhw .winner { color: var(--hc-dhw); }
 
+  /* Header pills (v2): schedule / suspended, guest mode */
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { height: 32px; padding: 0 12px; border-radius: 16px; gap: 6px; font-size: 12px; font-weight: 500; background: var(--hc-soft); color: var(--primary-text-color); }
+  .pill ha-icon { --mdc-icon-size: 16px; color: var(--hc-accent); }
+  .pill.on { background: color-mix(in srgb, var(--hc-accent) 18%, transparent); }
+  .pill.susp { background: color-mix(in srgb, ${SUN} 15%, transparent); color: ${SUN}; font-weight: 600; }
+  .pill.susp ha-icon { color: ${SUN}; }
+  #nosched { color: ${SUN}; background: color-mix(in srgb, ${SUN} 12%, transparent); }
+
   /* Rooms */
   .rooms { display: flex; flex-direction: column; gap: 4px; }
-  .row {
-    display: grid; grid-template-columns: minmax(0,3fr) minmax(56px,2fr) auto 34px; align-items: center; gap: 8px;
-    padding: 6px 6px 6px 10px; border-radius: 12px; border: 1px solid transparent;
-  }
+  .row { padding: 6px 6px 7px 10px; border-radius: 12px; border: 1px solid transparent; }
+  .rgrid { display: grid; grid-template-columns: minmax(0,3fr) minmax(56px,2fr) auto 34px; align-items: center; gap: 8px; }
+  .rsched { font-size: 11px; color: var(--secondary-text-color); display: none; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; }
+  .rsched.show { display: flex; }
+  .rsched ha-icon { --mdc-icon-size: 12px; flex: none; }
+  .rsched span { overflow: hidden; text-overflow: ellipsis; }
+  .rsched.manual { color: var(--hc-override); font-weight: 500; }
+  .rsched.sun, .rsched.none, .rsched.susp { color: ${SUN}; }
+  .rsched.none { font-weight: 600; }
+  .rsched.mine { font-style: italic; }
+  .strip { position: relative; height: 4px; margin-top: 7px; border-radius: 2px; background: var(--hc-soft); overflow: hidden; display: none; }
+  .strip.show { display: block; }
+  .strip i { position: absolute; top: 0; bottom: 0; }
+  .strip i.over { background: repeating-linear-gradient(135deg, var(--hc-override) 0 4px, transparent 4px 8px); }
+  .strip i.sunwait { background: repeating-linear-gradient(135deg, ${SUN} 0 4px, transparent 4px 8px); }
+  .strip i.now { width: 2px; background: var(--primary-text-color); }
+  .rtgt.tap { cursor: pointer; border-radius: 6px; }
+  .rtgt.tap:hover { background: var(--hc-soft); }
+  .row.manual .rtgt { color: var(--hc-override); }
+  /* No schedule: hatched, holds the temperature without schedule, two ways out */
+  .row.nosched { border: 1px dashed color-mix(in srgb, ${SUN} 50%, transparent); background: repeating-linear-gradient(135deg, color-mix(in srgb, ${SUN} 6%, transparent) 0 8px, transparent 8px 16px); }
+  .row.nosched .rtgt { opacity: .55; }
+  .nsbox { display: none; margin-top: 8px; }
+  .row.nosched .nsbox { display: block; }
+  .nsbox p { margin: 0 0 8px; font-size: 11px; color: var(--secondary-text-color); line-height: 1.4; }
+  .nsbtns { display: flex; gap: 8px; }
+  .btn { flex: 1; min-height: 40px; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--hc-soft); color: var(--primary-text-color); padding: 0 12px; }
+  .btn.primary { background: var(--hc-accent); color: #1c1c1c; font-weight: 700; }
+
+  /* Dialogs: over the card, full screen on a phone */
+  .dlg { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
+  .dbox { width: min(420px, 100vw); max-height: 100vh; overflow: auto; box-sizing: border-box; padding: 18px 20px; border-radius: 20px; background: var(--card-background-color, var(--ha-card-background, #1c1c1c)); color: var(--primary-text-color); display: flex; flex-direction: column; gap: 14px; }
+  @media (max-width: 500px) { .dbox { width: 100vw; height: 100vh; border-radius: 0; } }
+  .dhead { display: flex; align-items: flex-start; gap: 10px; }
+  .dhead > div { flex: 1; min-width: 0; }
+  .dtitle { font-size: 18px; font-weight: 600; }
+  .dsub { font-size: 12px; color: var(--secondary-text-color); }
+  .dclose { width: 40px; height: 40px; border-radius: 50%; background: var(--hc-soft); color: var(--primary-text-color); flex: none; }
+  .dset { display: flex; align-items: center; justify-content: center; gap: 18px; }
+  .dset .adj { width: 48px; height: 48px; border-radius: 12px; }
+  .dval { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; min-width: 110px; }
+  .dval small { display: block; font-size: 12px; font-weight: 400; color: var(--secondary-text-color); }
+  fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  legend { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--secondary-text-color); margin-bottom: 6px; padding: 0; }
+  .opt { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 12px; border-radius: 12px; border: 1px solid var(--divider-color, #2e2e2e); cursor: pointer; }
+  .opt:has(input:checked) { border-color: var(--hc-accent); background: color-mix(in srgb, var(--hc-accent) 10%, transparent); }
+  .opt input { accent-color: var(--hc-accent); width: 20px; height: 20px; margin: 0; flex: none; }
+  .opt span { display: flex; flex-direction: column; }
+  .opt b { font-size: 14px; font-weight: 600; }
+  .opt small { font-size: 12px; color: var(--secondary-text-color); }
+  .opt input[type="datetime-local"] { width: auto; height: auto; accent-color: auto; font: inherit; background: var(--hc-soft); color: inherit; border: 0; border-radius: 8px; padding: 6px 8px; margin-top: 4px; }
+  .dbtns { display: flex; gap: 8px; }
   .row.win { border-color: color-mix(in srgb, var(--hc-fire) 45%, transparent); background: color-mix(in srgb, var(--hc-fire) 8%, transparent); }
   .rinfo { min-width: 0; cursor: pointer; }
   .rname { font-size: 14px; font-weight: 500; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -208,7 +320,7 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   /* One room: its Heat/Off sits in the header, the row loses that column. */
   #hmode { display: none; flex: none; }
   .single #hmode { display: flex; }
-  .single .row { grid-template-columns: minmax(0,3fr) minmax(56px,2fr) auto; }
+  .single .rgrid { grid-template-columns: minmax(0,3fr) minmax(56px,2fr) auto; }
   .single .row .mode { display: none; }
   #hmode.heat { background: var(--hc-heat); color: #fff; }
   #hmode.paused { background: var(--hc-soft); color: var(--hc-heat); opacity: 1; cursor: pointer; }
@@ -239,7 +351,7 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   }
   @media (prefers-reduced-motion: reduce) { .burning #flame, .dhw #flame, #fault, #drop { animation: none !important; } .coldwater #flame { clip-path: none; } .coldwater #drip { display: none; } }
   /* Narrow card (phone, small grid cell): room name and role get the space. */
-  @container (max-width: 360px) { .row { gap: 4px; } .rcur { font-size: 18px; } .rcur ha-icon { display: none; } }
+  @container (max-width: 360px) { .rgrid { gap: 4px; } .rcur { font-size: 18px; } .rcur ha-icon { display: none; } }
 `;
 
 class HeatingControlCard extends HTMLElement {
@@ -314,6 +426,11 @@ class HeatingControlCard extends HTMLElement {
           </div>
           <button class="mode" id="hmode"><ha-icon id="hmicon" icon="mdi:radiator-off"></ha-icon></button>
         </div>
+        <div class="pills" id="pills">
+          <button class="pill" id="spill"><ha-icon icon="mdi:clock-outline"></ha-icon><span id="spillText">Schedule</span></button>
+          <button class="pill" id="gpill"><ha-icon icon="mdi:account-plus-outline"></ha-icon><span id="gpillText">Guest mode</span></button>
+        </div>
+        <div class="note" id="nosched"><ha-icon icon="mdi:alert"></ha-icon><span id="noschedText"></span></div>
         <div class="note" id="sched"><ha-icon icon="mdi:calendar-clock"></ha-icon><span>Central heating switch is off</span></div>
         <div class="note" id="warn"><ha-icon icon="mdi:alert"></ha-icon><span id="warnText"></span></div>
         <div class="rooms" id="rooms"></div>
@@ -325,7 +442,15 @@ class HeatingControlCard extends HTMLElement {
       hmode: $("hmode"), hmicon: $("hmicon"),
       flowline: $("flowline"), flowText: $("flowText"),
       sched: $("sched"), warn: $("warn"), warnText: $("warnText"), rooms: $("rooms"),
+      pills: $("pills"), spill: $("spill"), spillText: $("spillText"), gpill: $("gpill"), gpillText: $("gpillText"),
+      nosched: $("nosched"), noschedText: $("noschedText"),
     };
+    $("spill").addEventListener("click", () => this._suspendTap());
+    $("gpill").addEventListener("click", () => this._guestDialog());
+    $("nosched").addEventListener("click", () => {
+      const first = this.shadowRoot.querySelector(".row.nosched");
+      if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
     $("icon").addEventListener("click", () => this._moreInfo(this._iconTarget));
     $("htext").addEventListener("click", () => this._moreInfo(this._flowHead ? this._config.water_flow : this._winnerEntity));
     $("fault").addEventListener("click", () => this._moreInfo(this._config.fault));
@@ -531,6 +656,30 @@ class HeatingControlCard extends HTMLElement {
     const coldIcon = icon === "mdi:water-pump";
     this._iconTarget = offline ? c.boiler : fault ? c.fault : dhw ? c.hot_water : coldIcon ? c.water_flow : c.flame && flameState ? c.flame : c.boiler;
 
+    // Schedules (v2): pills and rooms without a schedule
+    const scheduled = house.filter((r) => {
+      const s = this._state(r.entity);
+      return s && s.attributes.schedule_state !== undefined;
+    });
+    const suspended = scheduled.some((r) => this._state(r.entity).attributes.schedules_suspended === true);
+    e.spill.style.display = scheduled.length ? "" : "none";
+    e.spill.classList.toggle("susp", suspended);
+    e.spill.querySelector("ha-icon").setAttribute("icon", suspended ? "mdi:pause" : "mdi:clock-outline");
+    e.spillText.textContent = suspended ? "Suspended" : "Schedule";
+    e.spill.setAttribute("aria-label", suspended ? "Schedules suspended, tap to resume" : "Schedules on, tap to suspend");
+    this._guest = this._guestEntity();
+    const gs = this._state(this._guest);
+    e.gpill.style.display = gs ? "" : "none";
+    const guestOn = !!gs && gs.state === "on";
+    e.gpill.classList.toggle("on", guestOn);
+    e.gpillText.textContent = guestOn ? (gs.attributes.until ? `Guest · until ${this._when(gs.attributes.until)}` : "Guest · on") : "Guest mode";
+    e.pills.style.display = scheduled.length || gs ? "" : "none";
+    const none = scheduled.filter((r) => this._state(r.entity).attributes.schedule_state === "none");
+    e.nosched.classList.toggle("show", none.length > 0);
+    e.noschedText.textContent = none.length
+      ? `${none.length === 1 ? "1 room" : `${none.length} rooms`} without a schedule · holds ${fmt(num(this._state(none[0].entity).attributes.temperature) ?? 15, 0)}°`
+      : "";
+
     e.sched.classList.toggle("show", chOff);
     e.warn.classList.toggle("show", lowP || highP);
     e.warnText.textContent = lowP
@@ -585,19 +734,30 @@ class HeatingControlCard extends HTMLElement {
       const row = document.createElement("div");
       row.className = "row";
       row.innerHTML = `
-        <div class="rinfo">
-          <div class="rname">${esc(room.label)}</div>
-          <div class="rrole"><ha-icon class="ricon" icon="mdi:fire"></ha-icon><span class="rtext"></span></div>
+        <div class="rgrid">
+          <div class="rinfo">
+            <div class="rname">${esc(room.label)}</div>
+            <div class="rrole"><ha-icon class="ricon" icon="mdi:fire"></ha-icon><span class="rtext"></span></div>
+            <div class="rsched"><ha-icon class="sicon" icon="mdi:clock-outline"></ha-icon><span class="stext"></span></div>
+          </div>
+          <div class="rcur" title="Room temperature"><ha-icon icon="mdi:thermometer"></ha-icon><span class="rcurv"></span></div>
+          <div class="set">
+            <button class="adj down" title="Lower"><ha-icon icon="mdi:minus"></ha-icon></button>
+            <div class="rtgt"></div>
+            <button class="adj up" title="Raise"><ha-icon icon="mdi:plus"></ha-icon></button>
+          </div>
+          <button class="mode"><ha-icon class="micon" icon="mdi:radiator-off"></ha-icon></button>
         </div>
-        <div class="rcur" title="Room temperature"><ha-icon icon="mdi:thermometer"></ha-icon><span class="rcurv"></span></div>
-        <div class="set">
-          <button class="adj down" title="Lower"><ha-icon icon="mdi:minus"></ha-icon></button>
-          <div class="rtgt"></div>
-          <button class="adj up" title="Raise"><ha-icon icon="mdi:plus"></ha-icon></button>
-        </div>
-        <button class="mode"><ha-icon class="micon" icon="mdi:radiator-off"></ha-icon></button>`;
+        <div class="strip"></div>
+        <div class="nsbox">
+          <p>Targets can't be changed until this room has a schedule, or you take it over yourself.</p>
+          <div class="nsbtns"><button class="btn primary make">Make schedule</button><button class="btn mine">Scheduling off</button></div>
+        </div>`;
       const q = (s) => row.querySelector(s);
-      const refs = { row, ricon: q(".ricon"), rtext: q(".rtext"), cur: q(".rcurv"), tgt: q(".rtgt"), up: q(".up"), down: q(".down"), mode: q(".mode"), micon: q(".micon") };
+      const refs = {
+        row, ricon: q(".ricon"), rtext: q(".rtext"), cur: q(".rcurv"), tgt: q(".rtgt"), up: q(".up"), down: q(".down"),
+        mode: q(".mode"), micon: q(".micon"), sched: q(".rsched"), sicon: q(".sicon"), stext: q(".stext"), strip: q(".strip"),
+      };
       const prev = this._rows.get(room.entity);
       const state = { refs, pending: prev ? prev.pending : null, timer: prev ? prev.timer : null, clear: prev ? prev.clear : null, room };
       this._rows.set(room.entity, state);
@@ -605,6 +765,9 @@ class HeatingControlCard extends HTMLElement {
       refs.up.addEventListener("click", () => this._adjust(room.entity, 1));
       refs.down.addEventListener("click", () => this._adjust(room.entity, -1));
       refs.mode.addEventListener("click", () => this._modeTap(room.entity));
+      refs.tgt.addEventListener("click", () => this._targetTap(room.entity));
+      q(".make").addEventListener("click", () => this._makeDialog(room.entity));
+      q(".mine").addEventListener("click", () => this._call(INTEGRATION, "set_schedule", { entity_id: room.entity, scheduling: "off" }));
       box.appendChild(row);
     });
     this._rowKey = key;
@@ -667,7 +830,18 @@ class HeatingControlCard extends HTMLElement {
     f.micon.setAttribute("icon", isOff ? "mdi:radiator-off" : "mdi:radiator");
     f.mode.title = isOff ? "Turn heating on" : "Turn heating off";
 
-    const locked = unavailable || isOff;
+    const sched = this._schedLine(a);
+    f.sched.classList.toggle("show", !!sched);
+    f.sched.className = `rsched${sched ? ` show ${sched.cls}` : ""}`;
+    f.stext.textContent = sched ? sched.text : "";
+    f.sicon.setAttribute("icon", sched ? sched.icon : "mdi:clock-outline");
+    this._strip(f.strip, a);
+    const noSchedule = ["none", "blocked"].includes(a.schedule_state);
+    const scheduledRoom = a.schedule_state === "active" || a.schedule_state === "suspended";
+    f.tgt.classList.toggle("tap", scheduledRoom && !isOff && !unavailable);
+    f.tgt.title = scheduledRoom ? "Keep this until…" : "";
+
+    const locked = unavailable || isOff || noSchedule;
     f.down.disabled = locked || num(target) === null || num(target) <= min;
     f.up.disabled = locked || num(target) === null || num(target) >= max;
     f.mode.disabled = unavailable;
@@ -682,6 +856,233 @@ class HeatingControlCard extends HTMLElement {
     cls.toggle("away", paused && reason === "away");
     cls.toggle("pending", r.pending !== null);
     cls.toggle("unavailable", unavailable);
+    cls.toggle("nosched", a.schedule_state === "none");
+    cls.toggle("manual", !!a.override);
+  }
+
+  // The schedule line under a room's role: { text, icon, cls } or null (v1 room).
+  _schedLine(a) {
+    const st = a.schedule_state;
+    if (st === undefined) return null;
+    const P = presetMap(a);
+    const name = (id) => (P[id] ? P[id].name : id);
+    const temp = (v) => `${fmt(v, 1).replace(/\.0$/, "")}°`;
+    if (st === "none") return { text: `No schedule · holds ${temp(a.temperature)}`, icon: "mdi:alert", cls: "none" };
+    if (st === "blocked") return { text: `Schedules can't be read · holds ${temp(a.temperature)}`, icon: "mdi:alert", cls: "none" };
+    if (st === "off") return { text: "Scheduling off · you control it", icon: "mdi:account-cog-outline", cls: "mine" };
+    if (st === "suspended") return { text: `Suspended · holds ${temp(a.temperature)}`, icon: "mdi:pause", cls: "susp" };
+    const o = a.override;
+    if (o) {
+      const what = o.preset ? name(o.preset) : `Manual ${temp(o.target)}`;
+      const until = o.until ? `until ${this._when(o.until)}` : "until you change it";
+      return { text: `${what} ${until}${o.keep_when_away ? " · stays when away" : ""}`, icon: "mdi:hand-back-right-outline", cls: "manual" };
+    }
+    if (a.sun_assist) {
+      const pending = a.sun_assist.status === "pending";
+      const check = a.sun_assist.check_at ? `, checks ${hhmm(a.sun_assist.check_at)}` : "";
+      return { text: pending ? "Sun assist · reading the forecast" : `Sun assist · ${name(a.preset_mode)} waits${check}`, icon: "mdi:white-balance-sunny", cls: "sun" };
+    }
+    const now = a.preset_mode && a.preset_mode !== "none" ? a.preset_mode : null;
+    let text = now ? name(now) : "";
+    if (now && now !== "off" && P[now] && P[now].temperature === null) text = `${name(now)} → Off (not used here)`;
+    if (a.next_change) text = `${text ? `${text} · ` : ""}${name(a.next_change.preset)} at ${hhmm(a.next_change.at)}`;
+    return { text: text || "Schedule", icon: "mdi:clock-outline", cls: "" };
+  }
+
+  // Today strip: the schedule's blocks in preset colours, the change by hand
+  // (hatched) and the sun assist wait on top, and a now marker.
+  _strip(el, a) {
+    const blocks = a.schedule_state ? todayBlocks(a.schedule) : [];
+    el.classList.toggle("show", blocks.length > 0);
+    if (!blocks.length) { el.innerHTML = ""; return; }
+    const P = presetMap(a);
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const pct = (m) => `${(Math.max(0, Math.min(1440, m)) / 1440) * 100}%`;
+    const box = (from, to, cls, bg = "") => `<i class="${cls}" style="left:${pct(from)};width:${pct(to - from)}${bg ? `;background:${bg}` : ""}"></i>`;
+    let html = blocks.map(([from, to, p]) => {
+      // A preset the room doesn't use means Off there
+      const notUsed = p !== "off" && P[p] && P[p].temperature === null;
+      return box(from, to, "blk", esc(notUsed ? P.off.color : (P[p] || P.off).color));
+    }).join("");
+    const untilMin = (iso) => {
+      if (!iso) return 1440;
+      const d = new Date(iso);
+      return d.toDateString() === now.toDateString() ? d.getHours() * 60 + d.getMinutes() : 1440;
+    };
+    if (a.override) html += box(nowMin, untilMin(a.override.until), "over");
+    else if (a.sun_assist) html += box(nowMin, untilMin(a.sun_assist.check_at), "sunwait");
+    html += `<i class="now" style="left:${pct(nowMin)}"></i>`;
+    el.innerHTML = html;
+  }
+
+  _when(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return hhmm(iso);
+    return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${hhmm(iso)}`;
+  }
+
+  // The integration's guest mode switch (only there with the Guest mode feature on).
+  _guestEntity() {
+    const ents = this._hass.entities || {};
+    const id = Object.keys(ents).find((k) => k.startsWith("switch.") && ents[k].platform === INTEGRATION && ents[k].translation_key === "guest_mode");
+    return id || null;
+  }
+
+  // A service call whose refusal (a room without a schedule, say) is shown.
+  async _call(domain, service, data) {
+    try {
+      await this._hass.callService(domain, service, data);
+    } catch (err) {
+      const ev = new Event("hass-notification", { bubbles: true, composed: true });
+      ev.detail = { message: (err && err.message) || String(err) };
+      this.dispatchEvent(ev);
+    }
+  }
+
+  _suspendTap() {
+    const anyRoom = this._houseRooms(this._rooms()).find((r) => {
+      const s = this._state(r.entity);
+      return s && s.attributes.schedule_state !== undefined;
+    });
+    const susp = !!anyRoom && this._state(anyRoom.entity).attributes.schedules_suspended === true;
+    this._call(INTEGRATION, susp ? "resume_schedules" : "suspend_schedules", {});
+  }
+
+  // ---------------------------------------------------------------- dialogs
+  _openDialog(html, wire) {
+    this._closeDialog();
+    const d = document.createElement("div");
+    d.className = "dlg";
+    d.innerHTML = `<div class="dbox" role="dialog" aria-modal="true">${html}</div>`;
+    d.addEventListener("click", (ev) => { if (ev.target === d) this._closeDialog(); });
+    this.shadowRoot.appendChild(d);
+    this._dlg = d;
+    const close = d.querySelector(".dclose");
+    if (close) close.addEventListener("click", () => this._closeDialog());
+    wire(d);
+    const first = d.querySelector("input:checked, button.primary");
+    if (first && first.focus) first.focus();
+  }
+
+  _closeDialog() {
+    if (this._dlg) this._dlg.remove();
+    this._dlg = null;
+  }
+
+  _head(title, sub) {
+    return `<div class="dhead"><div><div class="dtitle">${esc(title)}</div><div class="dsub">${esc(sub || "")}</div></div>
+      <button class="dclose" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button></div>`;
+  }
+
+  _opt(name, value, title, small, checked) {
+    return `<label class="opt"><input type="radio" name="${name}" value="${esc(value)}"${checked ? " checked" : ""}><span><b>${esc(title)}</b>${small ? `<small>${esc(small)}</small>` : ""}</span></label>`;
+  }
+
+  // "Keep this until": a change by hand on a room with a schedule (set_override).
+  _targetTap(entityId) {
+    const s = this._state(entityId);
+    const r = this._rows.get(entityId);
+    if (!s || !r) return;
+    const a = s.attributes;
+    if (!["active", "suspended"].includes(a.schedule_state) || s.state === "off") return;
+    const P = presetMap(a);
+    const step = Number(r.room.step || this._config.step || a.target_temp_step || 0.5);
+    let value = num(r.pending !== null ? r.pending : a.temperature) ?? 20;
+    const nc = a.next_change;
+    const later = (h) => { const d = new Date(Date.now() + h * 3600e3); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const past = (h) => nc && new Date(nc.at) < new Date(Date.now() + h * 3600e3) ? `, past the ${hhmm(nc.at)} change` : "";
+    const o = a.override;
+    const says = nc ? `Schedule says ${P[a.preset_mode] ? P[a.preset_mode].name : ""} until ${hhmm(nc.at)}` : "Follows its schedule";
+    const html = `${this._head(r.room.label, says)}
+      <div class="dset"><button class="adj ddown" aria-label="Lower target"><ha-icon icon="mdi:minus"></ha-icon></button>
+        <div class="dval"><span class="dv"></span><small>now ${fmt(a.current_temperature)}°</small></div>
+        <button class="adj dup" aria-label="Raise target"><ha-icon icon="mdi:plus"></ha-icon></button></div>
+      <fieldset><legend>Keep this until</legend>
+        ${this._opt("until", "next_change", "Next schedule change", nc ? `${P[nc.preset] ? P[nc.preset].name : nc.preset} at ${hhmm(nc.at)}` : "", !o || !!o.until)}
+        ${this._opt("until", "1", "1 hour", `until ${later(1)}${past(1)}`, false)}
+        ${this._opt("until", "3", "3 hours", `until ${later(3)}${past(3)}`, false)}
+        ${this._opt("until", "permanent", "Until I change it", "schedule off for this room until Back to schedule", !!o && !o.until)}
+      </fieldset>
+      <label class="opt"><input type="checkbox" class="keep"${o && o.keep_when_away ? " checked" : ""}><span><b>Keep when everyone is away</b>
+        <small>Off: this change ends when the house goes away. On: for a visitor Home Assistant doesn't track.</small></span></label>
+      <div class="dbtns"><button class="btn back">Back to schedule</button><button class="btn primary set"></button></div>`;
+    this._openDialog(html, (d) => {
+      const min = a.min_temp ?? 5;
+      const max = a.max_temp ?? 30;
+      const show = () => {
+        d.querySelector(".dv").textContent = `${fmt(value)}°`;
+        d.querySelector(".set").textContent = `Set ${fmt(value)}°`;
+      };
+      const move = (dir) => { value = Math.round(Math.min(max, Math.max(min, value + dir * step)) * 100) / 100; show(); };
+      d.querySelector(".ddown").addEventListener("click", () => move(-1));
+      d.querySelector(".dup").addEventListener("click", () => move(1));
+      d.querySelector(".back").addEventListener("click", () => {
+        this._call(INTEGRATION, "resume_schedule", { entity_id: entityId });
+        this._closeDialog();
+      });
+      d.querySelector(".set").addEventListener("click", () => {
+        const until = d.querySelector('input[name="until"]:checked').value;
+        const data = { entity_id: entityId, temperature: value, keep_when_away: d.querySelector(".keep").checked };
+        if (until === "1" || until === "3") data.duration = { hours: Number(until) };
+        else data.until = until;
+        this._call(INTEGRATION, "set_override", data);
+        this._closeDialog();
+      });
+      show();
+    });
+  }
+
+  // Make schedule: one preset all day, every day; save is enough (#115).
+  _makeDialog(entityId) {
+    const s = this._state(entityId);
+    const r = this._rows.get(entityId);
+    if (!s || !r) return;
+    const a = s.attributes;
+    const presets = (a.presets || []).filter((p) => p.temperature !== null);
+    const html = `${this._head(r.room.label, "Start with one preset all day; change the schedule on the card later.")}
+      <fieldset><legend>All day, every day</legend>
+        ${presets.map((p, i) => this._opt("preset", p.id, p.name, `${fmt(p.temperature)}°`, p.id === "eco" || (i === 0 && !presets.some((x) => x.id === "eco")))).join("")}
+      </fieldset>
+      <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary save">Save schedule</button></div>`;
+    this._openDialog(html, (d) => {
+      d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
+      d.querySelector(".save").addEventListener("click", () => {
+        const preset = d.querySelector('input[name="preset"]:checked').value;
+        const week = Array.from({ length: 7 }, () => [{ time: "00:00", preset }]);
+        this._call(INTEGRATION, "set_schedule", { entity_id: entityId, week });
+        this._closeDialog();
+      });
+    });
+  }
+
+  // Guest mode: someone is home, until switched off or a set time (#117).
+  _guestDialog() {
+    const id = this._guest;
+    const gs = this._state(id);
+    if (!gs) return;
+    const on = gs.state === "on";
+    const end = new Date(Date.now() + 24 * 3600e3);
+    const local = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:00`;
+    const html = `${this._head("Someone is home", "For visitors Home Assistant doesn't track. Presence is ignored and every room follows its schedule, as if you were home.")}
+      <fieldset><legend>Ends</legend>
+        ${this._opt("ends", "off", "Until I turn it off", "stays on when you come home and leave again", true)}
+        <label class="opt"><input type="radio" name="ends" value="at"><span><b>At a set time</b><input type="datetime-local" class="at" value="${local}"></span></label>
+      </fieldset>
+      <div class="dbtns">${on ? `<button class="btn stop">Turn off</button>` : ""}<button class="btn primary start">${on ? "Save" : "Start guest mode"}</button></div>`;
+    this._openDialog(html, (d) => {
+      const stop = d.querySelector(".stop");
+      if (stop) stop.addEventListener("click", () => { this._call(INTEGRATION, "set_guest_mode", { on: false }); this._closeDialog(); });
+      d.querySelector(".at").addEventListener("focus", () => { d.querySelector('input[value="at"]').checked = true; });
+      d.querySelector(".start").addEventListener("click", () => {
+        const data = { on: true };
+        if (d.querySelector('input[name="ends"]:checked').value === "at") data.until = new Date(d.querySelector(".at").value).toISOString();
+        this._call(INTEGRATION, "set_guest_mode", data);
+        this._closeDialog();
+      });
+    });
   }
 
   _adjust(entityId, dir) {
@@ -787,6 +1188,8 @@ const LABELS = {
   warning: "Pressure warning",
   room: "Rooms in heat",
   water: "Water flow",
+  accent: "Accent (buttons, selection)",
+  override: "Change by hand",
 };
 
 async function loadHaForm() {
