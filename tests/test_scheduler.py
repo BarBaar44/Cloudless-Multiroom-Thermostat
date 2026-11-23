@@ -443,3 +443,69 @@ async def test_guest_mode_end_in_the_past_is_refused(hass: HomeAssistant, house)
             DOMAIN, "set_guest_mode", {"until": "2026-11-23T10:00:00+01:00"}, blocking=True
         )
     assert err.value.translation_key == "guest_end_in_past"
+
+
+# ---------------------------------------------------------------- #113
+async def _presets(hass: HomeAssistant, **data) -> None:
+    await hass.services.async_call(DOMAIN, "set_presets", data, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def test_add_a_preset_with_temperatures_and_colour(hass: HomeAssistant, house) -> None:
+    await _presets(
+        hass,
+        presets=[{"id": "eco", "name": "Eco"}, {"id": "warm", "name": "Warm", "color": "#ff5722"}, {"name": "Sleep"}],
+        temperatures={"climate.living": {"sleep": 16.5}},
+    )
+    living = _room(hass, "living")
+    assert living["presets"] == [
+        {"id": "eco", "name": "Eco", "color": None, "temperature": 15.0},
+        {"id": "warm", "name": "Warm", "color": "#ff5722", "temperature": 19.0},
+        {"id": "sleep", "name": "Sleep", "color": None, "temperature": 16.5},
+    ]
+    assert _room(hass, "office")["presets"][2]["temperature"] is None  # not used there
+    await _schedule(hass, "climate.office", one_block_week("sleep"))
+    office = _room(hass, "office")
+    assert office["preset_mode"] == "sleep" and office["temperature"] == 10.0  # not used means Off
+    assert "sleep" in office["preset_modes"]
+
+
+async def test_changing_a_preset_temperature_applies_now(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.living", one_block_week("warm"))
+    await _presets(hass, temperatures={"climate.living": {"warm": 20.5}})
+    assert _room(hass, "living")["temperature"] == 20.5
+    # The room form shows the same value: one copy, in the schedule file
+    assert house.runtime_data.rooms[next(
+        r for r, room in house.runtime_data.rooms.items() if room.name == "Living"
+    )].warm_temp == 20.5
+
+
+async def test_a_preset_in_use_can_not_be_removed(hass: HomeAssistant, house) -> None:
+    await _presets(hass, presets=[{"id": "eco", "name": "Eco"}, {"id": "warm", "name": "Warm"}, {"name": "Sleep"}])
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("22:00", "sleep")))
+    with pytest.raises(ServiceValidationError) as err:
+        await _presets(hass, presets=[{"id": "eco", "name": "Eco"}, {"id": "warm", "name": "Warm"}])
+    assert err.value.translation_key == "preset_in_use"
+    assert err.value.translation_placeholders["rooms"] == "Living"
+
+
+@pytest.mark.parametrize(
+    ("data", "key"),
+    [
+        ({"temperatures": {"climate.living": {"warm": None}}}, "builtin_needs_temperature"),
+        ({"temperatures": {"climate.living": {"warm": 40}}}, "temperature_out_of_range"),
+        ({"temperatures": {"climate.living": {"party": 20}}}, "unknown_preset"),
+        ({"temperatures": {"switch.ch_enabled": {"warm": 20}}}, "not_a_room"),
+    ],
+)
+async def test_bad_preset_changes_are_refused(hass: HomeAssistant, house, data, key) -> None:
+    with pytest.raises(ServiceValidationError) as err:
+        await _presets(hass, **data)
+    assert err.value.translation_key == key
+
+
+async def test_bad_preset_list_is_refused(hass: HomeAssistant, house) -> None:
+    with pytest.raises(ServiceValidationError, match="can't be removed"):
+        await _presets(hass, presets=[{"id": "eco", "name": "Eco"}])
+    with pytest.raises(ServiceValidationError, match="#ff5722"):
+        await _presets(hass, presets=[{"id": "eco", "name": "Eco", "color": "orange"}, {"id": "warm", "name": "Warm"}])

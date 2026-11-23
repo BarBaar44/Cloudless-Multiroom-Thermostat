@@ -26,6 +26,7 @@ top, as in v1.
 
 from __future__ import annotations
 
+import copy
 import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -37,16 +38,20 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_MAX_TEMP,
+    CONF_MIN_TEMP,
     CONF_NO_SCHEDULE_TEMP,
+    DEFAULT_MAX_TEMP,
+    DEFAULT_MIN_TEMP,
     DEFAULT_NO_SCHEDULE_TEMP,
-    UNTIL_NEXT_CHANGE,
-    UNTIL_PERMANENT,
     DOMAIN,
     SCHEDULE_ACTIVE,
     SCHEDULE_BLOCKED,
     SCHEDULE_NONE,
     SCHEDULE_OFF,
     SCHEDULE_SUSPENDED,
+    UNTIL_NEXT_CHANGE,
+    UNTIL_PERMANENT,
 )
 from .features import FEATURE_GUEST
 from .schedule import (
@@ -58,6 +63,9 @@ from .schedule import (
     next_change,
     preset_ids,
     preset_temperature,
+    presets_in_week,
+    slug,
+    validate_presets,
     validate_week,
 )
 
@@ -187,8 +195,21 @@ class Scheduler:
         """For the card: schedule state, next change and override."""
         change = self.next_change(room)
         override = self.override(room)
+        data = self.data
         return {
             "schedule_state": self.state(room),
+            # The presets dialog and every schedule colour come from here (#113, #130)
+            "presets": None
+            if data is None
+            else [
+                {
+                    "id": p["id"],
+                    "name": p["name"],
+                    "color": p.get("color"),
+                    "temperature": preset_temperature(data, room.room_id, p["id"]),
+                }
+                for p in data["presets"]
+            ],
             "override": None
             if override is None
             else {
@@ -410,6 +431,80 @@ class Scheduler:
         """Back to schedule: drop the room's override."""
         if self.data is not None and self.data["overrides"].pop(room.room_id, None) is not None:
             await self.store.async_save()
+        self.apply()
+
+    async def async_set_presets(
+        self,
+        presets: list[dict[str, Any]] | None,
+        temperatures: dict[str, dict[str, float | None]] | None,
+    ) -> None:
+        """The presets dialog (#113): the preset list and each room's temperature per preset.
+
+        `presets` is the whole list in order; a preset without an id is new and
+        gets one from its name. `temperatures` maps room id to {preset: value or
+        None (not used)}; presets left out keep their value. A preset still used
+        in a schedule can't be removed. Eco and Warm always need a temperature.
+        """
+        data = self.data
+        if data is None:
+            raise _refuse("schedules_blocked", room=self.controller.entry.title)
+        new = copy.deepcopy(data)
+        if presets is not None:
+            taken = {p["id"] for p in presets if p.get("id")}
+            given = []
+            for preset in presets:
+                preset = dict(preset)
+                if not preset.get("id"):
+                    preset["id"] = slug(str(preset.get("name", "")), taken)
+                    taken.add(preset["id"])
+                given.append(preset)
+            try:
+                new["presets"] = validate_presets(given)
+            except ScheduleError as err:
+                raise ServiceValidationError(str(err)) from err
+            ids = set(preset_ids(new))
+            removed = set(preset_ids(data)) - ids
+            in_use = sorted(
+                {self.controller.rooms[rid].name for rid, room in data["rooms"].items()
+                 if rid in self.controller.rooms and room.get("week") and presets_in_week(room["week"]) & removed}
+            )
+            if in_use:
+                raise _refuse("preset_in_use", rooms=", ".join(in_use))
+            for row in new["temperatures"].values():
+                for pid in list(row):
+                    if pid not in ids:
+                        del row[pid]
+                for pid in ids:
+                    row.setdefault(pid, None)
+            for rid in [r for r, o in new["overrides"].items() if o.get("preset") in removed]:
+                del new["overrides"][rid]
+        for room_id, values in (temperatures or {}).items():
+            room = self.controller.rooms.get(room_id)
+            if room is None:
+                continue
+            row = new["temperatures"].setdefault(room_id, {})
+            for pid, value in values.items():
+                if pid not in preset_ids(new):
+                    raise _refuse("unknown_preset", preset=pid)
+                if value is None:
+                    if pid in ("eco", "warm"):
+                        raise _refuse("builtin_needs_temperature", room=room.name, preset=pid)
+                    row[pid] = None
+                    continue
+                value = float(value)
+                low = float(room.config.get(CONF_MIN_TEMP, DEFAULT_MIN_TEMP))
+                high = float(room.config.get(CONF_MAX_TEMP, DEFAULT_MAX_TEMP))
+                if not low <= value <= high:
+                    raise _refuse(
+                        "temperature_out_of_range", room=room.name, temperature=f"{value:g}",
+                        low=f"{low:g}", high=f"{high:g}",
+                    )
+                row[pid] = value
+        data.clear()
+        data.update(new)
+        for room_id, room in self.controller.rooms.items():
+            room.preset_temps = self.store.temperatures(room_id)  # the rows were replaced
+        await self.store.async_save()
         self.apply()
 
     async def async_set_schedule(

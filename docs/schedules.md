@@ -28,6 +28,22 @@ A schedule is a week, Monday first. Each day has up to 12 switch points on 15 mi
 | Scheduling off | Yours: presets, targets and your own automations work as before v2, nothing expires |
 | Schedules suspended | Rooms with a schedule hold the Temperature without schedule; rooms with scheduling off are not affected. A change by hand starts that one room's schedule again, with the change on top, until schedules are resumed |
 
+## Presets
+
+Eco and Warm are built in; add your own (Sleep, for example), up to 10 in all. Each room has its own temperature per preset, or *not used*: a switch point to a preset the room doesn't use means **Off** for that room. Eco and Warm always have a temperature (the room form edits the same two values). A preset still used in a schedule can't be removed. Each preset can have a colour, used for it everywhere on the card. The card's presets dialog uses the `set_presets` action:
+
+```yaml
+action: cloudless_multiroom_thermostat.set_presets
+data:
+  presets:
+    - {id: eco, name: Eco}
+    - {id: warm, name: Warm, color: "#ff5722"}
+    - {name: Sleep, color: "#5c6bc0"}   # new: gets the id sleep
+  temperatures:
+    climate.living_room: {sleep: 16.5}
+    climate.office: {sleep: null}       # not used here
+```
+
 ## Changes by hand
 
 A change by hand on a room with a schedule lasts until the next schedule change, unless you choose otherwise with the `set_override` action (the card's *Keep this until* dialog uses it):
@@ -59,6 +75,7 @@ Away, windows and pauses work on top of the schedule, as before. The schedule ke
 | `cloudless_multiroom_thermostat.set_schedule` | a room climate | `week`: seven lists of `{time, preset}`, Monday first. `scheduling`: `on` (default) or `off`. Without `week`, turning on uses the schedule the room already had |
 | `cloudless_multiroom_thermostat.set_override` | a room climate | A change by hand: `temperature` or `preset`; `until` (`next_change`, default, or `permanent`) or `duration`; `keep_when_away` (default off) |
 | `cloudless_multiroom_thermostat.resume_schedule` | a room climate | Ends a change by hand: back to the schedule |
+| `cloudless_multiroom_thermostat.set_presets` | optional heating system | `presets`: the whole list (`id`, `name`, `color`; no id is new); `temperatures`: per room climate `{preset: value or null}`. See [Presets](#presets) |
 | `cloudless_multiroom_thermostat.suspend_schedules` | optional heating system | Every room with a schedule holds the Temperature without schedule; a change by hand starts that room's schedule again |
 | `cloudless_multiroom_thermostat.resume_schedules` | optional heating system | Rooms follow their schedules again |
 
@@ -81,4 +98,4 @@ data:
 
 ## Technical detail
 
-Room climate attributes: `schedule_state` (`active`, `none`, `off`, `suspended`, `blocked`), `next_change` (`at`, local time, and `preset`), `override` (`target`, `preset`, `until` or none for until I change it, `keep_when_away`), `override_until`. Schedules, preset temperatures and overrides are kept in `.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`, versioned: a copy `<file>.v<N>.bak` is made before every migration, and a file written by a newer version is never overwritten (`blocked`: every room holds the Temperature without schedule, Repairs says why).
+Room climate attributes: `schedule_state` (`active`, `none`, `off`, `suspended`, `blocked`), `next_change` (`at`, local time, and `preset`), `override` (`target`, `preset`, `until` or none for until I change it, `keep_when_away`), `override_until`, `presets` (the system's presets in order, each with `id`, `name`, `color` and this room's `temperature`, none for not used). Schedules, preset temperatures and overrides are kept in `.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`, versioned: a copy `<file>.v<N>.bak` is made before every migration, and a file written by a newer version is never overwritten (`blocked`: every room holds the Temperature without schedule, Repairs says why).

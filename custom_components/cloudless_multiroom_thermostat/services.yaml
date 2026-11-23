@@ -98,3 +98,15 @@ set_guest_mode:
     duration:
       selector:
         duration:
+set_presets:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: cloudless_multiroom_thermostat
+    presets:
+      selector:
+        object:
+    temperatures:
+      selector:
+        object:

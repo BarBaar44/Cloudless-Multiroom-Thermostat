@@ -29,6 +29,7 @@ Each room is a device with these entities.
 | `next_change` | Next schedule change: `at` (local time) and `preset`, or none |
 | `override` | The change by hand in force: `target`, `preset`, `until` (local time, none for until I change it) and `keep_when_away`, or none |
 | `override_until` | When a change by hand ends (local time), or none |
+| `presets` | The system's presets in order: `id`, `name`, `color`, and this room's `temperature` (none: not used) |
 | `sun_assist` | While the preset waits for the sun: `status` (`pending`, `holding`), `hold`, `check_at` (local time), or none. See [Sun assist](sun-assist.md) |
 
 The room's `hvac_action` is heating while it is the winner or a passenger and the heat source runs, idle otherwise, and off while it is off or paused.
@@ -76,6 +77,7 @@ Attributes added since v1.9:
 | `cloudless_multiroom_thermostat.set_schedule` | room climate; `week`, `scheduling` | Save a room's week schedule, or turn scheduling on or off. See [Schedules](schedules.md#actions) |
 | `cloudless_multiroom_thermostat.set_override` | room climate; `temperature` or `preset`, `until` or `duration`, `keep_when_away` | A change by hand on a room with a schedule. See [Schedules](schedules.md#changes-by-hand) |
 | `cloudless_multiroom_thermostat.resume_schedule` | room climate | End a change by hand: back to the schedule |
+| `cloudless_multiroom_thermostat.set_presets` | `presets`, `temperatures`, `config_entry_id` (needed with more than one system) | The preset list and each room's temperature per preset. See [Presets](schedules.md#presets) |
 | `cloudless_multiroom_thermostat.set_guest_mode` | `on` (default true), `until` or `duration`, `config_entry_id` (optional) | Someone is home: presence is ignored until switched off or the end. See [Away](away.md#guest-mode) |
 | `cloudless_multiroom_thermostat.suspend_schedules` | `config_entry_id` (optional) | Rooms with a schedule hold the Temperature without schedule |
 | `cloudless_multiroom_thermostat.resume_schedules` | `config_entry_id` (optional) | Rooms follow their schedules again |

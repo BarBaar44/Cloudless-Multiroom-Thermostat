@@ -536,6 +536,24 @@
           "description": "Instead of an end time: for this long."
         }
       }
+    },
+    "set_presets": {
+      "name": "Set presets",
+      "description": "The presets of a heating system, in order (Eco and Warm always included), and each room's temperature per preset or not used (means Off).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Heating system",
+          "description": "Needed when there is more than one heating system."
+        },
+        "presets": {
+          "name": "Presets",
+          "description": "The whole list: {id, name, color}. A preset without an id is new. A preset left out is removed (not while a schedule uses it)."
+        },
+        "temperatures": {
+          "name": "Temperatures",
+          "description": "Per room climate: {preset: temperature, or null for not used}. Presets left out keep their value."
+        }
+      }
     }
   },
   "exceptions": {
@@ -562,6 +580,21 @@
     },
     "feature_off": {
       "message": "{feature} is off for {system}: turn it on under Configure > Features"
+    },
+    "which_system": {
+      "message": "Name the heating system (config_entry_id): there is more than one, or none"
+    },
+    "not_a_room": {
+      "message": "{entity} is not a room of this heating system"
+    },
+    "preset_in_use": {
+      "message": "A preset you removed is still used in the schedule of {rooms}: change those schedules first"
+    },
+    "builtin_needs_temperature": {
+      "message": "{room}: Eco and Warm always need a temperature"
+    },
+    "temperature_out_of_range": {
+      "message": "{room}: {temperature} °C is outside its range of {low} to {high} °C"
     }
   },
   "issues": {

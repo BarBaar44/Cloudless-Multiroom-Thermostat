@@ -25,9 +25,9 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from datetime import time as dt_time
-from collections.abc import Mapping
 from typing import Any, Final
 
 SCHEMA_VERSION: Final = 1
@@ -50,6 +50,7 @@ SCHEDULING_ON: Final = "on"
 SCHEDULING_OFF: Final = "off"  # the room is the user's: v1 behaviour, no overrides
 
 _PRESET_ID = re.compile(r"^[a-z0-9_]{1,32}$")
+_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _TIME = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
@@ -86,13 +87,27 @@ def validate_presets(presets: Any) -> list[dict[str, Any]]:
             raise ScheduleError(f"Preset {pid!r} needs a name")
         if name.casefold() in names:
             raise ScheduleError(f"Two presets are called {name!r}")
+        color = preset.get("color")
+        if color not in (None, "") and (not isinstance(color, str) or not _COLOR.match(color)):
+            raise ScheduleError(f"Colour of {name} must be like #ff5722")
         seen.add(pid)
         names.add(name.casefold())
-        clean.append({"id": pid, "name": name, "builtin": pid in dict(BUILTIN_PRESETS)})
+        clean.append(
+            {"id": pid, "name": name, "builtin": pid in dict(BUILTIN_PRESETS), **({"color": color} if color else {})}
+        )
     for pid, _ in BUILTIN_PRESETS:
         if pid not in seen:
             raise ScheduleError(f"The built in preset {pid!r} can't be removed")
     return clean
+
+
+def slug(name: str, taken: set[str]) -> str:
+    """A preset id for a new preset name: lower case letters, digits and _, unique."""
+    base = re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_")[:28] or "preset"
+    candidate, n = base, 2
+    while candidate in taken or candidate == PRESET_OFF:
+        candidate, n = f"{base}_{n}", n + 1
+    return candidate
 
 
 def preset_ids(data: Mapping[str, Any]) -> list[str]:
