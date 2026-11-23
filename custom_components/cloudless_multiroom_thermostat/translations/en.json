@@ -547,11 +547,11 @@
         },
         "presets": {
           "name": "Presets",
-          "description": "The whole list: {id, name, color}. A preset without an id is new. A preset left out is removed (not while a schedule uses it)."
+          "description": "The whole list in order, each with an id, a name and an optional colour. A preset without an id is new. A preset left out is removed (not while a schedule uses it)."
         },
         "temperatures": {
           "name": "Temperatures",
-          "description": "Per room climate: {preset: temperature, or null for not used}. Presets left out keep their value."
+          "description": "Per room climate: a temperature per preset, or null for not used. Presets left out keep their value."
         }
       }
     }
