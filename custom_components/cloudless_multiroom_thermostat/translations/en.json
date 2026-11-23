@@ -386,6 +386,32 @@
           "description": "Optional. Only this heating system."
         }
       }
+    },
+    "set_override": {
+      "name": "Set manual change",
+      "description": "Change a room with a schedule by hand: a temperature or a preset, for how long, and whether it stays when everyone leaves.",
+      "fields": {
+        "temperature": {
+          "name": "Temperature",
+          "description": "The temperature to hold. Give this or a preset."
+        },
+        "preset": {
+          "name": "Preset",
+          "description": "The preset to hold (eco, warm, a preset you added, or off). Give this or a temperature."
+        },
+        "until": {
+          "name": "Until",
+          "description": "next_change (default): until the next schedule change. permanent: until Back to schedule."
+        },
+        "duration": {
+          "name": "For",
+          "description": "Instead of until: for this long, at most 7 days (for example 1 or 3 hours)."
+        },
+        "keep_when_away": {
+          "name": "Keep when everyone is away",
+          "description": "Off (default): the change ends when everyone leaves. On: it stays, also while everyone is away (for a visitor Home Assistant doesn't track)."
+        }
+      }
     }
   },
   "exceptions": {
@@ -400,6 +426,12 @@
     },
     "no_week": {
       "message": "{room} has no schedule to turn on: send a week"
+    },
+    "override_target_or_preset": {
+      "message": "Give a temperature or a preset, not both"
+    },
+    "scheduling_off": {
+      "message": "{room} has scheduling off: set its target or preset directly"
     }
   },
   "issues": {
