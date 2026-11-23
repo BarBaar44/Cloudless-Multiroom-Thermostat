@@ -125,6 +125,14 @@ Each room gets a schedule line and a thin strip for today in its presets' colour
 | Suspended · holds 15° | Schedules are suspended for the house |
 | No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (one preset all day; Eco is preselected) and **Scheduling off** |
 
+**Week and editing.** With schedules, the card has two views: **Rooms** and **Week** (one room, seven day lanes, its presets with their temperatures). Tap a day, or a room's schedule line, to edit:
+
+- On a wide screen (900 px or more, a tablet or a desktop) the editor shows the whole week. Tap a block to select it and drag its handles (switch points snap to 15 minutes, the time shows while you drag), or step its start and end with − and + in the side panel. Pick a preset there to change the block. To add a block, tap a preset in the palette, then tap a day: it gets an hour of that preset. **Copy day to…** copies the selected day to other days; **Remove block** gives its time to the block before it.
+- On a phone the editor shows one day as a list of switch points, each with a time (15 minute steps) and a preset, plus **Add switch point**, and **Also use for** to save the same day for other days.
+- **Save** sends the whole week. A day has at most 12 switch points; the editor says which day has too many.
+- **Copy to room…** in the Week view gives other rooms this week. It warns first when a room doesn't use one of its presets (there it means Off), and changes by hand in those rooms end.
+- **Turn off schedule** gives the room back to you (scheduling off); **Turn schedule on** returns to the week it had.
+
 **Changing a target.** The − and + buttons change it until the next schedule change. Tap the target itself for **Keep this until**: next schedule change, 1 hour, 3 hours or until I change it, and **Keep when everyone is away**; **Back to schedule** ends a change by hand.
 
 **Header pills.** **Schedule** suspends every room's schedule (the pill then reads **Suspended**; tap to resume). **Guest mode** appears when the [Guest mode](away.md#guest-mode) feature is on: start it until you turn it off or until a set time.
