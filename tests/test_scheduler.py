@@ -509,3 +509,14 @@ async def test_bad_preset_list_is_refused(hass: HomeAssistant, house) -> None:
         await _presets(hass, presets=[{"id": "eco", "name": "Eco"}])
     with pytest.raises(ServiceValidationError, match="#ff5722"):
         await _presets(hass, presets=[{"id": "eco", "name": "Eco", "color": "orange"}, {"id": "warm", "name": "Warm"}])
+
+
+async def test_card_gets_the_week_and_the_suspend_flag(hass: HomeAssistant, house) -> None:
+    week = _every_day(_pt("07:00", "warm"), _pt("22:00", "eco"))
+    await _schedule(hass, "climate.living", week)
+    living = _room(hass, "living")
+    assert living["schedule"][0] == week[0] and living["schedules_suspended"] is False
+    assert _room(hass, "office")["schedule"] is None
+    await hass.services.async_call(DOMAIN, "suspend_schedules", {}, blocking=True)
+    await hass.async_block_till_done()
+    assert _room(hass, "office")["schedules_suspended"] is True
