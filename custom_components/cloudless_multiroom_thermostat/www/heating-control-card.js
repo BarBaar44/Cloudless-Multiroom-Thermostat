@@ -142,6 +142,59 @@ function presetMap(a) {
   return out;
 }
 
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MAX_POINTS = 12; // switch points per day, as the integration allows
+const SNAP = 15;
+const hm = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+const snap = (m) => Math.round(m / SNAP) * SNAP;
+
+// A week of switch points -> per day blocks [start, end, preset] in minutes,
+// the point in force at midnight carried over from earlier days.
+function weekBlocks(week) {
+  const out = [];
+  for (let day = 0; day < 7; day++) {
+    let carry = null;
+    for (let back = 1; back <= 7 && !carry; back++) {
+      const pts = (week && week[(day - back + 7) % 7]) || [];
+      if (pts.length) carry = pts[pts.length - 1].preset;
+    }
+    const pts = ((week && week[day]) || []).map((p) => [minutes(p.time), p.preset]);
+    if (!pts.length || pts[0][0] > 0) pts.unshift([0, carry || (pts[0] ? pts[0][1] : "eco")]);
+    out.push(merge(pts.map(([start, preset], i) => [start, i + 1 < pts.length ? pts[i + 1][0] : 1440, preset])));
+  }
+  return out;
+}
+
+// Neighbouring blocks with the same preset become one.
+function merge(blocks) {
+  const out = [];
+  blocks.filter(([a, e]) => e > a).forEach((b) => {
+    const last = out[out.length - 1];
+    if (last && last[2] === b[2]) last[1] = b[1];
+    else out.push(b.slice());
+  });
+  return out;
+}
+
+// Paint [from, to) with a preset over a day's blocks.
+function paint(blocks, from, to, preset) {
+  const out = [];
+  blocks.forEach(([a, e, p]) => {
+    if (e <= from || a >= to) out.push([a, e, p]);
+    else {
+      if (a < from) out.push([a, from, p]);
+      if (e > to) out.push([to, e, p]);
+    }
+  });
+  out.push([from, to, preset]);
+  out.sort((x, y) => x[0] - y[0]);
+  return merge(out);
+}
+
+// Blocks -> the integration's week: every day starts with an explicit
+// 00:00 point, so a day never depends on the one before it.
+const toWeek = (days) => days.map((blocks) => merge(blocks).map(([a, , p]) => ({ time: hm(a), preset: p })));
+
 // Today's blocks [start, end, preset] in minutes from a week (Monday first),
 // with the point in force at midnight carried over from earlier days.
 function todayBlocks(week, now = new Date()) {
@@ -266,6 +319,47 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .nsbtns { display: flex; gap: 8px; }
   .btn { flex: 1; min-height: 40px; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--hc-soft); color: var(--primary-text-color); padding: 0 12px; }
   .btn.primary { background: var(--hc-accent); color: #1c1c1c; font-weight: 700; }
+
+  /* Views */
+  .tabs { display: flex; gap: 4px; background: var(--hc-soft); border-radius: 10px; padding: 3px; }
+  .tab { flex: 1; height: 34px; border-radius: 8px; background: transparent; color: var(--secondary-text-color); font-size: 13px; font-weight: 500; }
+  .tab.on { background: color-mix(in srgb, var(--primary-text-color) 14%, transparent); color: var(--primary-text-color); font-weight: 600; }
+  .rsched { cursor: pointer; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { min-height: 34px; padding: 0 12px; border-radius: 17px; font-size: 12px; font-weight: 500; background: var(--hc-soft); color: var(--primary-text-color); border: 1px solid transparent; }
+  .chip.on { background: var(--hc-accent); color: #1c1c1c; font-weight: 600; }
+  .chip.pick { border-color: var(--hc-accent); background: color-mix(in srgb, var(--hc-accent) 14%, transparent); }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--secondary-text-color); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .lanes { display: flex; flex-direction: column; gap: 6px; }
+  .lane { display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 8px; }
+  .lane > span { font-size: 13px; font-weight: 600; color: var(--secondary-text-color); }
+  .lane.today > span { color: var(--hc-accent); }
+  .bar { position: relative; height: 30px; border-radius: 8px; overflow: hidden; background: var(--hc-soft); cursor: pointer; touch-action: none; }
+  .bar b { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 2px solid var(--card-background-color, #1c1c1c); font-size: 11px; font-weight: 600; display: flex; align-items: center; padding-left: 8px; overflow: hidden; white-space: nowrap; }
+  .bar b.sel { outline: 3px solid var(--primary-text-color); outline-offset: -3px; z-index: 1; border-radius: 6px; }
+  .bar .h { position: absolute; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 2; touch-action: none; }
+  .bar .bubble { position: absolute; top: 0; transform: translate(-50%, 0); background: var(--primary-text-color); color: var(--card-background-color, #1c1c1c); font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 6px; z-index: 3; pointer-events: none; }
+  .ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--secondary-text-color); margin-left: 46px; font-variant-numeric: tabular-nums; }
+  .hint { font-size: 11px; color: var(--secondary-text-color); line-height: 1.4; }
+  .warnline { font-size: 12px; color: var(--hc-warn); }
+  /* Editor: grid plus side panel on wide screens, one day as a list on a phone */
+  .dbox.wide { width: min(1180px, 96vw); }
+  .edgrid { display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  .panel { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--hc-soft); }
+  .trow { display: grid; grid-template-columns: 44px 44px 1fr 44px; align-items: center; gap: 6px; }
+  .trow .adj { width: 44px; height: 44px; border-radius: 10px; }
+  .trow b { text-align: center; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .choice { min-height: 48px; padding: 6px 12px; border-radius: 12px; font-size: 14px; font-weight: 700; flex-direction: column; align-items: flex-start; background: var(--card-background-color, #1c1c1c); color: var(--primary-text-color); }
+  .choice small { font-size: 11px; font-weight: 500; opacity: .8; }
+  .pts { display: flex; flex-direction: column; gap: 6px; }
+  .pt { display: grid; grid-template-columns: 96px 1fr 40px; gap: 6px; align-items: center; }
+  .pt input[type="time"] { height: 40px; font: inherit; font-size: 15px; background: var(--hc-soft); color: inherit; border: 0; border-radius: 8px; padding: 0 6px; color-scheme: light dark; }
+  .pt select { height: 40px; font: inherit; background: var(--hc-soft); color: inherit; border: 0; border-radius: 8px; padding: 0 6px; }
+  .pt .rm { width: 40px; height: 40px; border-radius: 8px; background: var(--hc-soft); color: var(--secondary-text-color); }
+  @media (max-width: 899px) { .edgrid { grid-template-columns: 1fr; } }
 
   /* Dialogs: over the card, full screen on a phone */
   .dlg { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
@@ -433,7 +527,12 @@ class HeatingControlCard extends HTMLElement {
         <div class="note" id="nosched"><ha-icon icon="mdi:alert"></ha-icon><span id="noschedText"></span></div>
         <div class="note" id="sched"><ha-icon icon="mdi:calendar-clock"></ha-icon><span>Central heating switch is off</span></div>
         <div class="note" id="warn"><ha-icon icon="mdi:alert"></ha-icon><span id="warnText"></span></div>
+        <div class="tabs" id="tabs" role="tablist">
+          <button role="tab" class="tab on" data-v="rooms">Rooms</button>
+          <button role="tab" class="tab" data-v="week">Week</button>
+        </div>
         <div class="rooms" id="rooms"></div>
+        <div class="weekv" id="weekv"></div>
       </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     this._el = {
@@ -443,8 +542,13 @@ class HeatingControlCard extends HTMLElement {
       flowline: $("flowline"), flowText: $("flowText"),
       sched: $("sched"), warn: $("warn"), warnText: $("warnText"), rooms: $("rooms"),
       pills: $("pills"), spill: $("spill"), spillText: $("spillText"), gpill: $("gpill"), gpillText: $("gpillText"),
-      nosched: $("nosched"), noschedText: $("noschedText"),
+      nosched: $("nosched"), noschedText: $("noschedText"), tabs: $("tabs"), weekv: $("weekv"),
     };
+    this._view = "rooms";
+    this.shadowRoot.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
+      this._view = t.dataset.v;
+      this._update();
+    }));
     $("spill").addEventListener("click", () => this._suspendTap());
     $("gpill").addEventListener("click", () => this._guestDialog());
     $("nosched").addEventListener("click", () => {
@@ -674,6 +778,16 @@ class HeatingControlCard extends HTMLElement {
     e.gpill.classList.toggle("on", guestOn);
     e.gpillText.textContent = guestOn ? (gs.attributes.until ? `Guest · until ${this._when(gs.attributes.until)}` : "Guest · on") : "Guest mode";
     e.pills.style.display = scheduled.length || gs ? "" : "none";
+    // Views: Rooms, and Week once a room has schedules
+    e.tabs.style.display = scheduled.length ? "" : "none";
+    if (!scheduled.length) this._view = "rooms";
+    this.shadowRoot.querySelectorAll(".tab").forEach((t) => {
+      t.classList.toggle("on", t.dataset.v === this._view);
+      t.setAttribute("aria-selected", t.dataset.v === this._view ? "true" : "false");
+    });
+    e.rooms.style.display = this._view === "rooms" ? "" : "none";
+    e.weekv.style.display = this._view === "week" ? "" : "none";
+    if (this._view === "week") this._renderWeek(scheduled);
     const none = scheduled.filter((r) => this._state(r.entity).attributes.schedule_state === "none");
     e.nosched.classList.toggle("show", none.length > 0);
     e.noschedText.textContent = none.length
@@ -766,6 +880,11 @@ class HeatingControlCard extends HTMLElement {
       refs.down.addEventListener("click", () => this._adjust(room.entity, -1));
       refs.mode.addEventListener("click", () => this._modeTap(room.entity));
       refs.tgt.addEventListener("click", () => this._targetTap(room.entity));
+      refs.sched.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const a = (this._state(room.entity) || {}).attributes || {};
+        if (["active", "suspended", "off"].includes(a.schedule_state) && a.schedule) this._editor(room.entity);
+      });
       q(".make").addEventListener("click", () => this._makeDialog(room.entity));
       q(".mine").addEventListener("click", () => this._call(INTEGRATION, "set_schedule", { entity_id: room.entity, scheduling: "off" }));
       box.appendChild(row);
@@ -932,13 +1051,16 @@ class HeatingControlCard extends HTMLElement {
   }
 
   // A service call whose refusal (a room without a schedule, say) is shown.
+  // True when it went through.
   async _call(domain, service, data) {
     try {
       await this._hass.callService(domain, service, data);
+      return true;
     } catch (err) {
       const ev = new Event("hass-notification", { bubbles: true, composed: true });
       ev.detail = { message: (err && err.message) || String(err) };
       this.dispatchEvent(ev);
+      return false;
     }
   }
 
@@ -949,6 +1071,365 @@ class HeatingControlCard extends HTMLElement {
     });
     const susp = !!anyRoom && this._state(anyRoom.entity).attributes.schedules_suspended === true;
     this._call(INTEGRATION, susp ? "resume_schedules" : "suspend_schedules", {});
+  }
+
+  // ------------------------------------------------------------ week view
+  _presetColor(P, p) {
+    const notUsed = p !== "off" && P[p] && P[p].temperature === null;
+    return notUsed || !P[p] ? P.off.color : P[p].color;
+  }
+
+  _bars(blocks, P, label = true) {
+    return blocks.map(([a, e, p], i) => {
+      const lab = label && e - a >= 120 && P[p] ? esc(P[p].name) : "";
+      return `<b data-i="${i}" style="left:${(a / 1440) * 100}%;width:${((e - a) / 1440) * 100}%;background:${esc(this._presetColor(P, p))};color:${p === "off" ? "#c8c8c8" : "#1c1c1c"}">${lab}</b>`;
+    }).join("");
+  }
+
+  _renderWeek(scheduled) {
+    const box = this._el.weekv;
+    const withWeek = scheduled.filter((r) => Array.isArray(this._state(r.entity).attributes.schedule));
+    if (!withWeek.some((r) => r.entity === this._weekRoom)) this._weekRoom = withWeek.length ? withWeek[0].entity : null;
+    if (!this._weekRoom) {
+      box.innerHTML = `<div class="empty">No room has a schedule yet: Make schedule on a room first.</div>`;
+      return;
+    }
+    const a = this._state(this._weekRoom).attributes;
+    const P = presetMap(a);
+    const days = weekBlocks(a.schedule);
+    const today = (new Date().getDay() + 6) % 7;
+    const used = new Set(days.flat().map((b) => b[2]));
+    const key = JSON.stringify([this._weekRoom, a.schedule, a.presets, today, withWeek.map((r) => r.entity), a.schedule_state]);
+    if (key === this._weekKey) return;
+    this._weekKey = key;
+    box.innerHTML = `
+      <div class="chips">${withWeek.map((r) => `<button class="chip${r.entity === this._weekRoom ? " on" : ""}" data-e="${esc(r.entity)}">${esc(r.label)}</button>`).join("")}</div>
+      <div class="legend">${[...used].map((p) => `<span><i style="background:${esc(this._presetColor(P, p))}"></i>${esc(P[p] ? P[p].name : p)}${P[p] && P[p].temperature !== null && p !== "off" ? ` ${fmt(P[p].temperature)}°` : ""}</span>`).join("")}</div>
+      <div class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      <div class="lanes">${days.map((b, d) => `<div class="lane${d === today ? " today" : ""}" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" role="button" aria-label="Edit ${DAY_NAMES[d]}">${this._bars(b, P)}</div></div>`).join("")}</div>
+      <div class="hint">Tap a day to edit it. Away and open windows still win over the schedule.</div>
+      <div class="dbtns"><button class="btn copy">Copy to room…</button>${a.schedule_state === "off"
+        ? `<button class="btn on">Turn schedule on</button>` : `<button class="btn off">Turn off schedule</button>`}</div>`;
+    box.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { this._weekRoom = c.dataset.e; this._weekKey = null; this._update(); }));
+    box.querySelectorAll(".lane").forEach((l) => l.addEventListener("click", () => this._editor(this._weekRoom, Number(l.dataset.d))));
+    box.querySelector(".copy").addEventListener("click", () => this._copyDialog(this._weekRoom));
+    const off = box.querySelector(".off");
+    if (off) off.addEventListener("click", () => this._call(INTEGRATION, "set_schedule", { entity_id: this._weekRoom, scheduling: "off" }));
+    const on = box.querySelector(".on");
+    if (on) on.addEventListener("click", () => this._call(INTEGRATION, "set_schedule", { entity_id: this._weekRoom, scheduling: "on" }));
+  }
+
+  // --------------------------------------------------------------- editor
+  // Wide screens: the week as a grid (drag, palette, side panel). Phones and
+  // narrow cards: one day as a list of switch points with time fields.
+  _editor(entityId, day = null) {
+    const s = this._state(entityId);
+    if (!s || !Array.isArray(s.attributes.schedule)) return;
+    const a = s.attributes;
+    const r = this._rows.get(entityId);
+    const label = r ? r.room.label : a.friendly_name || entityId;
+    const days = weekBlocks(a.schedule);
+    const wide = (window.innerWidth || 1024) >= 900;
+    const first = day === null ? (new Date().getDay() + 6) % 7 : day;
+    this._ed = { entity: entityId, label, days, P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide };
+    if (wide) this._renderWide();
+    else this._renderList();
+  }
+
+  _choicesHtml(current) {
+    const P = this._ed.P;
+    return Object.entries(P).filter(([id]) => id !== "off").concat([["off", P.off]]).map(([id, p]) => {
+      const notUsed = id !== "off" && p.temperature === null;
+      const t = id === "off" ? "Off" : notUsed ? "not used · Off" : `${fmt(p.temperature)}°`;
+      const bg = id === current ? `background:${esc(this._presetColor(P, id))};color:${id === "off" ? "#c8c8c8" : "#1c1c1c"}` : "";
+      return `<button class="choice" data-p="${esc(id)}" style="${bg}">${esc(p.name)}<small>${t}</small></button>`;
+    }).join("");
+  }
+
+  _tooMany() {
+    const bad = this._ed.days.map((b, d) => (merge(b).length > MAX_POINTS ? DAY_NAMES[d] : null)).filter(Boolean);
+    return bad.length ? `At most ${MAX_POINTS} switch points per day: ${bad.join(", ")}` : "";
+  }
+
+  _renderWide() {
+    const ed = this._ed;
+    const [sd, si] = ed.sel;
+    const b = ed.days[sd][si] || ed.days[sd][0];
+    const P = ed.P;
+    const palette = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
+    const tooMany = this._tooMany();
+    const html = `${this._head("Edit schedule", ed.label)}
+      <div class="edgrid">
+        <div>
+          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">Add a block: tap a preset, then tap a day</span>
+            ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
+          <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
+          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" data-d="${d}">${this._bars(blocks, P)}</div></div>`).join("")}</div>
+          <div class="hint" style="margin-top:8px">Tap a block to select it, then drag one of its handles: switch points snap to 15 minutes. Exact times are on the right.</div>
+        </div>
+        <div class="panel">
+          <div class="dsub">Selected block</div>
+          <div class="dtitle" style="font-size:16px">${DAY_NAMES[sd]} · ${hm(b[0])} to ${hm(b[1])}</div>
+          <div class="trow"><span class="hint">From</span><button class="adj" data-t="0" data-d="-1" aria-label="Start 15 minutes earlier"${si === 0 ? " disabled" : ""}>−</button><b>${hm(b[0])}</b><button class="adj" data-t="0" data-d="1" aria-label="Start 15 minutes later"${si === 0 ? " disabled" : ""}>+</button></div>
+          <div class="trow"><span class="hint">To</span><button class="adj" data-t="1" data-d="-1" aria-label="End 15 minutes earlier"${si === ed.days[sd].length - 1 ? " disabled" : ""}>−</button><b>${hm(b[1])}</b><button class="adj" data-t="1" data-d="1" aria-label="End 15 minutes later"${si === ed.days[sd].length - 1 ? " disabled" : ""}>+</button></div>
+          <div class="choices">${this._choicesHtml(b[2])}</div>
+          <div class="dbtns"><button class="btn copyday">Copy day to…</button><button class="btn rmblock"${ed.days[sd].length < 2 ? " disabled" : ""}>Remove block</button></div>
+          <div class="chips copyto" style="display:none">${DAY_NAMES.map((n, d) => d === sd ? "" : `<button class="chip${ed.also.has(d) ? " pick" : ""}" data-also="${d}">${n}</button>`).join("")}</div>
+          ${tooMany ? `<div class="warnline">${esc(tooMany)}</div>` : ""}
+          <div class="dbtns" style="margin-top:auto"><button class="btn cancel">Cancel</button><button class="btn primary save"${tooMany ? " disabled" : ""}>Save</button></div>
+        </div>
+      </div>`;
+    const keepCopy = this._dlg && this._dlg.querySelector(".copyto") && this._dlg.querySelector(".copyto").style.display !== "none";
+    this._openDialog(html, (d) => {
+      d.querySelector(".dbox").classList.add("wide");
+      if (keepCopy) d.querySelector(".copyto").style.display = "";
+      const bars = [...d.querySelectorAll(".bar")];
+      bars.forEach((bar) => {
+        const day = Number(bar.dataset.d);
+        bar.querySelectorAll("b").forEach((el) => el.classList.toggle("sel", day === sd && Number(el.dataset.i) === si));
+        bar.addEventListener("click", (ev) => {
+          if (this._dragging) return;
+          const m = this._minuteAt(bar, ev.clientX);
+          if (ed.tool) {
+            const from = Math.min(snap(m), 1440 - 60);
+            ed.days[day] = paint(ed.days[day], from, from + 60, ed.tool);
+            ed.sel = [day, ed.days[day].findIndex(([a, e]) => a <= from && from < e)];
+          } else {
+            ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, e]) => a <= m && m < e))];
+          }
+          this._renderWide();
+        });
+      });
+      // Handles on the selected block
+      const bar = bars[sd];
+      const blocks = ed.days[sd];
+      [[0, si > 0], [1, si < blocks.length - 1]].forEach(([edge, ok]) => {
+        if (!ok) return;
+        const h = document.createElement("button");
+        h.className = "h";
+        h.setAttribute("aria-label", `Drag ${edge ? "end" : "start"}, now ${hm(blocks[si][edge])}`);
+        h.style.left = `${(blocks[si][edge] / 1440) * 100}%`;
+        h.addEventListener("pointerdown", (ev) => this._dragStart(ev, bar, h, edge));
+        h.addEventListener("click", (ev) => ev.stopPropagation());
+        bar.appendChild(h);
+      });
+      d.querySelectorAll("[data-tool]").forEach((c) => c.addEventListener("click", () => {
+        ed.tool = ed.tool === c.dataset.tool ? null : c.dataset.tool;
+        this._renderWide();
+      }));
+      d.querySelectorAll(".trow .adj").forEach((btn) => btn.addEventListener("click", () => {
+        this._shift(Number(btn.dataset.t), Number(btn.dataset.d) * SNAP);
+        this._renderWide();
+      }));
+      d.querySelectorAll(".choice").forEach((c) => c.addEventListener("click", () => {
+        ed.days[sd][si][2] = c.dataset.p;
+        ed.days[sd] = merge(ed.days[sd]);
+        ed.sel = [sd, Math.min(si, ed.days[sd].length - 1)];
+        this._renderWide();
+      }));
+      d.querySelector(".rmblock").addEventListener("click", () => {
+        const bl = ed.days[sd];
+        bl[si][2] = si > 0 ? bl[si - 1][2] : bl[si + 1][2];
+        ed.days[sd] = merge(bl);
+        ed.sel = [sd, Math.max(0, si - 1)];
+        this._renderWide();
+      });
+      d.querySelector(".copyday").addEventListener("click", () => {
+        const box = d.querySelector(".copyto");
+        box.style.display = box.style.display === "none" ? "" : "none";
+      });
+      d.querySelectorAll("[data-also]").forEach((c) => c.addEventListener("click", () => {
+        const day = Number(c.dataset.also);
+        ed.days[day] = ed.days[sd].map((x) => x.slice());
+        c.classList.add("pick");
+        ed.also.add(day);
+        this._renderWide();
+      }));
+      d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
+      d.querySelector(".save").addEventListener("click", () => this._saveWeek());
+    });
+  }
+
+  _minuteAt(bar, x) {
+    const rect = bar.getBoundingClientRect();
+    const w = rect.width || 1;
+    return Math.max(0, Math.min(1439, ((x - rect.left) / w) * 1440));
+  }
+
+  // Move the selected block's start (edge 0) or end (edge 1), snapped and
+  // kept at least 15 minutes from its neighbours.
+  _shift(edge, delta, to = null) {
+    const ed = this._ed;
+    const [sd, si] = ed.sel;
+    const bl = ed.days[sd];
+    const b = bl[si];
+    if (edge === 0 && si > 0) {
+      const v = Math.min(Math.max(to === null ? b[0] + delta : to, bl[si - 1][0] + SNAP), b[1] - SNAP);
+      b[0] = v; bl[si - 1][1] = v;
+    }
+    if (edge === 1 && si < bl.length - 1) {
+      const v = Math.min(Math.max(to === null ? b[1] + delta : to, b[0] + SNAP), bl[si + 1][1] - SNAP);
+      b[1] = v; bl[si + 1][0] = v;
+    }
+  }
+
+  _dragStart(ev, bar, handle, edge) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    this._dragging = true;
+    if (handle.setPointerCapture && ev.pointerId !== undefined) handle.setPointerCapture(ev.pointerId);
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bar.appendChild(bubble);
+    const move = (e) => {
+      const m = snap(this._minuteAt(bar, e.clientX));
+      this._shift(edge, 0, m);
+      const v = this._ed.days[this._ed.sel[0]][this._ed.sel[1]][edge];
+      handle.style.left = bubble.style.left = `${(v / 1440) * 100}%`;
+      bubble.textContent = hm(v);
+      const blocks = this._ed.days[this._ed.sel[0]];
+      bar.querySelectorAll("b").forEach((el, i) => {
+        if (!blocks[i]) return;
+        el.style.left = `${(blocks[i][0] / 1440) * 100}%`;
+        el.style.width = `${((blocks[i][1] - blocks[i][0]) / 1440) * 100}%`;
+      });
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      setTimeout(() => { this._dragging = false; }, 0);
+      this._renderWide();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+  }
+
+  // Phone: one day as a list of switch points.
+  _renderList() {
+    const ed = this._ed;
+    const day = ed.day;
+    const P = ed.P;
+    const blocks = ed.days[day];
+    const options = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
+    const tooMany = this._tooMany();
+    const html = `${this._head(ed.label, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day])}
+      <div class="chips">${DAY_NAMES.map((n, d) => `<button class="chip${d === day ? " on" : ""}" data-day="${d}">${n}</button>`).join("")}</div>
+      <div><div class="bar" style="height:22px;cursor:default">${this._bars(blocks, P, false)}</div>
+        <div class="ticks" style="margin-left:0"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
+      <fieldset><legend>Switch points</legend><div class="pts">
+        ${blocks.map(([a, , p], i) => `<div class="pt" data-i="${i}">
+          <input type="time" step="900" aria-label="Time" value="${hm(a)}"${i === 0 ? " disabled" : ""}>
+          <select aria-label="Preset">${options.map((k) => `<option value="${esc(k)}"${k === p ? " selected" : ""}>${esc(P[k].name)}${k !== "off" && P[k].temperature === null ? " (not used: Off)" : ""}</option>`).join("")}</select>
+          <button class="rm" aria-label="Remove switch point"${i === 0 ? " disabled" : ""}><ha-icon icon="mdi:close"></ha-icon></button></div>`).join("")}
+      </div><button class="btn addpt" style="margin-top:6px">+ Add switch point</button></fieldset>
+      <fieldset><legend>Also use for</legend><div class="chips">${DAY_NAMES.map((n, d) => d === day ? "" : `<button class="chip${ed.also.has(d) ? " pick" : ""}" data-also="${d}">${n}</button>`).join("")}</div></fieldset>
+      ${tooMany ? `<div class="warnline">${esc(tooMany)}</div>` : ""}
+      <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary save"${tooMany ? " disabled" : ""}>Save${ed.also.size ? ` ${[day, ...ed.also].sort().map((d) => DAY_NAMES[d]).join(" + ")}` : ""}</button></div>`;
+    this._openDialog(html, (d) => {
+      const copyAlso = () => ed.also.forEach((o) => { ed.days[o] = ed.days[day].map((x) => x.slice()); });
+      d.querySelectorAll("[data-day]").forEach((c) => c.addEventListener("click", () => {
+        copyAlso();
+        ed.day = Number(c.dataset.day);
+        ed.also = new Set();
+        this._renderList();
+      }));
+      d.querySelectorAll(".pt").forEach((row) => {
+        const i = Number(row.dataset.i);
+        row.querySelector("select").addEventListener("change", (ev) => {
+          ed.days[day][i][2] = ev.target.value;
+          ed.days[day] = merge(ed.days[day]);
+          copyAlso();
+          this._renderList();
+        });
+        row.querySelector("input").addEventListener("change", (ev) => {
+          const m = snap(minutes(ev.target.value || "00:00"));
+          const bl = ed.days[day];
+          const lo = bl[i - 1][0] + SNAP;
+          const hi = i + 1 < bl.length ? bl[i + 1][0] - SNAP : 1440 - SNAP;
+          const v = Math.min(Math.max(m, lo), hi);
+          bl[i][0] = v; bl[i - 1][1] = v;
+          copyAlso();
+          this._renderList();
+        });
+        row.querySelector(".rm").addEventListener("click", () => {
+          const bl = ed.days[day];
+          bl[i - 1][1] = bl[i][1];
+          bl.splice(i, 1);
+          ed.days[day] = merge(bl);
+          copyAlso();
+          this._renderList();
+        });
+      });
+      d.querySelector(".addpt").addEventListener("click", () => {
+        const bl = ed.days[day];
+        const last = bl[bl.length - 1];
+        const at = Math.min(1440 - SNAP, snap(last[0] + Math.max(SNAP, (last[1] - last[0]) / 2)));
+        if (at > last[0]) {
+          const other = options.find((k) => k !== last[2]) || last[2];
+          ed.days[day] = paint(bl, at, last[1], other);
+        }
+        copyAlso();
+        this._renderList();
+      });
+      d.querySelectorAll("[data-also]").forEach((c) => c.addEventListener("click", () => {
+        const o = Number(c.dataset.also);
+        if (ed.also.has(o)) ed.also.delete(o);
+        else ed.also.add(o);
+        copyAlso();
+        this._renderList();
+      }));
+      d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
+      d.querySelector(".save").addEventListener("click", () => { copyAlso(); this._saveWeek(); });
+    });
+  }
+
+  async _saveWeek() {
+    const ed = this._ed;
+    if (this._tooMany()) return;
+    const ok = await this._call(INTEGRATION, "set_schedule", { entity_id: ed.entity, week: toWeek(ed.days) });
+    if (ok) this._closeDialog();
+  }
+
+  // Copy a room's week to other rooms; warn first about presets they don't use (#113).
+  _copyDialog(entityId) {
+    const s = this._state(entityId);
+    if (!s) return;
+    const week = s.attributes.schedule;
+    const P = presetMap(s.attributes);
+    const usedIds = new Set(weekBlocks(week).flat().map((b) => b[2]).filter((p) => p !== "off"));
+    const targets = this._houseRooms(this._rooms()).filter((r) => {
+      const t = this._state(r.entity);
+      return r.entity !== entityId && t && t.attributes.schedule_state !== undefined && t.state !== "unavailable";
+    });
+    const picked = new Set();
+    const render = () => {
+      const warn = [...picked].map((id) => {
+        const tp = presetMap(this._state(id).attributes);
+        const missing = [...usedIds].filter((p) => tp[p] && tp[p].temperature === null).map((p) => (P[p] ? P[p].name : p));
+        const name = targets.find((r) => r.entity === id).label;
+        return missing.length ? `${name} doesn't use ${missing.join(", ")}: that becomes Off there.` : null;
+      }).filter(Boolean);
+      const html = `${this._head("Copy schedule", `From ${(this._rows.get(entityId) || { room: { label: entityId } }).room.label} to`)}
+        <div class="chips">${targets.map((r) => `<button class="chip${picked.has(r.entity) ? " pick" : ""}" data-e="${esc(r.entity)}">${esc(r.label)}</button>`).join("")}</div>
+        ${warn.map((w) => `<div class="warnline">${esc(w)}</div>`).join("")}
+        <div class="hint">The rooms you pick get this week; their changes by hand end.</div>
+        <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary go"${picked.size ? "" : " disabled"}>${warn.length ? "Copy anyway" : "Copy"}</button></div>`;
+      this._openDialog(html, (d) => {
+        d.querySelectorAll("[data-e]").forEach((c) => c.addEventListener("click", () => {
+          if (picked.has(c.dataset.e)) picked.delete(c.dataset.e);
+          else picked.add(c.dataset.e);
+          render();
+        }));
+        d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
+        d.querySelector(".go").addEventListener("click", async () => {
+          for (const id of picked) await this._call(INTEGRATION, "set_schedule", { entity_id: id, week });
+          this._closeDialog();
+        });
+      });
+    };
+    render();
   }
 
   // ---------------------------------------------------------------- dialogs

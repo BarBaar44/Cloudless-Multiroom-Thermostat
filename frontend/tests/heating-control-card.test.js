@@ -494,6 +494,124 @@ test("a refused call shows its message", async () => {
   assert.strictEqual(msg, "Hallway has no schedule: make one or turn scheduling off");
 });
 
+/* ---------------- v2 editor ---------------- */
+
+const lastSchedule = (h) => {
+  const c = [...h.calls].reverse().find(([, s]) => s === "set_schedule");
+  return c && JSON.parse(JSON.stringify(c[2]));
+};
+
+test("week view: tabs, seven lanes, a lane opens the editor", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()), [OFFICE]: room("Office", 19, 19, sched()) });
+  const c = render(h);
+  assert.notStrictEqual(c._el.tabs.style.display, "none");
+  c.shadowRoot.querySelector('.tab[data-v="week"]').click();
+  assert.strictEqual(c._el.rooms.style.display, "none");
+  assert.strictEqual(c._el.weekv.querySelectorAll(".lane").length, 7);
+  assert.strictEqual(c._el.weekv.querySelectorAll(".lane")[0].querySelectorAll(".bar b").length, 3);
+  c._el.weekv.querySelectorAll(".lane")[2].click();
+  assert(c.shadowRoot.querySelector(".dlg .edgrid"), "wide editor");
+  assert(c.shadowRoot.querySelector(".dlg .panel .dtitle").textContent.startsWith("Wed"));
+});
+
+test("wide editor: move a switch point by 15 minutes, change a preset, save", async () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  // Select the Warm block (07:00 to 22:00) through the editor state, then step its start
+  c._ed.sel = [0, 1];
+  c._renderWide();
+  c.shadowRoot.querySelector('.trow .adj[data-t="0"][data-d="1"]').click();
+  assert(c.shadowRoot.querySelector(".panel .dtitle").textContent.includes("07:15 to 22:00"));
+  c.shadowRoot.querySelector('.choice[data-p="sleep"]').click();
+  c.shadowRoot.querySelector(".save").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const data = lastSchedule(h);
+  same(data.week[0], [{ time: "00:00", preset: "eco" }, { time: "07:15", preset: "sleep" }, { time: "22:00", preset: "eco" }]);
+  same(data.week[1], [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }]);
+  assert(!c.shadowRoot.querySelector(".dlg"), "closes after saving");
+});
+
+test("wide editor: palette paints a block, copy day, remove block", async () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c.shadowRoot.querySelector('[data-tool="off"]').click();
+  c.shadowRoot.querySelectorAll(".dlg .bar")[0].dispatchEvent(new w.MouseEvent("click", { bubbles: true, clientX: 0 }));
+  assert.strictEqual(c._ed.days[0][0][2], "off");
+  c.shadowRoot.querySelector(".copyday").click();
+  c.shadowRoot.querySelector('[data-also="6"]').click();
+  same(c._ed.days[6], c._ed.days[0]);
+  c._ed.sel = [0, 0];
+  c._renderWide();
+  assert(c.shadowRoot.querySelector(".rmblock").disabled === false);
+  c.shadowRoot.querySelector(".save").click();
+  await new Promise((r) => setTimeout(r, 0));
+  same(lastSchedule(h).week[6][0], { time: "00:00", preset: "off" });
+});
+
+test("more than 12 switch points on a day can't be saved", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c._ed.days[0] = Array.from({ length: 13 }, (_, i) => [i * 60, i === 12 ? 1440 : (i + 1) * 60, i % 2 ? "warm" : "eco"]);
+  c._renderWide();
+  assert(c.shadowRoot.querySelector(".save").disabled);
+  assert(c.shadowRoot.querySelector(".warnline").textContent.includes("Mon"));
+});
+
+test("phone: one day as a list, also for other days", async () => {
+  const before = w.innerWidth;
+  w.innerWidth = 400;
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 5);
+  w.innerWidth = before; // the other tests run on a wide screen
+  {
+    const d = c.shadowRoot.querySelector(".dlg");
+    assert(!d.querySelector(".edgrid"), "list, not the grid");
+    assert.strictEqual(d.querySelectorAll(".pt").length, 3);
+    const sel = d.querySelectorAll(".pt select")[1];
+    sel.value = "sleep";
+    sel.dispatchEvent(new w.Event("change"));
+    c.shadowRoot.querySelector('[data-also="6"]').click();
+    assert(c.shadowRoot.querySelector(".save").textContent.includes("Sat + Sun"));
+    const t = c.shadowRoot.querySelectorAll(".pt input")[1];
+    t.value = "08:10";
+    t.dispatchEvent(new w.Event("change"));
+    c.shadowRoot.querySelector(".save").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const week = lastSchedule(h).week;
+    same(week[5], [{ time: "00:00", preset: "eco" }, { time: "08:15", preset: "sleep" }, { time: "22:00", preset: "eco" }]);
+    same(week[6], week[5]);
+  }
+});
+
+test("copy to rooms warns about presets the other room doesn't use", async () => {
+  const sleepWeek = Array.from({ length: 7 }, () => [{ time: "07:00", preset: "warm" }, { time: "22:00", preset: "sleep" }]);
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 19, sched({ schedule: sleepWeek, presets: PRESETS(19, 16) })),
+    [OFFICE]: room("Office", 19, 19, sched({ presets: PRESETS(19, null) })),
+  });
+  const c = render(h);
+  c._copyDialog(LIVING);
+  c.shadowRoot.querySelector(`.dlg [data-e="${OFFICE}"]`).click();
+  assert(c.shadowRoot.querySelector(".warnline").textContent.includes("Office doesn't use Sleep"));
+  assert.strictEqual(c.shadowRoot.querySelector(".go").textContent, "Copy anyway");
+  c.shadowRoot.querySelector(".go").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const data = lastSchedule(h);
+  assert.strictEqual(data.entity_id, OFFICE);
+  same(data.week, sleepWeek);
+});
+
+test("the schedule line opens the editor", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c.shadowRoot.querySelector(".row .rsched").click();
+  assert(c.shadowRoot.querySelector(".dlg .edgrid"));
+});
+
 test("registers once, also when another copy of the card loaded first", () => {
   const before = w.customCards.length;
   w.eval(fs.readFileSync(CARD, "utf8").replace(/^const /gm, "var "));
