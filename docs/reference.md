@@ -56,7 +56,7 @@ The heating system is a device with these entities.
 | `delta` | Target minus temperature |
 | `present` | `false` while everybody is away (see [Away](away.md)) |
 
-**Learning features** add five sensors to the heating system when they are switched on: gas per degree-day, night prediction, last warm-up overshoot, PID advice and the learning features report. Their states and attributes are in [Learning features](experimental.md#maturity-at-a-glance). They also add diagnostic sensors with long-term statistics for the numbers worth following over a season (see [Long-term statistics](experimental.md#long-term-statistics)).
+**Learning features** add five sensors to the heating system when they are switched on: gas per degree-day, night prediction, last warm-up overshoot, PID advice and the learning features report. Their states and attributes are in [Learning features](experimental.md#where-each-feature-stands). They also add diagnostic sensors with long-term statistics for the numbers worth following over a season (see [Long-term statistics](experimental.md#long-term-statistics)).
 
 Attributes added since v1.9:
 

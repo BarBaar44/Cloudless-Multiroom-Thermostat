@@ -412,7 +412,7 @@ async def test_report_notification(hass: HomeAssistant) -> None:
     assert "no complete warm-up episodes today" in message
     assert "Night, Living" in message
     assert "set a gas meter and an outdoor sensor" in message
-    assert "Progress to stable:" in message
+    assert "Learning progress:" in message
     assert "Night model: 0 of 30 predicted nights" in message
     assert DOCS_EXPERIMENTAL_URL in message
     assert kw["notification_id"].endswith("_report")
@@ -1512,11 +1512,11 @@ async def test_report_sensor_and_events_only(hass: HomeAssistant) -> None:
     assert len(created) == 1
     message, kw = created[0]
     assert "max flow 47.5 -> 40 degC" in message
-    assert "Progress to stable" not in message  # events only, not the report
+    assert "Learning progress" not in message  # events only, not the report
     assert "learning features report" not in kw["title"]
     state = hass.states.get("sensor.heating_learning_features_report")
     assert state.attributes["device_class"] == "timestamp"
-    assert "Progress to stable:" in state.attributes["text"]
+    assert "Learning progress:" in state.attributes["text"]
     assert state.attributes["events"] == [
         "- Boiler settings changed since the last report: max flow 47.5 -> 40 degC"
     ]
@@ -1543,7 +1543,7 @@ async def test_notify_off_but_manual_report_posts(hass: HomeAssistant) -> None:
         await runner._async_scheduled_report()
         assert created == []
         await hass.services.async_call(DOMAIN, "experimental_report", {}, blocking=True)
-    assert len(created) == 1 and "Progress to stable:" in created[0]
+    assert len(created) == 1 and "Learning progress:" in created[0]
 
 
 async def test_report_sensor_restored_after_reload(hass: HomeAssistant) -> None:
@@ -1567,8 +1567,8 @@ def test_maturity_events() -> None:
     }
     assert progress.maturity_events(None, status) == []  # first report: nothing to compare
     assert progress.maturity_events({"gas": False, "night": True, "pid": False}, status) == [
-        "- Gas per degree-day: ready to become stable",
-        "- Night model: no longer ready for stable",
+        "- Gas per degree-day: proven",
+        "- Night model: needs more data again",
     ]
 
 

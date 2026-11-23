@@ -1,4 +1,4 @@
-"""Progress of the experimental features towards stable."""
+"""Learning progress of the learning features: when each one is proven."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def test_night_progress_only_the_bands_that_occur() -> None:
     assert "2 of 2 outdoor bands confirmed" in p["text"]
     assert "below 0 °C: 2 of 5 nights (not confirmed yet)" in p["text"]
     assert p["bands"]["below_0"]["ok"] is False and p["bands"]["0_8"]["ok"] is True
-    # A band that occurs and doesn't hold blocks stable
+    # A band that occurs and doesn't hold blocks proven
     bad = nights[:-2] + [_night(28, 0.7, 4.0)] * 2
     p = progress.night_progress(bad)
     assert not p["done"] and "(a night off by more than 0.6)" in p["text"]
