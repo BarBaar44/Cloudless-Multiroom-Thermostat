@@ -197,3 +197,12 @@ async def test_change_by_hand_beats_sun_assist(hass: HomeAssistant, sunny_house,
     await hass.async_block_till_done()
     living = _room(hass, "living")
     assert living["temperature"] == 21.0 and living["sun_assist"] is None
+
+
+async def test_started_after_the_check_time_warms_up(hass: HomeAssistant, sunny_house, freezer) -> None:
+    """HA (re)started in the afternoon: a morning switch point is not decided late."""
+    calls = _forecast(hass, "sunny")
+    await _schedule(hass, "climate.living", WEEK)
+    await _at(hass, freezer, SEVEN + timedelta(hours=4))  # 11:00, past the 10:00 check
+    assert not calls
+    assert _room(hass, "living")["temperature"] == 19.0

@@ -125,7 +125,9 @@ class SunAssist:
         key = instant.isoformat()
         rec = state.get(room.room_id)
         if rec is None or rec.get("point") != key:
-            rec = {"point": key, "status": PENDING, "check_at": None}
+            # Started up after the check time of a morning switch point: too late to wait
+            late = now >= instant + self.check_delay
+            rec = {"point": key, "status": STARTED if late else PENDING, "check_at": None}
             state[room.room_id] = rec
             self.scheduler.store.async_delay_save()
         retry_due = (

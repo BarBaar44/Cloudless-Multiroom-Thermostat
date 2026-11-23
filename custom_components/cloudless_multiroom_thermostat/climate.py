@@ -57,7 +57,8 @@ async def async_setup_entry(
 ) -> None:
     controller = entry.runtime_data
     for sub_id, sub in entry.subentries.items():
-        if sub.subentry_type != SUBENTRY_ROOM:
+        # A room added while this setup was running is in the next one (the add reloads)
+        if sub.subentry_type != SUBENTRY_ROOM or sub_id not in controller.rooms:
             continue
         async_add_entities(
             [RoomClimate(controller, controller.rooms[sub_id])],

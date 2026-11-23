@@ -41,17 +41,13 @@ from .scheduler import issue_ids
 
 _LOGGER = logging.getLogger(__name__)
 
-# What v2.0.0 changes or removes (#111). Logged once per Home Assistant run.
-V2_SCHEDULE_NOTICE = (
-    "Cloudless Multiroom Thermostat v2.0.0 will need a schedule for every room: "
-    "a room without one holds 15 °C until you make a schedule or turn scheduling off for it. "
-    "See Coming: v2.0 in the upgrading docs (docs/upgrading.md)"
-)
+# What a coming version changes or removes (#111). Logged once per Home Assistant run.
+# The schedule notice went with v2.0.0 itself; the report moves to v2.1 (2026-11-23).
 V2_REPORT_NOTICE = (
-    "Cloudless Multiroom Thermostat v2.0.0 removes the 21:00 evening report, the Learning features "
+    "Cloudless Multiroom Thermostat v2.1.0 removes the 21:00 evening report, the Learning features "
     "report sensor, the Evening notification option and the experimental_report service; "
     "the learning features move to live sensors and a learning view in the card. "
-    "See Coming: v2.0 in the upgrading docs (docs/upgrading.md)"
+    "See the upgrading docs (docs/upgrading.md)"
 )
 _NOTICES_LOGGED: set[str] = set()
 
@@ -198,7 +194,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> bool:
     controller = HeatingController(hass, entry)
     entry.runtime_data = controller
-    _log_v2_notice(V2_SCHEDULE_NOTICE)
     if controller.settings.get(CONF_EXPERIMENTAL):
         _log_v2_notice(V2_REPORT_NOTICE)
         from .experimental.runner import ExperimentalRunner  # noqa: PLC0415
