@@ -44,3 +44,8 @@ The heating system's **Winning room** sensor has a `present` attribute; each roo
 **I have visitors Home Assistant doesn't track.** With an input boolean as the presence entity you can switch it on by hand. Otherwise pick **Lower rooms to eco** so the house doesn't go cold. A guest mode is planned for v2.0, see the [roadmap](../ROADMAP.md).
 
 **Does it change my presets or targets?** No. Away only changes what is sent to the heat source and the TRVs while nobody is home.
+
+## Guest mode
+
+**Someone is home (guest mode)** is a switch on the heating system: while it is on, the house counts as occupied whatever presence says, so every room runs its schedule and changes by hand stay. For visitors Home Assistant doesn't track. Turn it on from the switch, or with the `set_guest_mode` action, which also takes an end time (`until`) or a `duration`. When it ends while nobody is home, away starts then: changes by hand end, except those kept when away. The end time is in the switch's `until` attribute.
+

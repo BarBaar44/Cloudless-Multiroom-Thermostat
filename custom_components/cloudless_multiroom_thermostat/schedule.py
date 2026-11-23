@@ -12,6 +12,7 @@ Layout of the data (schema version 1):
       "overrides": {room_id: {...}},
       "suspended": false,
       "unsuspended": [room_id, ...],   # taken out of the suspend by a change by hand
+      "guest": None | {"until": iso | None},  # someone is home, whatever presence says
     }
 
 A point is {"time": "HH:MM", "preset": preset_id | "off", "mode": "at"}.
@@ -178,6 +179,7 @@ def empty_data() -> dict[str, Any]:
         "overrides": {},
         "suspended": False,
         "unsuspended": [],
+        "guest": None,
     }
 
 
@@ -218,6 +220,11 @@ def validate_data(data: Any) -> dict[str, Any]:
     if not isinstance(unsuspended, list):
         raise ScheduleError("Rooms taken out of the suspend must be a list")
     clean["unsuspended"] = [str(r) for r in unsuspended] if clean["suspended"] else []
+    guest = data.get("guest")
+    if guest is not None:
+        if not isinstance(guest, Mapping) or not (guest.get("until") is None or isinstance(guest["until"], str)):
+            raise ScheduleError("Guest mode must be an object with an optional end time")
+        clean["guest"] = {"until": guest.get("until")}
     return clean
 
 

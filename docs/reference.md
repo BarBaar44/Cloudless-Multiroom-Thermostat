@@ -8,6 +8,7 @@ Each room is a device with these entities.
 
 | Entity | What it is |
 |---|---|
+| `switch.<system>_someone_is_home_guest_mode` | Guest mode: on, the house counts as occupied whatever presence says. Attribute `until`. See [Away](away.md#guest-mode) |
 | `climate.<room>` | The room's virtual thermostat: Heat/Off, target, presets **Eco** and **Warm** (a target set by hand shows as **Manual**). Mode, preset and target survive a restart |
 | `binary_sensor.<room>_paused` | On while the room is set to heat but held off |
 | `binary_sensor.<room>_window` | Only with window sensors: open or closed after the open and close delays, as the heating sees it |
@@ -74,6 +75,7 @@ Attributes added since v1.9:
 | `cloudless_multiroom_thermostat.set_schedule` | room climate; `week`, `scheduling` | Save a room's week schedule, or turn scheduling on or off. See [Schedules](schedules.md#actions) |
 | `cloudless_multiroom_thermostat.set_override` | room climate; `temperature` or `preset`, `until` or `duration`, `keep_when_away` | A change by hand on a room with a schedule. See [Schedules](schedules.md#changes-by-hand) |
 | `cloudless_multiroom_thermostat.resume_schedule` | room climate | End a change by hand: back to the schedule |
+| `cloudless_multiroom_thermostat.set_guest_mode` | `on` (default true), `until` or `duration`, `config_entry_id` (optional) | Someone is home: presence is ignored until switched off or the end. See [Away](away.md#guest-mode) |
 | `cloudless_multiroom_thermostat.suspend_schedules` | `config_entry_id` (optional) | Rooms with a schedule hold the Temperature without schedule |
 | `cloudless_multiroom_thermostat.resume_schedules` | `config_entry_id` (optional) | Rooms follow their schedules again |
 | `cloudless_multiroom_thermostat.experimental_report` | `config_entry_id` (optional) | Post the learning features report now |

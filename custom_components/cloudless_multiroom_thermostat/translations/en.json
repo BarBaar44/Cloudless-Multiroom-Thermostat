@@ -318,6 +318,16 @@
       "paused": {
         "name": "Paused"
       }
+    },
+    "switch": {
+      "guest_mode": {
+        "name": "Someone is home (guest mode)",
+        "state_attributes": {
+          "until": {
+            "name": "Until"
+          }
+        }
+      }
     }
   },
   "services": {
@@ -412,6 +422,28 @@
           "description": "Off (default): the change ends when everyone leaves. On: it stays, also while everyone is away (for a visitor Home Assistant doesn't track)."
         }
       }
+    },
+    "set_guest_mode": {
+      "name": "Set guest mode",
+      "description": "Treat the house as occupied, whatever presence says, so every room runs its schedule (for visitors Home Assistant doesn't track).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Heating system",
+          "description": "Optional. Only this heating system."
+        },
+        "on": {
+          "name": "On",
+          "description": "On (default) or off."
+        },
+        "until": {
+          "name": "Until",
+          "description": "Optional end time. Without it, guest mode stays on until switched off."
+        },
+        "duration": {
+          "name": "For",
+          "description": "Instead of an end time: for this long."
+        }
+      }
     }
   },
   "exceptions": {
@@ -432,6 +464,9 @@
     },
     "scheduling_off": {
       "message": "{room} has scheduling off: set its target or preset directly"
+    },
+    "guest_end_in_past": {
+      "message": "The end time of guest mode is in the past"
     }
   },
   "issues": {
