@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Storage for schedules and presets (#112, #113, groundwork for v2.0):** each heating system gets a schedule file (`.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`), and from now on the only place each room's Eco and Warm temperatures are kept: on the first start they move there from the room settings. The room form still shows and edits them. Versioned from the start: a copy is kept before every future migration, and a file written by a newer version is never overwritten. Nothing acts on it yet; the heating works exactly as before.
+
 ## 1.9.2
 
 Two more observe only models for v2, both from the daytime reheats (top-ups) that keep a warm room on target: how far a room keeps rising after the burner stops, and the flow temperature the house needs per outdoor band. Nothing changes in how the house heats, and there are no new fields or `thermostat.yaml` changes. Both show up in the evening report once the learning features are on.

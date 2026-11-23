@@ -432,6 +432,9 @@ async def test_add_room_two_steps(hass: HomeAssistant, setup) -> None:
     await hass.async_block_till_done()
     sub = next(s for s in entry.subentries.values() if s.title == "Attic")
     assert sub.data["target_temp_step"] == 0.5 and "area" not in sub.data
+    # Eco and Warm live in the schedule file only (#112)
+    assert "warm_temperature" not in sub.data
+    assert entry.runtime_data.schedules.data["temperatures"][sub.subentry_id] == {"eco": 15.0, "warm": 18.0}
     assert hass.states.get("climate.attic") is not None
 
 
@@ -454,7 +457,7 @@ async def test_edit_room_keeps_device_area_set_in_ha(hass: HomeAssistant, setup)
     result = await flows.async_configure(result["flow_id"], SENSOR_STEP)
     assert result["type"] is FlowResultType.ABORT and result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
-    assert entry.subentries[office.subentry_id].data["warm_temperature"] == 21.0
+    assert entry.runtime_data.rooms[office.subentry_id].warm_temp == 21.0  # kept in the schedule file (#112)
     assert devices.async_get_device_by_identifier((DOMAIN, office.subentry_id), entry.entry_id).area_id == study.id
 
 

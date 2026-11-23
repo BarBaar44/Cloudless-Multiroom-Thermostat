@@ -13,13 +13,18 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    CONF_ECO_TEMP,
     CONF_EXPERIMENTAL,
+    CONF_WARM_TEMP,
+    DEFAULT_ECO_TEMP,
+    DEFAULT_WARM_TEMP,
     DOMAIN,
     SERVICE_EXPERIMENTAL_REPORT,
     SERVICE_SET_ALL_OFF,
 )
 from .controller import HeatingController
 from .frontend import async_remove_frontend, async_setup_frontend
+from .schedule_store import ScheduleStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,12 +113,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> bool:
     )
     controller.system_device_id = system_device.id
 
+    await _async_load_schedules(hass, entry, controller)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await controller.async_start()
     if controller.experimental is not None:
         await _async_start_learning(controller)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
+
+
+async def _async_load_schedules(hass: HomeAssistant, entry: CMTConfigEntry, controller: HeatingController) -> None:
+    """Load the v2 schedule data (#112) and make it the only home of the preset temperatures.
+
+    Eco and Warm handed over by the room form (Add room, Edit room) or left by
+    v1 move into the schedule file and are then removed from the room. This
+    runs before the update listener is added, so removing them doesn't reload.
+    Nothing acts on schedules yet. A problem here stops scheduling, never the
+    heating: the values then stay with the room until the file can be used.
+    """
+    store = ScheduleStore(hass, entry.entry_id)
+    controller.schedules = store
+    await store.async_load(
+        {
+            room_id: (room.config.get(CONF_ECO_TEMP), room.config.get(CONF_WARM_TEMP))
+            for room_id, room in controller.rooms.items()
+        },
+        (DEFAULT_ECO_TEMP, DEFAULT_WARM_TEMP),
+    )
+    if store.blocked is not None:
+        return
+    for room_id, room in controller.rooms.items():
+        room.preset_temps = store.temperatures(room_id)
+        if CONF_ECO_TEMP in room.config or CONF_WARM_TEMP in room.config:
+            room.config = {k: v for k, v in room.config.items() if k not in (CONF_ECO_TEMP, CONF_WARM_TEMP)}
+            hass.config_entries.async_update_subentry(entry, entry.subentries[room_id], data=room.config)
 
 
 async def _async_start_learning(controller: HeatingController) -> None:
@@ -144,6 +178,7 @@ async def _async_reload(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
-    """Remove the card's dashboard resource with the last heating system."""
+    """Remove the system's schedules, and the card's dashboard resource with the last system."""
+    await ScheduleStore(hass, entry.entry_id).async_remove()
     if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
         await async_remove_frontend(hass)

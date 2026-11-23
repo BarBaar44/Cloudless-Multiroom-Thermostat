@@ -136,19 +136,28 @@ class Room:
     manual_pause: bool = False
     window_open: bool = False
     current: float | None = None
+    # Preset temperatures from the schedule file (#112), the only place they are
+    # kept. None while that file can't be used: then a value the room form
+    # handed over and that couldn't be moved yet, else the default.
+    preset_temps: dict[str, float | None] | None = None
     _window_timer: CALLBACK_TYPE | None = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
         return self.config[CONF_ROOM_NAME]
 
+    def _preset_temp(self, preset: str, key: str, default: float) -> float:
+        if self.preset_temps is not None and self.preset_temps.get(preset) is not None:
+            return float(self.preset_temps[preset])
+        return float(self.config.get(key, default))
+
     @property
     def eco_temp(self) -> float:
-        return float(self.config.get(CONF_ECO_TEMP, DEFAULT_ECO_TEMP))
+        return self._preset_temp(PRESET_ECO, CONF_ECO_TEMP, DEFAULT_ECO_TEMP)
 
     @property
     def warm_temp(self) -> float:
-        return float(self.config.get(CONF_WARM_TEMP, DEFAULT_WARM_TEMP))
+        return self._preset_temp(PRESET_WARM, CONF_WARM_TEMP, DEFAULT_WARM_TEMP)
 
     @property
     def buffer(self) -> float:
@@ -170,6 +179,7 @@ class HeatingController:
         self.winner = Winner(None, WINNER_OFF, self.off_temp, None, 0.0)
         self.present = True
         self.experimental: Any = None  # ExperimentalRunner when enabled in options
+        self.schedules: Any = None  # ScheduleStore, loaded in async_setup_entry (#112)
         self.system_device_id: str | None = None  # set in async_setup_entry
         self._unsubs: list[CALLBACK_TYPE] = []
         self._sent: dict[str, tuple[Any, float]] = {}
