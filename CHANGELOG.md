@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.9.2
+
+Two more observe only models for v2, both from the daytime reheats (top-ups) that keep a warm room on target: how far a room keeps rising after the burner stops, and the flow temperature the house needs per outdoor band. Nothing changes in how the house heats, and there are no new fields or `thermostat.yaml` changes. Both show up in the evening report once the learning features are on.
 
 - **Hold profile: coast after top-ups (#163):** each daytime reheat (top-up) of a warm room now gets a record of its coast: how far the room keeps rising after the burner stopped, with the room against target at that moment, the dip before it, the burn and the hour. Modelled per room, time of day and outdoor band; every top-up is first predicted and then compared. Shown in the evening report and the report sensor's `hold` attribute; the kept samples from before are measured too. See [Hold profile](docs/experimental.md#hold-profile-coast-after-top-ups). Observe only: stopping a top-up early by the predicted coast comes after v2.0 (#164).
 
