@@ -9,7 +9,9 @@ Each room is in one of five schedule states:
   (15 °C by default); target and preset calls are refused;
 - off: scheduling off, the room is the user's (presets and targets as in v1);
 - suspended: schedules are suspended for the whole system; rooms with a
-  schedule hold the Temperature without schedule;
+  schedule hold the Temperature without schedule. A change by hand takes that
+  one room out of the suspend: it follows its schedule again, with the change
+  on top, until schedules are resumed (or suspended again);
 - blocked: the schedule file can't be used (newer version, broken); which
   rooms had scheduling off can't be known, so every room holds the
   Temperature without schedule.
@@ -106,7 +108,7 @@ class Scheduler:
             return SCHEDULE_NONE
         if entry["scheduling"] == SCHEDULING_OFF:
             return SCHEDULE_OFF
-        if data["suspended"]:
+        if data["suspended"] and room.room_id not in data["unsuspended"]:
             return SCHEDULE_SUSPENDED
         return SCHEDULE_ACTIVE
 
@@ -255,7 +257,9 @@ class Scheduler:
         if state == SCHEDULE_BLOCKED:
             raise _refuse("schedules_blocked", room=room.name)
         if state == SCHEDULE_SUSPENDED:
-            raise _refuse("schedules_suspended", room=room.name)
+            # A change by hand starts this room's schedule again (decided 2026-11-23)
+            self.data["unsuspended"].append(room.room_id)
+            return SCHEDULE_ACTIVE
         return state
 
     async def async_request_target(self, room: Room, target: float) -> None:
@@ -323,7 +327,8 @@ class Scheduler:
         data = self.data
         if data is None:
             raise _refuse("schedules_blocked", room=self.controller.entry.title)
-        if data["suspended"] != suspended:
+        if data["suspended"] != suspended or data["unsuspended"]:
             data["suspended"] = suspended
+            data["unsuspended"] = []
             await self.store.async_save()
         self.apply()

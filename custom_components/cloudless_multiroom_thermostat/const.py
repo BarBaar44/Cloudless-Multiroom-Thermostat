@@ -66,7 +66,7 @@ DEFAULT_STEP: Final = 0.5
 DEFAULT_ECO_TEMP: Final = 15.0
 DEFAULT_WARM_TEMP: Final = 19.0
 DEFAULT_NO_SCHEDULE_TEMP: Final = 15.0
-DEFAULT_INITIAL_SCHEDULE: Final = "warm"
+DEFAULT_INITIAL_SCHEDULE: Final = "eco"
 
 # Schedule state of a room (#114, #115), attribute schedule_state
 SCHEDULE_ACTIVE: Final = "active"

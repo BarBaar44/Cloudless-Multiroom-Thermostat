@@ -8,7 +8,7 @@ Always: from v2.0 every room has a schedule, or you turn scheduling off for a ro
 
 ## How to turn it on
 
-- **New rooms:** the last step of **Add room** asks how the room starts: one preset all day (Warm by default), or scheduling off.
+- **New rooms:** the last step of **Add room** asks how the room starts: one preset all day (Eco by default), or scheduling off.
 - **Rooms you already had:** they have no schedule after the upgrade and hold 15 °C. **Settings > Repairs** lists them. Give each one a schedule with the `set_schedule` action (the schedule editor in the Heating Control Card comes later in v2.0), or turn scheduling off for it.
 
 ## Settings
@@ -26,7 +26,7 @@ A schedule is a week, Monday first. Each day has up to 12 switch points on 15 mi
 | Has a schedule | Follows it. A target or preset set by hand lasts until the next schedule change (the next switch point to another preset; with one preset all day, until midnight) |
 | Has no schedule | Holds the Temperature without schedule. Setting a target or preset is refused with "has no schedule: make one or turn scheduling off" |
 | Scheduling off | Yours: presets, targets and your own automations work as before v2, nothing expires |
-| Schedules suspended | Rooms with a schedule hold the Temperature without schedule; rooms with scheduling off are not affected |
+| Schedules suspended | Rooms with a schedule hold the Temperature without schedule; rooms with scheduling off are not affected. A change by hand starts that one room's schedule again, with the change on top, until schedules are resumed |
 
 **Off is off:** a room switched off stays off whatever its schedule says. Switch it back to heat and it does what the schedule says at that moment. A switch point to **Off** is different: the room stays on heat and holds the off temperature until the next point.
 
@@ -46,7 +46,7 @@ Away, windows and pauses work on top of the schedule, as before. The schedule ke
 |---|---|---|
 | `cloudless_multiroom_thermostat.set_schedule` | a room climate | `week`: seven lists of `{time, preset}`, Monday first. `scheduling`: `on` (default) or `off`. Without `week`, turning on uses the schedule the room already had |
 | `cloudless_multiroom_thermostat.resume_schedule` | a room climate | Ends a change by hand: back to the schedule |
-| `cloudless_multiroom_thermostat.suspend_schedules` | optional heating system | Every room with a schedule holds the Temperature without schedule |
+| `cloudless_multiroom_thermostat.suspend_schedules` | optional heating system | Every room with a schedule holds the Temperature without schedule; a change by hand starts that room's schedule again |
 | `cloudless_multiroom_thermostat.resume_schedules` | optional heating system | Rooms follow their schedules again |
 
 Example, Warm from 07:00 to 22:00 every day:

@@ -11,6 +11,7 @@ Layout of the data (schema version 1):
       "rooms": {room_id: {"scheduling": "on" | "off", "week": [[point, ...] x 7]}},
       "overrides": {room_id: {...}},
       "suspended": false,
+      "unsuspended": [room_id, ...],   # taken out of the suspend by a change by hand
     }
 
 A point is {"time": "HH:MM", "preset": preset_id | "off", "mode": "at"}.
@@ -176,6 +177,7 @@ def empty_data() -> dict[str, Any]:
         "rooms": {},
         "overrides": {},
         "suspended": False,
+        "unsuspended": [],
     }
 
 
@@ -212,6 +214,10 @@ def validate_data(data: Any) -> dict[str, Any]:
         raise ScheduleError("Overrides must be an object per room")
     clean["overrides"] = copy.deepcopy(dict(overrides))  # shape is defined with #116
     clean["suspended"] = bool(data.get("suspended", False))
+    unsuspended = data.get("unsuspended", [])
+    if not isinstance(unsuspended, list):
+        raise ScheduleError("Rooms taken out of the suspend must be a list")
+    clean["unsuspended"] = [str(r) for r in unsuspended] if clean["suspended"] else []
     return clean
 
 
@@ -246,6 +252,7 @@ def sync_rooms(
     for key in ("temperatures", "rooms", "overrides"):
         for room_id in [r for r in data[key] if r not in rooms]:
             del data[key][room_id]
+    data["unsuspended"] = [r for r in data.get("unsuspended", []) if r in rooms]
     return data != before
 
 

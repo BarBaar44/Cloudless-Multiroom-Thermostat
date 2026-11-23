@@ -212,12 +212,28 @@ async def test_suspend_holds_15_for_scheduled_rooms_only(hass: HomeAssistant, ho
     assert _room(hass, "living")["schedule_state"] == "suspended"
     assert _room(hass, "living")["temperature"] == 15.0
     assert _room(hass, "office")["temperature"] == 20.0
-    with pytest.raises(ServiceValidationError) as err:
-        await _call(hass, "set_temperature", "climate.living", temperature=21)
-    assert err.value.translation_key == "schedules_suspended"
     await hass.services.async_call(DOMAIN, "resume_schedules", {}, blocking=True)
     await hass.async_block_till_done()
     assert _room(hass, "living")["temperature"] == 19.0
+
+
+async def test_change_by_hand_starts_that_rooms_schedule_while_suspended(hass: HomeAssistant, house, freezer) -> None:
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("22:00", "eco")))
+    await _schedule(hass, "climate.office", one_block_week("warm"))
+    await hass.services.async_call(DOMAIN, "suspend_schedules", {}, blocking=True)
+    await hass.async_block_till_done()
+    await _call(hass, "set_temperature", "climate.living", temperature=21)
+    living = _room(hass, "living")
+    assert living["schedule_state"] == "active" and living["temperature"] == 21.0
+    assert living["override_until"] == "2026-11-23T22:00:00+01:00"
+    assert _room(hass, "office")["schedule_state"] == "suspended"  # only that room
+    await _at(hass, freezer, datetime(2026, 11, 23, 21, 0, tzinfo=UTC))
+    assert _room(hass, "living")["temperature"] == 15.0  # its schedule: eco
+    # Suspending again takes every room back in
+    await hass.services.async_call(DOMAIN, "resume_schedules", {}, blocking=True)
+    await hass.services.async_call(DOMAIN, "suspend_schedules", {}, blocking=True)
+    await hass.async_block_till_done()
+    assert _room(hass, "living")["schedule_state"] == "suspended"
 
 
 async def test_scheduling_off_is_v1(hass: HomeAssistant, house) -> None:

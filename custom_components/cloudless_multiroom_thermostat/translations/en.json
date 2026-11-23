@@ -38,7 +38,7 @@
           "away_mode": "Rooms that are set to heat go off, or are lowered to their eco temperature.",
           "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
           "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours).",
-          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended. Make a schedule or turn scheduling off for each room."
+          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room."
         }
       }
     }
@@ -69,7 +69,7 @@
           "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
           "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours).",
           "experimental": "They learn how the house and boiler behave: warm-up and PID advice, night cooldown prediction, gas per degree-day and an evening report. Observe only: they never change the heating. On: the next page asks for the entities they use. What each feature does and how mature it is: [Learning features]({docs_url})",
-          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended. Make a schedule or turn scheduling off for each room."
+          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room."
         }
       },
       "experimental": {
@@ -369,7 +369,7 @@
     },
     "suspend_schedules": {
       "name": "Suspend schedules",
-      "description": "Every room with a schedule holds the temperature without schedule until schedules are resumed.",
+      "description": "Every room with a schedule holds the temperature without schedule until schedules are resumed. A change by hand starts that room's schedule again.",
       "fields": {
         "config_entry_id": {
           "name": "Heating system",
@@ -394,9 +394,6 @@
     },
     "schedules_blocked": {
       "message": "Schedules can't be used right now (see Repairs), so {room} can't be changed"
-    },
-    "schedules_suspended": {
-      "message": "Schedules are suspended, so {room} holds the temperature without schedule: resume schedules first"
     },
     "unknown_preset": {
       "message": "Unknown preset {preset}"
