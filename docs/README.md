@@ -6,6 +6,7 @@
 | [How it works](how-it-works.md) | A virtual thermostat in every room, the winner and the two tiers |
 | [Rooms](rooms.md) | Room settings, presets, rooms that only heat along, roles |
 | [Schedules](schedules.md) | Week schedules per room, rooms without a schedule, scheduling off |
+| [Sun assist](sun-assist.md) | Rooms that get sun wait for the sun on a sunny morning |
 | [Away](away.md) | What happens when everybody leaves |
 | [Windows](windows.md) | Open window detection per room |
 | [Heating Control Card](card.md) | The dashboard card and its options |

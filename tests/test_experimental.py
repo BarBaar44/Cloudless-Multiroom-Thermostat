@@ -131,7 +131,7 @@ async def test_options_enable_experimental(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.MENU and "experimental" not in result["menu_options"]
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "features"})
     assert DOCS_EXPERIMENTAL_URL == result["description_placeholders"]["docs_url"]
-    features = {"feature_presence": False, "feature_windows": False, "feature_guest_mode": False}
+    features = {"feature_presence": False, "feature_windows": False, "feature_guest_mode": False, "feature_sun_assist": False}
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**features, "experimental": True}
     )

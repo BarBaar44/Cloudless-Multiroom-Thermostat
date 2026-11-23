@@ -54,7 +54,7 @@ from .schedule import (
     SCHEDULING_OFF,
     SCHEDULING_ON,
     ScheduleError,
-    current_point,
+    current_occurrence,
     next_change,
     preset_ids,
     preset_temperature,
@@ -85,6 +85,9 @@ class Scheduler:
         self.hass = hass
         self.controller = controller
         self._timer: CALLBACK_TYPE | None = None
+        from .sun import SunAssist  # noqa: PLC0415
+
+        self.sun = SunAssist(hass, self)
 
     # ------------------------------------------------------------- reading
     @property
@@ -196,6 +199,7 @@ class Scheduler:
                 else dt_util.as_local(dt_util.parse_datetime(override["until"])).isoformat(),
                 "keep_when_away": bool(override.get("keep_away")),
             },
+            "sun_assist": self.sun.attributes(room) if self.state(room) == SCHEDULE_ACTIVE and override is None else None,
             "next_change": None
             if change is None
             else {"at": dt_util.as_local(change[0]).isoformat(), "preset": change[1]},
@@ -229,9 +233,12 @@ class Scheduler:
                 if override is not None:
                     room.target, room.preset = float(override["target"]), override.get("preset")
                     continue
-                point = current_point(self.data["rooms"][room.room_id]["week"], now, self.tz)
+                instant, point = current_occurrence(self.data["rooms"][room.room_id]["week"], now, self.tz)
                 room.preset = point["preset"]
                 room.target = self.preset_temp(room, point["preset"])
+                hold = self.sun.hold_for(room, instant, room.target, now)
+                if hold is not None:
+                    room.target = hold  # the preset waits for the sun (#118)
             else:
                 room.target, room.preset = self.no_schedule_temp, None
         self._update_repairs()
@@ -268,6 +275,7 @@ class Scheduler:
             override = self.override(room, now)
             if override is not None and override.get("until") is not None:
                 moments.append(dt_util.parse_datetime(override["until"]))
+        moments.extend(m for m in self.sun.moments() if m > now)
         guest = self.guest(now)
         if guest is not None and guest.get("until") is not None:
             moments.append(dt_util.parse_datetime(guest["until"]))

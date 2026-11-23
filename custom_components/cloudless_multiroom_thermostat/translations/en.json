@@ -128,7 +128,8 @@
           "settings": "System settings",
           "features": "Features",
           "presence": "Presence and away",
-          "experimental": "Learning features"
+          "experimental": "Learning features",
+          "sun_assist": "Sun assist"
         }
       },
       "settings": {
@@ -170,13 +171,45 @@
           "feature_presence": "Presence and away",
           "feature_windows": "Windows",
           "feature_guest_mode": "Guest mode",
-          "experimental": "Learning features (observe only)"
+          "experimental": "Learning features (observe only)",
+          "feature_sun_assist": "Sun assist"
         },
         "data_description": {
           "feature_presence": "Rooms go off or to eco when everybody leaves, and changes by hand end. Needs a presence entity.",
           "feature_windows": "A room pauses while a window or door in it is open. Window sensors are set per room.",
           "feature_guest_mode": "A Someone is home switch that ignores presence, for visitors Home Assistant doesn't track.",
-          "experimental": "Learn how the house heats: warm-ups, nights, gas use, PID advice. They change nothing unless you allow it."
+          "experimental": "Learn how the house heats: warm-ups, nights, gas use, PID advice. They change nothing unless you allow it.",
+          "feature_sun_assist": "On a sunny morning, rooms that get sun wait for the sun instead of warming up, unless it is still dark at the check."
+        }
+      },
+      "sun_assist": {
+        "title": "Sun assist",
+        "description": "A switch point in the morning window to a preset warmer than the hold temperature, in a room that gets sun: on a sunny (and mild) forecast the room holds the hold temperature instead. At the check the preset starts when the room is still cold, or when the lux sensor still reads dark; otherwise the room keeps waiting for the sun until its next switch point. A forecast that can't be read warms up as scheduled and is tried again twice, an hour apart.",
+        "data": {
+          "sun_forecast": "Weather forecast",
+          "sun_conditions": "Counts as sunny",
+          "sun_rooms": "Rooms that get sun",
+          "sun_hold_temperature": "Hold temperature",
+          "sun_window_start": "Morning window from",
+          "sun_window_end": "Morning window until",
+          "sun_lux_sensor": "Lux sensor",
+          "sun_dark_below": "Still dark below",
+          "sun_check_delay": "Check after",
+          "sun_mild_above": "Only when the forecast is above",
+          "sun_cold_below": "Still cold below"
+        },
+        "data_description": {
+          "sun_forecast": "The hourly forecast from the switch point to the check time decides: sunny when at least half of those hours are in Counts as sunny.",
+          "sun_conditions": "Forecast conditions that count as sunny.",
+          "sun_rooms": "Only these rooms wait for the sun.",
+          "sun_hold_temperature": "Held instead of the preset while waiting. Presets at or below it are not affected.",
+          "sun_window_start": "Switch points from this time on can wait for the sun.",
+          "sun_window_end": "Switch points from this time on never wait.",
+          "sun_lux_sensor": "Optional. At the check the preset also starts when it reads dark.",
+          "sun_dark_below": "With a lux sensor: dark below this (or when it can't be read).",
+          "sun_check_delay": "Time after the switch point when the room (and the lux sensor) is checked. Once.",
+          "sun_mild_above": "Today's forecast high must be above this as well. Leave empty for no temperature condition.",
+          "sun_cold_below": "At the check the preset starts when the room is below this."
         }
       }
     }
@@ -285,6 +318,18 @@
         "eco": "Eco all day",
         "warm": "Warm all day",
         "scheduling_off": "Scheduling off: I control this room myself"
+      }
+    },
+    "sun_conditions": {
+      "options": {
+        "sunny": "Sunny",
+        "partlycloudy": "Partly cloudy",
+        "clear-night": "Clear night",
+        "cloudy": "Cloudy",
+        "fog": "Fog",
+        "rainy": "Rainy",
+        "snowy": "Snowy",
+        "windy": "Windy"
       }
     }
   },

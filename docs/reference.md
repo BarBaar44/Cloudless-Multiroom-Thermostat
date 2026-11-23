@@ -29,6 +29,7 @@ Each room is a device with these entities.
 | `next_change` | Next schedule change: `at` (local time) and `preset`, or none |
 | `override` | The change by hand in force: `target`, `preset`, `until` (local time, none for until I change it) and `keep_when_away`, or none |
 | `override_until` | When a change by hand ends (local time), or none |
+| `sun_assist` | While the preset waits for the sun: `status` (`pending`, `holding`), `hold`, `check_at` (local time), or none. See [Sun assist](sun-assist.md) |
 
 The room's `hvac_action` is heating while it is the winner or a passenger and the heat source runs, idle otherwise, and off while it is off or paused.
 

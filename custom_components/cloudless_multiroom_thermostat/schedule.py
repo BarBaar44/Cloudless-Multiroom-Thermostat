@@ -13,6 +13,7 @@ Layout of the data (schema version 1):
       "suspended": false,
       "unsuspended": [room_id, ...],   # taken out of the suspend by a change by hand
       "guest": None | {"until": iso | None},  # someone is home, whatever presence says
+      "sun": {room_id: {"point": iso, "status": ..., "check_at": iso | None}},  # sun assist
     }
 
 A point is {"time": "HH:MM", "preset": preset_id | "off", "mode": "at"}.
@@ -180,6 +181,7 @@ def empty_data() -> dict[str, Any]:
         "suspended": False,
         "unsuspended": [],
         "guest": None,
+        "sun": {},
     }
 
 
@@ -225,6 +227,19 @@ def validate_data(data: Any) -> dict[str, Any]:
         if not isinstance(guest, Mapping) or not (guest.get("until") is None or isinstance(guest["until"], str)):
             raise ScheduleError("Guest mode must be an object with an optional end time")
         clean["guest"] = {"until": guest.get("until")}
+    sun = data.get("sun", {})
+    if isinstance(sun, Mapping):  # sun assist decisions: dropped rather than refused when odd
+        clean["sun"] = {
+            str(rid): {
+                "point": rec["point"],
+                "status": rec["status"],
+                "check_at": rec.get("check_at"),
+                **({"retries": int(rec["retries"]), "retry_at": rec.get("retry_at")} if "retries" in rec else {}),
+            }
+            for rid, rec in sun.items()
+            if isinstance(rec, Mapping) and isinstance(rec.get("point"), str)
+            and rec.get("status") in ("pending", "holding", "started")
+        }
     return clean
 
 
@@ -256,8 +271,8 @@ def sync_rooms(
                 row[pid] = float(value)
             elif new or row[pid] is None:
                 row[pid] = float(default)
-    for key in ("temperatures", "rooms", "overrides"):
-        for room_id in [r for r in data[key] if r not in rooms]:
+    for key in ("temperatures", "rooms", "overrides", "sun"):
+        for room_id in [r for r in data.setdefault(key, {}) if r not in rooms]:
             del data[key][room_id]
     data["unsuspended"] = [r for r in data.get("unsuspended", []) if r in rooms]
     return data != before
@@ -305,12 +320,19 @@ def occurrences(
     return out
 
 
+def current_occurrence(
+    week: list[list[Mapping[str, Any]]], now: datetime, tz: tzinfo
+) -> tuple[datetime, Mapping[str, Any]]:
+    """The switch point in force now and the instant it started (also over midnight)."""
+    past = [item for item in occurrences(week, now, tz) if item[0] <= now]
+    return past[-1]  # a week has at least one point, and last week is in the list
+
+
 def current_point(
     week: list[list[Mapping[str, Any]]], now: datetime, tz: tzinfo
 ) -> Mapping[str, Any]:
     """The switch point in force now (the last one at or before now, also over midnight)."""
-    past = [point for instant, point in occurrences(week, now, tz) if instant <= now]
-    return past[-1]  # a week has at least one point, and last week is in the list
+    return current_occurrence(week, now, tz)[1]
 
 
 def next_change(

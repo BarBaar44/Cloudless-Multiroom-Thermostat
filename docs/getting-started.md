@@ -104,10 +104,11 @@ More rooms: **Add room** on the integration page; the gear next to a room edits 
   |---|---|
   | Presence and away | Rooms go off or to eco when everybody leaves. Opens its own page. See [Away](away.md) |
   | Windows | A room pauses while a window in it is open; the window fields appear in the room form. See [Windows](windows.md) |
+  | Sun assist | On a sunny morning, rooms that get sun wait for the sun. Opens its own page. See [Sun assist](sun-assist.md) |
   | Guest mode | A *Someone is home* switch that ignores presence. See [Guest mode](away.md#guest-mode) |
   | Learning features | Learn how the house heats. Opens its own page. See [Learning features](experimental.md) |
 
-- A page for each feature that is on and has settings (Presence and away, Learning features).
+- A page for each feature that is on and has settings (Presence and away, Sun assist, Learning features).
 
 Upgraded from before the Features page? Features you used stay on: a presence entity set means Presence and away is on, a room with window sensors means Windows is on.
 
