@@ -13,7 +13,8 @@ from homeassistant.util import dt as dt_util
 from . import CMTConfigEntry
 from .const import signal_update
 from .controller import HeatingController
-from .entity import system_device_info
+from .entity import remove_entity, system_device_info
+from .features import FEATURE_GUEST
 
 
 async def async_setup_entry(
@@ -21,7 +22,10 @@ async def async_setup_entry(
     entry: CMTConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    async_add_entities([GuestModeSwitch(entry.runtime_data)])
+    if entry.runtime_data.feature(FEATURE_GUEST):
+        async_add_entities([GuestModeSwitch(entry.runtime_data)])
+    else:
+        remove_entity(hass, "switch", f"{entry.entry_id}_guest_mode")
 
 
 class GuestModeSwitch(SwitchEntity):

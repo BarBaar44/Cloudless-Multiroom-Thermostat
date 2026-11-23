@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigSubentryData,
     ConfigFlow,
     ConfigFlowResult,
     ConfigSubentryFlow,
@@ -17,6 +18,13 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from .features import (
+    FEATURE_LEARNING,
+    FEATURE_PRESENCE,
+    FEATURE_WINDOWS,
+    FEATURES,
+    feature_on,
+)
 from .const import (
     CONF_INITIAL_SCHEDULE,
     CONF_NO_SCHEDULE_TEMP,
@@ -59,7 +67,6 @@ from .const import (
     CONF_EXP_ROOM,
     CONF_EXP_WATER,
     CONF_EXP_WEATHER,
-    CONF_EXPERIMENTAL,
     CONF_EXT_SELECT,
     CONF_EXT_TEMP,
     CONF_HEARTBEAT_MIN,
@@ -158,16 +165,21 @@ def heat_source_schema(source_type: str) -> vol.Schema:
     )
 
 
-SETTINGS_SCHEMA = vol.Schema(
+PRESENCE_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_OFF_TEMP, default=DEFAULT_OFF_TEMP): _temp(5, 16),
-        vol.Required(CONF_NO_SCHEDULE_TEMP, default=DEFAULT_NO_SCHEDULE_TEMP): _temp(5, 21),
-        vol.Optional(CONF_PRESENCE): _entities(
+        vol.Required(CONF_PRESENCE): _entities(
             ["binary_sensor", "input_boolean", "person", "zone", "group", "device_tracker"]
         ),
         vol.Required(CONF_AWAY_MODE, default=DEFAULT_AWAY_MODE): selector.SelectSelector(
             selector.SelectSelectorConfig(options=AWAY_MODES, translation_key=CONF_AWAY_MODE)
         ),
+    }
+)
+
+SETTINGS_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_OFF_TEMP, default=DEFAULT_OFF_TEMP): _temp(5, 16),
+        vol.Required(CONF_NO_SCHEDULE_TEMP, default=DEFAULT_NO_SCHEDULE_TEMP): _temp(5, 21),
         vol.Required(CONF_SKIP_UNCHANGED, default=DEFAULT_SKIP_UNCHANGED): selector.BooleanSelector(),
         vol.Required(CONF_HEARTBEAT_MIN, default=DEFAULT_HEARTBEAT_MIN): selector.NumberSelector(
             selector.NumberSelectorConfig(
@@ -185,6 +197,7 @@ class CloudlessMultiroomThermostatFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._room: dict[str, Any] = {}
 
     @classmethod
     @callback
@@ -218,18 +231,78 @@ class CloudlessMultiroomThermostatFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_heat_source(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_settings()
+            return await self.async_step_room()
         return self.async_show_form(
             step_id="heat_source",
             data_schema=heat_source_schema(self._data[CONF_HEAT_SOURCE_TYPE]),
         )
 
-    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    # The first room (#120): setup asks only for the heat source and one room.
+    async def async_step_room(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._data.update(user_input)
+            user_input = {**user_input, CONF_ROOM_NAME: user_input[CONF_ROOM_NAME].strip()}
+            errors = validate_room(user_input)
+            if not user_input[CONF_ROOM_NAME]:
+                errors[CONF_ROOM_NAME] = "name_required"
+            if not errors:
+                user_input[CONF_STEP] = float(user_input[CONF_STEP])
+                self._room.update(user_input)
+                return await self.async_step_room_sensors()
+        return self.async_show_form(
+            step_id="room",
+            data_schema=self.add_suggested_values_to_schema(ROOM_SCHEMA, user_input or {}),
+            errors=errors,
+        )
+
+    async def async_step_room_sensors(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            self._room.update(user_input)
+            return await self.async_step_room_schedule()
+        return self.async_show_form(
+            step_id="room_sensors",
+            data_schema=sensors_schema(windows=False),
+            description_placeholders={"room": self._room[CONF_ROOM_NAME]},
+        )
+
+    async def async_step_room_schedule(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            room = {**self._room, CONF_INITIAL_SCHEDULE: user_input[CONF_INITIAL_SCHEDULE]}
             title = self._data.pop(CONF_NAME)
-            return self.async_create_entry(title=title, data=self._data)
-        return self.async_show_form(step_id="settings", data_schema=SETTINGS_SCHEMA)
+            return self.async_create_entry(
+                title=title,
+                data=self._data,
+                subentries=[
+                    ConfigSubentryData(
+                        data=room, subentry_type=SUBENTRY_ROOM, title=room[CONF_ROOM_NAME], unique_id=None
+                    )
+                ],
+            )
+        return self.async_show_form(
+            step_id="room_schedule",
+            data_schema=initial_schedule_schema(None),
+            description_placeholders={"room": self._room[CONF_ROOM_NAME]},
+        )
+
+
+def initial_schedule_schema(data: dict[str, Any] | None) -> vol.Schema:
+    """One preset all day, or scheduling off (#115)."""
+    presets = data["presets"] if data is not None else [
+        {"id": PRESET_ECO, "name": "Eco"}, {"id": PRESET_WARM, "name": "Warm"}
+    ]
+    options = [
+        selector.SelectOptionDict(value=p["id"], label=f"{p['name']} all day") for p in presets
+    ] + [selector.SelectOptionDict(value=SCHEDULING_OFF_CHOICE, label=SCHEDULING_OFF_CHOICE)]
+    return vol.Schema(
+        {
+            vol.Required(CONF_INITIAL_SCHEDULE, default=DEFAULT_INITIAL_SCHEDULE): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options, translation_key=CONF_INITIAL_SCHEDULE,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            )
+        }
+    )
 
 
 def experimental_schema(rooms: dict[str, str]) -> vol.Schema:
@@ -289,48 +362,77 @@ def experimental_schema(rooms: dict[str, str]) -> vol.Schema:
 
 
 class SettingsOptionsFlow(OptionsFlow):
-    """Edit heat source entities and system settings (not the source type)."""
+    """A menu: system settings, Features, and a page per feature that is on and has settings (#120)."""
 
     def __init__(self) -> None:
         self._options: dict[str, Any] = {}
+        self._pages: list[str] = []
 
     @property
     def _current(self) -> dict[str, Any]:
-        return {**self.config_entry.data, **self.config_entry.options}
+        return {**self.config_entry.data, **self.config_entry.options, **self._options}
+
+    def _on(self, key: str) -> bool:
+        rooms = [sub.data for sub in self.config_entry.subentries.values() if sub.subentry_type == SUBENTRY_ROOM]
+        return feature_on(self._current, rooms, key)
+
+    async def _save(self, changes: dict[str, Any]) -> ConfigFlowResult:
+        self._options.update(changes)
+        if self._pages:
+            return await getattr(self, f"async_step_{self._pages.pop(0)}")()
+        return self.async_create_entry(data={**self.config_entry.options, **self._options})
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        menu = ["settings", "features"]
+        if self._on(FEATURE_PRESENCE):
+            menu.append("presence")
+        if self._on(FEATURE_LEARNING):
+            menu.append("experimental")
+        return self.async_show_menu(step_id="init", menu_options=menu)
+
+    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         current = self._current
-        source_type = current[CONF_HEAT_SOURCE_TYPE]
         schema = vol.Schema(
-            {
-                **heat_source_schema(source_type).schema,
-                **SETTINGS_SCHEMA.schema,
-                vol.Required(CONF_EXPERIMENTAL, default=False): selector.BooleanSelector(),
-            }
+            {**heat_source_schema(current[CONF_HEAT_SOURCE_TYPE]).schema, **SETTINGS_SCHEMA.schema}
         )
         if user_input is not None:
-            # Optional fields left empty must be removed, not kept from data
-            options = {k: v for k, v in user_input.items() if v not in (None, "")}
-            for key in (CONF_CH_SWITCH, CONF_PRESENCE):
-                options.setdefault(key, None)
-            # Keep the experimental settings while switched off, so switching
-            # back on remembers them
-            for key in (
-                CONF_EXP_ROOM, CONF_EXP_COMFORT_WEEKDAY, CONF_EXP_COMFORT_WEEKEND, CONF_EXP_DHW_RATE,
-                CONF_EXP_AUTO_APPLY, CONF_EXP_NOTIFY, *EXP_ENTITY_KEYS,
-            ):
-                if key in current:
-                    options[key] = current[key]
-            self._options = options
-            if options[CONF_EXPERIMENTAL]:
-                return await self.async_step_experimental()
-            return self.async_create_entry(data=options)
+            changes = dict(user_input)
+            if any(str(key) == CONF_CH_SWITCH for key in schema.schema):
+                changes.setdefault(CONF_CH_SWITCH, None)  # cleared really clears
+            return await self._save(changes)
         return self.async_show_form(
-            step_id="init",
+            step_id="settings",
             data_schema=self.add_suggested_values_to_schema(
                 schema, {k: v for k, v in current.items() if v is not None}
             ),
+        )
+
+    async def async_step_features(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            was = {key: self._on(key) for key in FEATURES}
+            changes = {key: bool(user_input[key]) for key in FEATURES}
+            # A feature switched on that needs settings opens its page next
+            if changes[FEATURE_PRESENCE] and (not was[FEATURE_PRESENCE] or not self._current.get(CONF_PRESENCE)):
+                self._pages.append("presence")
+            if changes[FEATURE_LEARNING] and not was[FEATURE_LEARNING]:
+                self._pages.append("experimental")
+            return await self._save(changes)
+        schema = vol.Schema({vol.Required(key): selector.BooleanSelector() for key in FEATURES})
+        return self.async_show_form(
+            step_id="features",
+            data_schema=self.add_suggested_values_to_schema(schema, {key: self._on(key) for key in FEATURES}),
             description_placeholders={"docs_url": DOCS_EXPERIMENTAL_URL},
+        )
+
+    async def async_step_presence(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return await self._save(dict(user_input))
+        current = self._current
+        return self.async_show_form(
+            step_id="presence",
+            data_schema=self.add_suggested_values_to_schema(
+                PRESENCE_SCHEMA, {k: v for k, v in current.items() if v is not None}
+            ),
         )
 
     async def async_step_experimental(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -340,11 +442,11 @@ class SettingsOptionsFlow(OptionsFlow):
             if sub.subentry_type == SUBENTRY_ROOM
         }
         if user_input is not None:
-            data = {**self._options, **user_input}
+            data = dict(user_input)
             for key in (*EXP_ENTITY_KEYS, CONF_EXP_DHW_RATE):  # cleared fields really clear
                 if not user_input.get(key):
                     data[key] = None
-            return self.async_create_entry(data=data)
+            return await self._save(data)
         current = self._current
         suggested = {k: v for k, v in current.items() if v is not None}
         if CONF_EXP_PEOPLE not in current and self.hass.states.get("zone.home"):
@@ -374,18 +476,25 @@ ROOM_SCHEMA = vol.Schema(
     }
 )
 
-# Step 2: sensors and valves
-SENSORS_SCHEMA = vol.Schema(
-    {
+# Step 2: sensors and valves; window fields only with the Windows feature on (#120)
+def sensors_schema(windows: bool) -> vol.Schema:
+    fields: dict[Any, Any] = {
         vol.Required(CONF_TEMP_SENSOR): _entities("sensor", device_class="temperature"),
         vol.Optional(CONF_TRVS, default=[]): _entities("climate", multiple=True),
         vol.Optional(CONF_EXT_TEMP, default=[]): _entities("number", multiple=True),
         vol.Optional(CONF_EXT_SELECT, default=[]): _entities("select", multiple=True),
-        vol.Optional(CONF_WINDOWS, default=[]): _entities(["binary_sensor", "input_boolean"], multiple=True),
-        vol.Required(CONF_WINDOW_OPEN_DELAY, default=DEFAULT_WINDOW_OPEN_DELAY): _seconds(),
-        vol.Required(CONF_WINDOW_CLOSE_DELAY, default=DEFAULT_WINDOW_CLOSE_DELAY): _seconds(),
     }
-)
+    if windows:
+        fields.update(
+            {
+                vol.Optional(CONF_WINDOWS, default=[]): _entities(
+                    ["binary_sensor", "input_boolean"], multiple=True
+                ),
+                vol.Required(CONF_WINDOW_OPEN_DELAY, default=DEFAULT_WINDOW_OPEN_DELAY): _seconds(),
+                vol.Required(CONF_WINDOW_CLOSE_DELAY, default=DEFAULT_WINDOW_CLOSE_DELAY): _seconds(),
+            }
+        )
+    return vol.Schema(fields)
 
 
 def validate_room(data: dict[str, Any]) -> dict[str, str]:
@@ -425,6 +534,11 @@ class RoomSubentryFlow(ConfigSubentryFlow):
             if temps and temps.get(preset) is not None:
                 current[key] = temps[preset]
         return current
+
+    def _windows_on(self) -> bool:
+        entry = self._get_entry()
+        rooms = [sub.data for sub in entry.subentries.values() if sub.subentry_type == SUBENTRY_ROOM]
+        return feature_on({**entry.data, **entry.options}, rooms, FEATURE_WINDOWS)
 
     def _name_taken(self, name: str) -> bool:
         own_id = self._get_reconfigure_subentry().subentry_id if self._editing else None
@@ -473,33 +587,20 @@ class RoomSubentryFlow(ConfigSubentryFlow):
             return self.async_create_entry(title=data[CONF_ROOM_NAME], data=data)
         controller = getattr(self._get_entry(), "runtime_data", None)
         scheduler = getattr(controller, "scheduler", None)
-        data = scheduler.data if scheduler is not None else None
-        presets = data["presets"] if data is not None else [
-            {"id": PRESET_ECO, "name": "Eco"}, {"id": PRESET_WARM, "name": "Warm"}
-        ]
-        options = [
-            selector.SelectOptionDict(value=p["id"], label=f"{p['name']} all day") for p in presets
-        ] + [selector.SelectOptionDict(value=SCHEDULING_OFF_CHOICE, label=SCHEDULING_OFF_CHOICE)]
         return self.async_show_form(
             step_id="schedule",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_INITIAL_SCHEDULE, default=DEFAULT_INITIAL_SCHEDULE): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=options, translation_key=CONF_INITIAL_SCHEDULE,
-                            mode=selector.SelectSelectorMode.LIST,
-                        )
-                    )
-                }
-            ),
+            data_schema=initial_schedule_schema(scheduler.data if scheduler is not None else None),
             description_placeholders={"room": self._data[CONF_ROOM_NAME]},
         )
 
     # Step 2 -----------------------------------------------------------------
     async def async_step_sensors(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         if user_input is not None:
-            # "area" was stored by an earlier version; drop it on edit
-            data = {**{k: v for k, v in self._data.items() if k != "area"}, **user_input}
+            # "area" was stored by an earlier version; drop it on edit. Fields
+            # of a feature that is off (windows) aren't in the form: keep them.
+            kept = dict(self._get_reconfigure_subentry().data) if self._editing else {}
+            data = {**kept, **{k: v for k, v in self._data.items() if k != "area"}, **user_input}
+            data.pop("area", None)
             title = data[CONF_ROOM_NAME]
             if self._editing:
                 return self.async_update_and_abort(
@@ -509,6 +610,6 @@ class RoomSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_schedule()
         return self.async_show_form(
             step_id="sensors",
-            data_schema=self.add_suggested_values_to_schema(SENSORS_SCHEMA, self._current),
+            data_schema=self.add_suggested_values_to_schema(sensors_schema(self._windows_on()), self._current),
             description_placeholders={"room": self._data[CONF_ROOM_NAME]},
         )

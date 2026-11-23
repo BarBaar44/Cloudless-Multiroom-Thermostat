@@ -102,6 +102,7 @@ from .const import (
     WRITE_GRACE_S,
     signal_update,
 )
+from .features import FEATURE_PRESENCE, FEATURE_WINDOWS, feature_on
 from .logic import (
     RoomDemand,
     Winner,
@@ -205,9 +206,15 @@ class HeatingController:
     def settings(self) -> dict[str, Any]:
         return {**self.entry.data, **self.entry.options}
 
+    def feature(self, key: str) -> bool:
+        """Whether a feature on the Features page is on (#120)."""
+        return feature_on(self.settings, (room.config for room in self.rooms.values()), key)
+
     @property
     def present(self) -> bool:
         """Somebody is home: the presence entity, or guest mode (#117)."""
+        if not self.feature(FEATURE_PRESENCE):
+            return True
         return self.presence_home or self.scheduler.guest_active()
 
     @callback
@@ -340,7 +347,7 @@ class HeatingController:
                     self.hass, [sensor], self._make_temp_listener(room.room_id)
                 )
             )
-            windows = cfg.get(CONF_WINDOWS) or []
+            windows = (cfg.get(CONF_WINDOWS) or []) if self.feature(FEATURE_WINDOWS) else []
             if windows:
                 room.window_open = self._windows_open(room)
                 self._unsubs.append(
@@ -355,7 +362,7 @@ class HeatingController:
             for select in cfg.get(CONF_EXT_SELECT) or []:
                 watched[select] = self._make_select_listener(room.room_id)
 
-        presence = self.settings.get(CONF_PRESENCE)
+        presence = self.settings.get(CONF_PRESENCE) if self.feature(FEATURE_PRESENCE) else None
         if presence:
             self.presence_home = self._read_presence()
             self._was_home = self.present

@@ -128,17 +128,12 @@ async def test_off_by_default_no_sensors(hass: HomeAssistant) -> None:
 async def test_options_enable_experimental(hass: HomeAssistant) -> None:
     entry = await _setup(hass, {})
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.MENU and "experimental" not in result["menu_options"]
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "features"})
     assert DOCS_EXPERIMENTAL_URL == result["description_placeholders"]["docs_url"]
+    features = {"feature_presence": False, "feature_windows": False, "feature_guest_mode": False}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "heat_source_entity": "climate.boiler",
-            "off_temperature": 10,
-            "away_mode": "off",
-            "skip_unchanged_writes": True,
-            "external_temp_heartbeat": 60,
-            "experimental": True,
-        },
+        result["flow_id"], {**features, "experimental": True}
     )
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "experimental"
     fields = {str(k): v for k, v in result["data_schema"].schema.items()}
@@ -165,16 +160,10 @@ async def test_options_enable_experimental(hass: HomeAssistant) -> None:
 
     # Switching off keeps the experimental settings for next time
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "experimental" in result["menu_options"]
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "features"})
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "heat_source_entity": "climate.boiler",
-            "off_temperature": 10,
-            "away_mode": "off",
-            "skip_unchanged_writes": True,
-            "external_temp_heartbeat": 60,
-            "experimental": False,
-        },
+        result["flow_id"], {**features, "experimental": False}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()

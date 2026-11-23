@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Heating system",
-        "description": "One heating system has one heat source. Rooms are added afterwards from the integration page.",
+        "description": "One heating system has one heat source. Setup asks for the heat source and your first room; everything else (presence and away, windows, guest mode, learning features) is on the Features page afterwards: Configure on this integration.",
         "data": {
           "name": "Name",
           "heat_source_type": "Heat source type"
@@ -22,56 +22,50 @@
           "hysteresis": "Switch only: start when a room is this far below its target, stop when it reaches it."
         }
       },
-      "settings": {
-        "title": "Settings",
+      "room": {
+        "title": "First room",
+        "description": "Step 1 of 3 of your first room: name and temperatures. More rooms: Add room on the integration page.",
         "data": {
-          "off_temperature": "Off temperature",
-          "presence_entity": "Presence",
-          "away_mode": "When everybody is away",
-          "skip_unchanged_writes": "Skip unchanged TRV writes",
-          "external_temp_heartbeat": "Heartbeat",
-          "temperature_without_schedule": "Temperature without schedule"
+          "name": "Room name",
+          "eco_temperature": "Eco temperature",
+          "warm_temperature": "Warm temperature",
+          "overshoot_buffer": "Overshoot buffer",
+          "drives_heat_source": "Drives the heat source",
+          "min_temp": "Minimum target",
+          "max_temp": "Maximum target",
+          "target_temp_step": "Target step"
         },
         "data_description": {
-          "off_temperature": "Sent to the heat source and TRVs when nothing should heat (frost protection).",
-          "presence_entity": "Optional. home / on means somebody is home. Unknown counts as home.",
-          "away_mode": "Rooms that are set to heat go off, or are lowered to their eco temperature.",
-          "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
-          "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours).",
-          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room."
+          "overshoot_buffer": "Added to the TRV targets only while this room drives the heat source.",
+          "drives_heat_source": "Turn off for a room that may heat along but must never make the heat source run, such as a hallway that cools much faster than the rest of the house. Its TRVs still get its target and open while another room drives the heat source."
+        }
+      },
+      "room_sensors": {
+        "title": "Sensors and valves",
+        "description": "Sensors and valves for {room}. Window sensors come with the Windows feature (Configure > Features).",
+        "data": {
+          "temperature_sensor": "Room temperature sensor",
+          "trvs": "Radiator valves (TRVs)",
+          "external_temperature_inputs": "TRV external temperature inputs",
+          "external_sensor_selects": "TRV external sensor selects"
+        },
+        "data_description": {
+          "trvs": "Optional. A room without TRVs only adds heat demand.",
+          "external_temperature_inputs": "Optional. Number entities that receive the room temperature (for example Sonoff TRVZB or Shelly BLU TRV).",
+          "external_sensor_selects": "Optional. Select entities that tell a TRV to use the external temperature (Sonoff TRVZB: temperature sensor select). Kept on the remote option while the room sensor works."
+        }
+      },
+      "room_schedule": {
+        "title": "Schedule",
+        "description": "Last step for {room}. A room always starts with a schedule: one preset all day, which you change later. Or turn scheduling off: then the room is yours. After this, turn on what else you want under Configure > Features.",
+        "data": {
+          "initial_schedule": "Start with"
         }
       }
     }
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Heating system settings",
-        "data": {
-          "heat_source_entity": "Heat source",
-          "ch_switch": "Central heating enable switch",
-          "hysteresis": "Hysteresis",
-          "off_temperature": "Off temperature",
-          "presence_entity": "Presence",
-          "away_mode": "When everybody is away",
-          "skip_unchanged_writes": "Skip unchanged TRV writes",
-          "external_temp_heartbeat": "Heartbeat",
-          "experimental": "Enable learning features (observe only)",
-          "temperature_without_schedule": "Temperature without schedule"
-        },
-        "data_description": {
-          "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see How it works in the docs (docs/how-it-works.md). What the thermostat must offer: Thermostat requirements (docs/thermostat.md).",
-          "ch_switch": "Optional. On while a room that drives the heat source is heating; off while none is (rooms off or paused, or only rooms that heat along).",
-          "hysteresis": "Switch only: start when a room is this far below its target, stop when it reaches it.",
-          "off_temperature": "Sent to the heat source and TRVs when nothing should heat (frost protection).",
-          "presence_entity": "Optional. home / on means somebody is home. Unknown counts as home.",
-          "away_mode": "Rooms that are set to heat go off, or are lowered to their eco temperature.",
-          "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
-          "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours).",
-          "experimental": "They learn how the house and boiler behave: warm-up and PID advice, night cooldown prediction, gas per degree-day and an evening report. Observe only: they never change the heating. On: the next page asks for the entities they use. What each feature does and how mature it is: [Learning features]({docs_url})",
-          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room."
-        }
-      },
       "experimental": {
         "title": "Learning features (observe only)",
         "description": "All observe only: nothing here changes the heating. Every entity is optional; a feature runs once the entities it needs are set. What each feature does, what it needs and how mature it is: [Learning features]({docs_url})",
@@ -127,6 +121,63 @@
           "exp_notify": "The 21:00 report always goes to the Learning features report sensor (show it with a Markdown card). Events only: a notification only when something happened that day (a PID change applied, kept or reverted, a boiler setting changed, a feature became ready for stable, an unreadable file moved aside). Summary: three lines every evening, plus events. Full report: the whole report, as before 1.7.0.",
           "exp_gas_price_before6": "Optional, shown next to the night prediction (for example Frank Energie)."
         }
+      },
+      "init": {
+        "title": "Heating system",
+        "menu_options": {
+          "settings": "System settings",
+          "features": "Features",
+          "presence": "Presence and away",
+          "experimental": "Learning features"
+        }
+      },
+      "settings": {
+        "title": "System settings",
+        "data": {
+          "heat_source_entity": "Heat source",
+          "ch_switch": "Central heating enable switch",
+          "hysteresis": "Hysteresis",
+          "off_temperature": "Off temperature",
+          "temperature_without_schedule": "Temperature without schedule",
+          "skip_unchanged_writes": "Skip unchanged TRV writes",
+          "external_temp_heartbeat": "Heartbeat"
+        },
+        "data_description": {
+          "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see How it works in the docs (docs/how-it-works.md). What the thermostat must offer: Thermostat requirements (docs/thermostat.md).",
+          "ch_switch": "Optional. On while a room that drives the heat source is heating; off while none is (rooms off or paused, or only rooms that heat along).",
+          "hysteresis": "Switch only: start when a room is this far below its target, stop when it reaches it.",
+          "off_temperature": "Sent to the heat source and TRVs when nothing should heat (frost protection).",
+          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room.",
+          "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
+          "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours)."
+        }
+      },
+      "presence": {
+        "title": "Presence and away",
+        "data": {
+          "presence_entity": "Presence",
+          "away_mode": "When everybody is away"
+        },
+        "data_description": {
+          "presence_entity": "home / on means somebody is home. Unknown counts as home.",
+          "away_mode": "Rooms that are set to heat go off, or are lowered to their eco temperature."
+        }
+      },
+      "features": {
+        "title": "Features",
+        "description": "Turn on what you want; everything that is off stays out of sight (no settings page, no entities, no card section). Settings of a feature you turn off are kept. Learning features: {docs_url}",
+        "data": {
+          "feature_presence": "Presence and away",
+          "feature_windows": "Windows",
+          "feature_guest_mode": "Guest mode",
+          "experimental": "Learning features (observe only)"
+        },
+        "data_description": {
+          "feature_presence": "Rooms go off or to eco when everybody leaves, and changes by hand end. Needs a presence entity.",
+          "feature_windows": "A room pauses while a window or door in it is open. Window sensors are set per room.",
+          "feature_guest_mode": "A Someone is home switch that ignores presence, for visitors Home Assistant doesn't track.",
+          "experimental": "Learn how the house heats: warm-ups, nights, gas use, PID advice. They change nothing unless you allow it."
+        }
       }
     }
   },
@@ -180,16 +231,12 @@
             "temperature_sensor": "Room temperature sensor",
             "trvs": "Radiator valves (TRVs)",
             "external_temperature_inputs": "TRV external temperature inputs",
-            "external_sensor_selects": "TRV external sensor selects",
-            "window_sensors": "Window and door sensors",
-            "window_open_delay": "Window open delay",
-            "window_close_delay": "Window close delay"
+            "external_sensor_selects": "TRV external sensor selects"
           },
           "data_description": {
             "trvs": "Optional. A room without TRVs only adds heat demand.",
             "external_temperature_inputs": "Optional. Number entities that receive the room temperature (for example Sonoff TRVZB or Shelly BLU TRV).",
-            "external_sensor_selects": "Optional. Select entities that tell a TRV to use the external temperature (Sonoff TRVZB: temperature sensor select). Kept on the remote option while the room sensor works.",
-            "window_sensors": "Optional. Heating in this room pauses while any of them is open."
+            "external_sensor_selects": "Optional. Select entities that tell a TRV to use the external temperature (Sonoff TRVZB: temperature sensor select). Kept on the remote option while the room sensor works."
           }
         },
         "schedule": {
@@ -467,6 +514,9 @@
     },
     "guest_end_in_past": {
       "message": "The end time of guest mode is in the past"
+    },
+    "feature_off": {
+      "message": "{feature} is off for {system}: turn it on under Configure > Features"
     }
   },
   "issues": {

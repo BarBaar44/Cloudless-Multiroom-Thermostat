@@ -15,7 +15,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import CMTConfigEntry
 from .const import CONF_WINDOWS, SUBENTRY_ROOM, signal_update
 from .controller import HeatingController, Room
-from .entity import room_device_info
+from .entity import remove_entity, room_device_info
+from .features import FEATURE_WINDOWS
 
 
 async def async_setup_entry(
@@ -29,8 +30,10 @@ async def async_setup_entry(
             continue
         room = controller.rooms[sub_id]
         entities: list[BinarySensorEntity] = [PausedSensor(controller, room)]
-        if room.config.get(CONF_WINDOWS):
+        if room.config.get(CONF_WINDOWS) and controller.feature(FEATURE_WINDOWS):
             entities.append(WindowSensor(controller, room))
+        else:
+            remove_entity(hass, "binary_sensor", f"{sub_id}_window")
         async_add_entities(entities, config_subentry_id=sub_id)
 
 
