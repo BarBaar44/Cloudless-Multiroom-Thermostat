@@ -100,3 +100,21 @@ async def test_settings_keep_the_feature_settings(hass: HomeAssistant, setup) ->
     )
     await hass.async_block_till_done()
     assert entry.options["feature_guest_mode"] is True and entry.options["off_temperature"] == 9
+
+
+async def test_sun_assist_on_opens_its_page(hass: HomeAssistant, setup) -> None:  # noqa: F811
+    entry, _ = setup
+    hass.states.async_set("weather.home", "sunny")
+    result = await _features(hass, entry, feature_sun_assist=True)
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "sun_assist"
+    living = next(s.subentry_id for s in entry.subentries.values() if s.title == "Living")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"sun_forecast": "weather.home", "sun_conditions": ["sunny"], "sun_rooms": [living],
+         "sun_hold_temperature": 15, "sun_window_start": "05:00:00", "sun_window_end": "12:00:00",
+         "sun_dark_below": 1000, "sun_check_delay": 180},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["sun_rooms"] == [living] and entry.options["sun_lux_sensor"] is None
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "sun_assist" in result["menu_options"]

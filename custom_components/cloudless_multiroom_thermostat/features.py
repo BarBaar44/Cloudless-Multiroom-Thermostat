@@ -19,8 +19,9 @@ from .const import CONF_EXPERIMENTAL, CONF_PRESENCE, CONF_WINDOWS
 FEATURE_PRESENCE: Final = "feature_presence"  # presence and away
 FEATURE_WINDOWS: Final = "feature_windows"
 FEATURE_GUEST: Final = "feature_guest_mode"
+FEATURE_SUN: Final = "feature_sun_assist"
 FEATURE_LEARNING: Final = CONF_EXPERIMENTAL  # the existing option key, kept as is
-FEATURES: Final = (FEATURE_PRESENCE, FEATURE_WINDOWS, FEATURE_GUEST, FEATURE_LEARNING)
+FEATURES: Final = (FEATURE_PRESENCE, FEATURE_WINDOWS, FEATURE_SUN, FEATURE_GUEST, FEATURE_LEARNING)
 
 
 def feature_on(settings: Mapping[str, Any], rooms: Iterable[Mapping[str, Any]], key: str) -> bool:

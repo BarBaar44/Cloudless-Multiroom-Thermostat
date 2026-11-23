@@ -21,9 +21,28 @@ from homeassistant.helpers import selector
 from .features import (
     FEATURE_LEARNING,
     FEATURE_PRESENCE,
+    FEATURE_SUN,
     FEATURE_WINDOWS,
     FEATURES,
     feature_on,
+)
+from .sun import (
+    CONF_SUN_CHECK_DELAY,
+    CONF_SUN_CONDITIONS,
+    CONF_SUN_DARK_BELOW,
+    CONF_SUN_FORECAST,
+    CONF_SUN_HOLD,
+    CONF_SUN_LUX,
+    CONF_SUN_ROOMS,
+    CONF_SUN_WINDOW_END,
+    CONF_SUN_WINDOW_START,
+    DEFAULT_SUN_CHECK_DELAY,
+    DEFAULT_SUN_CONDITIONS,
+    DEFAULT_SUN_DARK_BELOW,
+    DEFAULT_SUN_HOLD,
+    DEFAULT_SUN_WINDOW_END,
+    DEFAULT_SUN_WINDOW_START,
+    SUN_CONDITIONS,
 )
 from .const import (
     CONF_INITIAL_SCHEDULE,
@@ -386,6 +405,8 @@ class SettingsOptionsFlow(OptionsFlow):
         menu = ["settings", "features"]
         if self._on(FEATURE_PRESENCE):
             menu.append("presence")
+        if self._on(FEATURE_SUN):
+            menu.append("sun_assist")
         if self._on(FEATURE_LEARNING):
             menu.append("experimental")
         return self.async_show_menu(step_id="init", menu_options=menu)
@@ -414,6 +435,8 @@ class SettingsOptionsFlow(OptionsFlow):
             # A feature switched on that needs settings opens its page next
             if changes[FEATURE_PRESENCE] and (not was[FEATURE_PRESENCE] or not self._current.get(CONF_PRESENCE)):
                 self._pages.append("presence")
+            if changes[FEATURE_SUN] and (not was[FEATURE_SUN] or not self._current.get(CONF_SUN_FORECAST)):
+                self._pages.append("sun_assist")
             if changes[FEATURE_LEARNING] and not was[FEATURE_LEARNING]:
                 self._pages.append("experimental")
             return await self._save(changes)
@@ -422,6 +445,53 @@ class SettingsOptionsFlow(OptionsFlow):
             step_id="features",
             data_schema=self.add_suggested_values_to_schema(schema, {key: self._on(key) for key in FEATURES}),
             description_placeholders={"docs_url": DOCS_EXPERIMENTAL_URL},
+        )
+
+    async def async_step_sun_assist(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Sun assist settings live here, never in the card (decided 2026-11-07)."""
+        if user_input is not None:
+            changes = dict(user_input)
+            changes.setdefault(CONF_SUN_LUX, None)  # cleared really clears
+            changes[CONF_SUN_CHECK_DELAY] = int(changes[CONF_SUN_CHECK_DELAY])
+            return await self._save(changes)
+        rooms = [
+            selector.SelectOptionDict(value=sub.subentry_id, label=sub.title)
+            for sub in self.config_entry.subentries.values()
+            if sub.subentry_type == SUBENTRY_ROOM
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_SUN_FORECAST): _entities("weather"),
+                vol.Required(CONF_SUN_CONDITIONS, default=DEFAULT_SUN_CONDITIONS): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=SUN_CONDITIONS, multiple=True, translation_key=CONF_SUN_CONDITIONS
+                    )
+                ),
+                vol.Required(CONF_SUN_ROOMS, default=[]): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=rooms, multiple=True)
+                ),
+                vol.Required(CONF_SUN_HOLD, default=DEFAULT_SUN_HOLD): _temp(5, 21),
+                vol.Required(CONF_SUN_WINDOW_START, default=DEFAULT_SUN_WINDOW_START): selector.TimeSelector(),
+                vol.Required(CONF_SUN_WINDOW_END, default=DEFAULT_SUN_WINDOW_END): selector.TimeSelector(),
+                vol.Optional(CONF_SUN_LUX): _entities("sensor", device_class="illuminance"),
+                vol.Required(CONF_SUN_DARK_BELOW, default=DEFAULT_SUN_DARK_BELOW): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100000, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="lx"
+                    )
+                ),
+                vol.Required(CONF_SUN_CHECK_DELAY, default=DEFAULT_SUN_CHECK_DELAY): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=15, max=420, step=15, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="min"
+                    )
+                ),
+            }
+        )
+        current = self._current
+        return self.async_show_form(
+            step_id="sun_assist",
+            data_schema=self.add_suggested_values_to_schema(
+                schema, {k: v for k, v in current.items() if v is not None}
+            ),
         )
 
     async def async_step_presence(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
