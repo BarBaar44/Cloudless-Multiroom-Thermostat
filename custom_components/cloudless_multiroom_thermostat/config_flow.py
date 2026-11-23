@@ -18,6 +18,8 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    PRESET_ECO,
+    PRESET_WARM,
     AWAY_MODES,
     CONF_AWAY_MODE,
     CONF_BUFFER,
@@ -400,8 +402,23 @@ class RoomSubentryFlow(ConfigSubentryFlow):
 
     @property
     def _current(self) -> dict[str, Any]:
-        """Stored room data when editing, else empty."""
-        return dict(self._get_reconfigure_subentry().data) if self._editing else {}
+        """Stored room data when editing, else empty.
+
+        Eco and Warm live in the schedule file (#112); the form shows them from
+        there and hands edits back through the room, which moves them on load.
+        """
+        if not self._editing:
+            return {}
+        sub = self._get_reconfigure_subentry()
+        current = dict(sub.data)
+        entry = self._get_entry()
+        controller = getattr(entry, "runtime_data", None)
+        store = getattr(controller, "schedules", None)
+        temps = store.temperatures(sub.subentry_id) if store is not None else None
+        for preset, key in ((PRESET_ECO, CONF_ECO_TEMP), (PRESET_WARM, CONF_WARM_TEMP)):
+            if temps and temps.get(preset) is not None:
+                current[key] = temps[preset]
+        return current
 
     def _name_taken(self, name: str) -> bool:
         own_id = self._get_reconfigure_subentry().subentry_id if self._editing else None

@@ -158,6 +158,18 @@ def test_room_form_wins_for_eco_and_warm_and_added_presets_stay() -> None:
     assert not sync_rooms(data, {"living": (16.0, 21.0), "office": (15.0, 19.0)})
 
 
+def test_room_without_handed_over_values_keeps_its_own() -> None:
+    data = _data()
+    assert not sync_rooms(data, {"living": (None, None), "office": (None, None)})
+    assert data["temperatures"]["living"]["warm"] == 20.5
+
+
+def test_new_room_without_values_gets_the_defaults() -> None:
+    data = empty_data()
+    sync_rooms(data, {"attic": (None, 21.0)}, defaults=(14.0, 19.0))
+    assert data["temperatures"]["attic"] == {"eco": 14.0, "warm": 21.0}
+
+
 def test_removed_room_loses_its_column_schedule_and_override() -> None:
     data = _data()
     data["rooms"]["office"] = {"scheduling": "on", "week": one_block_week("eco")}

@@ -213,24 +213,34 @@ def validate_data(data: Any) -> dict[str, Any]:
     return clean
 
 
-def sync_rooms(data: dict[str, Any], rooms: Mapping[str, tuple[float, float]]) -> bool:
+def sync_rooms(
+    data: dict[str, Any],
+    rooms: Mapping[str, tuple[float | None, float | None]],
+    defaults: tuple[float, float] = (15.0, 19.0),
+) -> bool:
     """Bring the data in line with the rooms that exist. Returns True when it changed.
 
-    `rooms` maps room id to its (eco, warm) temperatures from the room form. The
-    form is the second place to edit Eco and Warm, so its values win: an edit
-    there reloads the entry and lands here. A new room gets a column with its
-    Eco and Warm and every added preset not used. A removed room loses its
-    temperatures, schedule and override (its learning records stay elsewhere).
+    `rooms` maps room id to Eco and Warm values handed over by the room form
+    (Add room, Edit room, or a v1 room upgraded to v2), None where the form
+    handed nothing over. Handed over values replace the stored ones: the file
+    is the only place they are kept. A new room gets a column with its Eco and
+    Warm (the defaults when none were handed over) and every added preset not
+    used. A removed room loses its temperatures, schedule and override (its
+    learning records stay elsewhere).
     """
     before = copy.deepcopy(data)
     ids = preset_ids(data)
     temps = data["temperatures"]
-    for room_id, (eco, warm) in rooms.items():
+    for room_id, handed in rooms.items():
+        new = room_id not in temps
         row = temps.setdefault(room_id, {})
         for pid in ids:
             row.setdefault(pid, None)
-        row["eco"] = float(eco)
-        row["warm"] = float(warm)
+        for pid, value, default in zip(("eco", "warm"), handed, defaults, strict=True):
+            if value is not None:
+                row[pid] = float(value)
+            elif new or row[pid] is None:
+                row[pid] = float(default)
     for key in ("temperatures", "rooms", "overrides"):
         for room_id in [r for r in data[key] if r not in rooms]:
             del data[key][room_id]

@@ -13,7 +13,11 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    CONF_ECO_TEMP,
     CONF_EXPERIMENTAL,
+    CONF_WARM_TEMP,
+    DEFAULT_ECO_TEMP,
+    DEFAULT_WARM_TEMP,
     DOMAIN,
     SERVICE_EXPERIMENTAL_REPORT,
     SERVICE_SET_ALL_OFF,
@@ -109,12 +113,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> bool:
     )
     controller.system_device_id = system_device.id
 
-    # v2 schedule data (#112). Loaded and kept in line with the rooms; nothing
-    # acts on it yet. A problem here stops scheduling, never the heating.
-    controller.schedules = ScheduleStore(hass, entry.entry_id)
-    await controller.schedules.async_load(
-        {room_id: (room.eco_temp, room.warm_temp) for room_id, room in controller.rooms.items()}
-    )
+    await _async_load_schedules(hass, entry, controller)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await controller.async_start()
@@ -122,6 +121,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> bool:
         await _async_start_learning(controller)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
+
+
+async def _async_load_schedules(hass: HomeAssistant, entry: CMTConfigEntry, controller: HeatingController) -> None:
+    """Load the v2 schedule data (#112) and make it the only home of the preset temperatures.
+
+    Eco and Warm handed over by the room form (Add room, Edit room) or left by
+    v1 move into the schedule file and are then removed from the room. This
+    runs before the update listener is added, so removing them doesn't reload.
+    Nothing acts on schedules yet. A problem here stops scheduling, never the
+    heating: the values then stay with the room until the file can be used.
+    """
+    store = ScheduleStore(hass, entry.entry_id)
+    controller.schedules = store
+    await store.async_load(
+        {
+            room_id: (room.config.get(CONF_ECO_TEMP), room.config.get(CONF_WARM_TEMP))
+            for room_id, room in controller.rooms.items()
+        },
+        (DEFAULT_ECO_TEMP, DEFAULT_WARM_TEMP),
+    )
+    if store.blocked is not None:
+        return
+    for room_id, room in controller.rooms.items():
+        room.preset_temps = store.temperatures(room_id)
+        if CONF_ECO_TEMP in room.config or CONF_WARM_TEMP in room.config:
+            room.config = {k: v for k, v in room.config.items() if k not in (CONF_ECO_TEMP, CONF_WARM_TEMP)}
+            hass.config_entries.async_update_subentry(entry, entry.subentries[room_id], data=room.config)
 
 
 async def _async_start_learning(controller: HeatingController) -> None:

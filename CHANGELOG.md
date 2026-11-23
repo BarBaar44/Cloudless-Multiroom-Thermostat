@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Storage for schedules and presets (#112, #113, groundwork for v2.0):** each heating system gets a schedule file (`.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`), created from the rooms' Eco and Warm temperatures. Versioned from the start: a copy is kept before every future migration, and a file written by a newer version is never overwritten. Nothing acts on it yet; the heating works exactly as before.
+- **Storage for schedules and presets (#112, #113, groundwork for v2.0):** each heating system gets a schedule file (`.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`), and from now on the only place each room's Eco and Warm temperatures are kept: on the first start they move there from the room settings. The room form still shows and edits them. Versioned from the start: a copy is kept before every future migration, and a file written by a newer version is never overwritten. Nothing acts on it yet; the heating works exactly as before.
 
 ## 1.9.2
 

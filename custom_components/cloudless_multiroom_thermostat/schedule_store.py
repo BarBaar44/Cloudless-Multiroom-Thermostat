@@ -70,7 +70,11 @@ class ScheduleStore:
     def path(self) -> str:
         return self._file.path
 
-    async def async_load(self, rooms: Mapping[str, tuple[float, float]]) -> None:
+    async def async_load(
+        self,
+        rooms: Mapping[str, tuple[float | None, float | None]],
+        defaults: tuple[float, float],
+    ) -> None:
         """Load (or create) the data and bring it in line with the rooms that exist.
 
         Never raises: a problem here stops scheduling, never the heating.
@@ -91,7 +95,7 @@ class ScheduleStore:
             except (ScheduleError, TypeError, ValueError) as err:
                 self._block(f"Stored schedules don't pass the checks: {err}")
                 return
-        changed = sync_rooms(data, rooms) or stored is None
+        changed = sync_rooms(data, rooms, defaults) or stored is None
         self.data = data
         if changed:
             await self.async_save()
@@ -100,6 +104,12 @@ class ScheduleStore:
         if self.blocked is not None or self.data is None:
             return  # never overwrite a file this version couldn't read
         await self._file.async_save(self.data)
+
+    def temperatures(self, room_id: str) -> dict[str, float | None] | None:
+        """The room's preset temperatures, None while the file can't be used."""
+        if self.data is None:
+            return None
+        return self.data["temperatures"].get(room_id)
 
     async def async_remove(self) -> None:
         """The heating system is deleted: its schedules go with it."""
