@@ -561,16 +561,13 @@ def test_v2_notices_logged_once(caplog) -> None:
     from custom_components.cloudless_multiroom_thermostat import (  # noqa: PLC0415
         _NOTICES_LOGGED,
         V2_REPORT_NOTICE,
-        V2_SCHEDULE_NOTICE,
         _log_v2_notice,
     )
 
     _NOTICES_LOGGED.clear()
     for _ in range(2):
-        _log_v2_notice(V2_SCHEDULE_NOTICE)
         _log_v2_notice(V2_REPORT_NOTICE)
-    assert caplog.text.count("will need a schedule for every room") == 1
-    assert caplog.text.count("removes the 21:00 evening report") == 1
+    assert caplog.text.count("v2.1.0 removes the 21:00 evening report") == 1
 
 
 SELECT_OPTS = {"options": ["local_temperature", "remote_temperature", "remote_source_offline"]}
@@ -674,3 +671,20 @@ async def test_select_without_clear_remote_option_is_left_alone(hass: HomeAssist
         assert calls.last("select.trv_living_sensor") is None
         assert hass.states.get("climate.living").attributes["external_sensor_ignored"] is False
         assert caplog.text.count("is clearly the external sensor") == 1
+
+
+async def test_room_added_during_setup_waits_for_the_next_one(hass: HomeAssistant, setup) -> None:
+    """Rooms added in quick succession: a subentry the controller doesn't know yet is skipped, not a crash."""
+    from custom_components.cloudless_multiroom_thermostat import binary_sensor, climate  # noqa: PLC0415
+
+    entry, _ = setup
+    office = next(s.subentry_id for s in entry.subentries.values() if s.title == "Office")
+    room = entry.runtime_data.rooms.pop(office)
+    added: list = []
+    try:
+        with patch.object(climate.entity_platform, "async_get_current_platform"):
+            await climate.async_setup_entry(hass, entry, lambda ents, **kw: added.extend(ents))
+        await binary_sensor.async_setup_entry(hass, entry, lambda ents, **kw: added.extend(ents))
+    finally:
+        entry.runtime_data.rooms[office] = room
+    assert added and all(e._room.room_id != office for e in added if hasattr(e, "_room"))
