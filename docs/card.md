@@ -125,7 +125,11 @@ Each room gets a schedule line and a thin strip for today in its presets' colour
 | Suspended · holds 15° | Schedules are suspended for the house |
 | No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (one preset all day; Eco is preselected) and **Scheduling off** |
 
-**Week and editing.** With schedules, the card has two views: **Rooms** and **Week** (one room, seven day lanes, its presets with their temperatures). Tap a day, or a room's schedule line, to edit:
+**Today.** Every room on one timeline for today, with changes by hand hatched and a now marker, and **Coming up**: the changes still to come today (rooms that switch at the same time to the same preset share a line).
+
+**Presets.** **Presets…** in the Week view or the editor opens a grid of rooms by presets. Tap a temperature to change it (or to set *not used* for a preset you added: Off in that room), tap a preset to rename it, pick its colour or remove it (Eco and Warm stay), and **+ Add preset** (up to 10). **Save** sends everything at once.
+
+**Week and editing.** With schedules, the card has three views: **Rooms**, **Today** and **Week** (one room, seven day lanes, its presets with their temperatures). Tap a day, or a room's schedule line, to edit:
 
 - On a wide screen (900 px or more, a tablet or a desktop) the editor shows the whole week. Tap a block to select it and drag its handles (switch points snap to 15 minutes, the time shows while you drag), or step its start and end with − and + in the side panel. Pick a preset there to change the block. To add a block, tap a preset in the palette, then tap a day: it gets an hour of that preset. **Copy day to…** copies the selected day to other days; **Remove block** gives its time to the block before it.
 - On a phone the editor shows one day as a list of switch points, each with a time (15 minute steps) and a preset, plus **Add switch point**, and **Also use for** to save the same day for other days.

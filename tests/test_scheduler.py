@@ -520,3 +520,15 @@ async def test_card_gets_the_week_and_the_suspend_flag(hass: HomeAssistant, hous
     await hass.services.async_call(DOMAIN, "suspend_schedules", {}, blocking=True)
     await hass.async_block_till_done()
     assert _room(hass, "office")["schedules_suspended"] is True
+
+
+async def test_new_preset_with_its_own_id_and_temperatures_in_one_call(hass: HomeAssistant, house) -> None:
+    """The card names a new preset's id itself, so its temperatures go in the same call."""
+    await _presets(
+        hass,
+        presets=[{"id": "eco", "name": "Eco"}, {"id": "warm", "name": "Warm"}, {"id": "comfort_plus", "name": "Comfort Plus"}],
+        temperatures={"climate.office": {"comfort_plus": 20.5}},
+    )
+    assert _room(hass, "office")["presets"][2] == {
+        "id": "comfort_plus", "name": "Comfort Plus", "color": None, "temperature": 20.5,
+    }

@@ -361,6 +361,37 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .pt .rm { width: 40px; height: 40px; border-radius: 8px; background: var(--hc-soft); color: var(--secondary-text-color); }
   @media (max-width: 899px) { .edgrid { grid-template-columns: 1fr; } }
 
+  /* Today: every room on one timeline, and what comes next */
+  .tlane { display: grid; grid-template-columns: minmax(80px, 140px) 1fr; align-items: center; gap: 10px; }
+  .tlane > span { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tbar { position: relative; height: 22px; border-radius: 6px; overflow: hidden; background: var(--hc-soft); }
+  .tbar b { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 2px solid var(--card-background-color, #1c1c1c); }
+  .tbar .over { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--hc-override) 0 4px, transparent 4px 8px); }
+  .tbar .now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary-text-color); }
+  .tbar .nosch { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 8px; font-size: 11px; color: ${SUN}; background: repeating-linear-gradient(135deg, color-mix(in srgb, ${SUN} 10%, transparent) 0 6px, transparent 6px 12px); }
+  .tticks { margin-left: 150px; }
+  .coming { display: flex; flex-direction: column; gap: 6px; }
+  .coming h4 { margin: 4px 0 0; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--secondary-text-color); font-weight: 500; }
+  .citem { display: grid; grid-template-columns: 46px 10px 1fr; gap: 8px; align-items: center; font-size: 13px; }
+  .citem b { font-variant-numeric: tabular-nums; }
+  .citem i { width: 10px; height: 10px; border-radius: 50%; }
+  .citem small { display: block; color: var(--secondary-text-color); font-size: 12px; }
+  /* Presets dialog: rooms by presets */
+  .pgrid { display: grid; gap: 6px; align-items: center; overflow-x: auto; }
+  .pgrid .ph { min-height: 40px; border-radius: 10px; background: var(--hc-soft); color: var(--primary-text-color); font-size: 13px; font-weight: 600; gap: 6px; padding: 0 8px; }
+  .pgrid .ph i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .pgrid .rn { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pgrid .cell { min-height: 40px; border-radius: 10px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--hc-soft); color: var(--primary-text-color); border: 1px solid transparent; }
+  .pgrid .cell.nu { background: transparent; color: var(--secondary-text-color); font-size: 11px; font-weight: 500; border: 1px dashed var(--divider-color, #3a3a3a); }
+  .pgrid .cell.sel { border-color: var(--hc-accent); color: var(--hc-accent); }
+  .cedit { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid var(--hc-accent); background: color-mix(in srgb, var(--hc-accent) 8%, transparent); }
+  .cedit > div { flex: 1; }
+  .cedit .adj { width: 40px; height: 40px; border-radius: 10px; }
+  .cedit b { font-size: 18px; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .pform { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pform input[type="text"] { flex: 1; min-width: 120px; height: 40px; font: inherit; background: var(--hc-soft); color: inherit; border: 0; border-radius: 10px; padding: 0 10px; }
+  .pform input[type="color"] { width: 44px; height: 40px; border: 0; background: none; padding: 0; }
+
   /* Dialogs: over the card, full screen on a phone */
   .dlg { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
   .dbox { width: min(420px, 100vw); max-height: 100vh; overflow: auto; box-sizing: border-box; padding: 18px 20px; border-radius: 20px; background: var(--card-background-color, var(--ha-card-background, #1c1c1c)); color: var(--primary-text-color); display: flex; flex-direction: column; gap: 14px; }
@@ -529,9 +560,11 @@ class HeatingControlCard extends HTMLElement {
         <div class="note" id="warn"><ha-icon icon="mdi:alert"></ha-icon><span id="warnText"></span></div>
         <div class="tabs" id="tabs" role="tablist">
           <button role="tab" class="tab on" data-v="rooms">Rooms</button>
+          <button role="tab" class="tab" data-v="today">Today</button>
           <button role="tab" class="tab" data-v="week">Week</button>
         </div>
         <div class="rooms" id="rooms"></div>
+        <div class="todayv" id="todayv"></div>
         <div class="weekv" id="weekv"></div>
       </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
@@ -542,7 +575,7 @@ class HeatingControlCard extends HTMLElement {
       flowline: $("flowline"), flowText: $("flowText"),
       sched: $("sched"), warn: $("warn"), warnText: $("warnText"), rooms: $("rooms"),
       pills: $("pills"), spill: $("spill"), spillText: $("spillText"), gpill: $("gpill"), gpillText: $("gpillText"),
-      nosched: $("nosched"), noschedText: $("noschedText"), tabs: $("tabs"), weekv: $("weekv"),
+      nosched: $("nosched"), noschedText: $("noschedText"), tabs: $("tabs"), weekv: $("weekv"), todayv: $("todayv"),
     };
     this._view = "rooms";
     this.shadowRoot.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
@@ -787,7 +820,9 @@ class HeatingControlCard extends HTMLElement {
     });
     e.rooms.style.display = this._view === "rooms" ? "" : "none";
     e.weekv.style.display = this._view === "week" ? "" : "none";
+    e.todayv.style.display = this._view === "today" ? "" : "none";
     if (this._view === "week") this._renderWeek(scheduled);
+    if (this._view === "today") this._renderToday(house.filter((r) => this._state(r.entity) && this._state(r.entity).attributes.schedule_state !== undefined));
     const none = scheduled.filter((r) => this._state(r.entity).attributes.schedule_state === "none");
     e.nosched.classList.toggle("show", none.length > 0);
     e.noschedText.textContent = none.length
@@ -1108,15 +1143,181 @@ class HeatingControlCard extends HTMLElement {
       <div class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
       <div class="lanes">${days.map((b, d) => `<div class="lane${d === today ? " today" : ""}" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" role="button" aria-label="Edit ${DAY_NAMES[d]}">${this._bars(b, P)}</div></div>`).join("")}</div>
       <div class="hint">Tap a day to edit it. Away and open windows still win over the schedule.</div>
-      <div class="dbtns"><button class="btn copy">Copy to room…</button>${a.schedule_state === "off"
+      <div class="dbtns"><button class="btn presets">Presets…</button><button class="btn copy">Copy to room…</button>${a.schedule_state === "off"
         ? `<button class="btn on">Turn schedule on</button>` : `<button class="btn off">Turn off schedule</button>`}</div>`;
     box.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { this._weekRoom = c.dataset.e; this._weekKey = null; this._update(); }));
     box.querySelectorAll(".lane").forEach((l) => l.addEventListener("click", () => this._editor(this._weekRoom, Number(l.dataset.d))));
     box.querySelector(".copy").addEventListener("click", () => this._copyDialog(this._weekRoom));
+    box.querySelector(".presets").addEventListener("click", () => this._presetsDialog());
     const off = box.querySelector(".off");
     if (off) off.addEventListener("click", () => this._call(INTEGRATION, "set_schedule", { entity_id: this._weekRoom, scheduling: "off" }));
     const on = box.querySelector(".on");
     if (on) on.addEventListener("click", () => this._call(INTEGRATION, "set_schedule", { entity_id: this._weekRoom, scheduling: "on" }));
+  }
+
+  // ----------------------------------------------------------- today view
+  // Every room on one timeline for today, and the changes still to come.
+  _renderToday(rooms) {
+    const box = this._el.todayv;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const key = JSON.stringify([rooms.map((r) => [r.entity, this._state(r.entity).attributes.schedule, this._state(r.entity).attributes.override, this._state(r.entity).attributes.schedule_state]), Math.floor(nowMin / 5)]);
+    if (key === this._todayKey) return;
+    this._todayKey = key;
+    const pct = (m) => `${(Math.max(0, Math.min(1440, m)) / 1440) * 100}%`;
+    const coming = [];
+    const lanes = rooms.map((r) => {
+      const a = this._state(r.entity).attributes;
+      const P = presetMap(a);
+      const name = (p) => (P[p] ? P[p].name : p);
+      const label = (p) => `${name(p)}${P[p] && P[p].temperature !== null && p !== "off" ? ` ${fmt(P[p].temperature)}°` : ""}`;
+      if (a.schedule_state === "none" || a.schedule_state === "blocked") {
+        return `<div class="tlane"><span>${esc(r.label)}</span><div class="tbar"><div class="nosch">No schedule · holds ${fmt(a.temperature)}°</div></div></div>`;
+      }
+      if (a.schedule_state === "off" || !Array.isArray(a.schedule)) {
+        return `<div class="tlane"><span>${esc(r.label)}</span><div class="tbar"><div class="nosch" style="color:var(--secondary-text-color);background:none">Scheduling off</div></div></div>`;
+      }
+      const blocks = todayBlocks(a.schedule, now);
+      blocks.forEach(([from, , p], i) => {
+        if (from > nowMin && i > 0 && a.schedule_state === "active") coming.push({ at: from, room: r.label, text: `${name(blocks[i - 1][2])} → ${label(p)}`, color: this._presetColor(P, p) });
+      });
+      let over = "";
+      if (a.override) {
+        const until = a.override.until ? new Date(a.override.until) : null;
+        const end = until && until.toDateString() === now.toDateString() ? until.getHours() * 60 + until.getMinutes() : 1440;
+        over = `<div class="over" style="left:${pct(nowMin)};width:${pct(end - nowMin)}"></div>`;
+        if (until && end < 1440) coming.push({ at: end, room: r.label, text: "Change by hand ends", color: "var(--hc-override)" });
+      }
+      const bars = blocks.map(([a1, e1, p]) => `<b style="left:${pct(a1)};width:${pct(e1 - a1)};background:${esc(this._presetColor(P, p))}"></b>`).join("");
+      return `<div class="tlane"><span>${esc(r.label)}</span><div class="tbar">${bars}${over}<div class="now" style="left:${pct(nowMin)}"></div></div></div>`;
+    });
+    coming.sort((x, y) => x.at - y.at);
+    // Rooms that change at the same time to the same preset share one line
+    const grouped = [];
+    coming.forEach((c) => {
+      const same = grouped.find((g) => g.at === c.at && g.text === c.text);
+      if (same) same.room += `, ${c.room}`;
+      else grouped.push({ ...c });
+    });
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    box.innerHTML = `
+      <div class="dsub">Today · ${days[now.getDay()]}</div>
+      <div class="ticks tticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      <div class="lanes">${lanes.join("")}</div>
+      <div class="coming"><h4>Coming up</h4>${grouped.length
+        ? grouped.slice(0, 6).map((c) => `<div class="citem"><b>${hm(c.at)}</b><i style="background:${esc(c.color)}"></i><span>${esc(c.room)}<small>${esc(c.text)}</small></span></div>`).join("")
+        : `<div class="hint">Nothing more changes today.</div>`}</div>`;
+  }
+
+  // -------------------------------------------------------- presets dialog
+  // Rooms by presets: a temperature per room or not used (Off there); add,
+  // rename, colour and remove presets (#113). Saved with set_presets.
+  _presetsDialog() {
+    const rooms = this._houseRooms(this._rooms()).filter((r) => {
+      const s = this._state(r.entity);
+      return s && Array.isArray(s.attributes.presets);
+    });
+    if (!rooms.length) return;
+    const first = this._state(rooms[0].entity).attributes;
+    const st = {
+      presets: first.presets.map((p, i) => ({ id: p.id, name: p.name, color: p.color || PRESET_COLORS[p.id] || PALETTE[(i - 2 + PALETTE.length) % PALETTE.length] })),
+      temps: Object.fromEntries(rooms.map((r) => [r.entity, Object.fromEntries(this._state(r.entity).attributes.presets.map((p) => [p.id, p.temperature]))])),
+      cell: null, head: null,
+    };
+    const builtin = (id) => id === "eco" || id === "warm";
+    const render = () => {
+      const cols = st.presets.length;
+      const cellHtml = (r, p) => {
+        const v = st.temps[r.entity][p.key || p.id];
+        const sel = st.cell && st.cell[0] === r.entity && st.cell[1] === (p.key || p.id);
+        return `<button class="cell${v === null || v === undefined ? " nu" : ""}${sel ? " sel" : ""}" data-e="${esc(r.entity)}" data-p="${esc(p.key || p.id)}" aria-label="${esc(r.label)} ${esc(p.name)}">${v === null || v === undefined ? "not used" : `${fmt(v)}°`}</button>`;
+      };
+      let editor = "";
+      if (st.cell) {
+        const [e, pid] = st.cell;
+        const p = st.presets.find((x) => (x.key || x.id) === pid);
+        const v = st.temps[e][pid];
+        const label = rooms.find((r) => r.entity === e).label;
+        editor = `<div class="cedit"><div><b style="font-size:13px;min-width:0;text-align:left">${esc(label)} · ${esc(p.name)}</b></div>
+          ${builtin(pid) ? "" : `<button class="btn nu" style="flex:none">${v === null ? "Use here" : "Not used"}</button>`}
+          <button class="adj cdown" aria-label="Lower"${v === null ? " disabled" : ""}>−</button><b>${v === null ? "--" : `${fmt(v)}°`}</b><button class="adj cup" aria-label="Raise"${v === null ? " disabled" : ""}>+</button></div>`;
+      }
+      if (st.head !== null) {
+        const p = st.presets[st.head];
+        editor = `<div class="cedit" style="flex-direction:column;align-items:stretch"><div class="pform">
+          <input type="text" class="pname" value="${esc(p.name)}" aria-label="Preset name"${builtin(p.id) ? "" : ""}>
+          <input type="color" class="pcolor" value="${esc(p.color)}" aria-label="Preset colour">
+          ${builtin(p.id) ? "" : `<button class="btn premove" style="flex:none">Remove</button>`}</div>
+          <div class="hint">${builtin(p.id) ? "Eco and Warm are built in: rename or recolour them, they can't be removed." : "A preset still used in a schedule can't be removed."}</div></div>`;
+      }
+      const html = `${this._head("Presets", "Heating system")}
+        <div class="pgrid" style="grid-template-columns: minmax(90px,1.4fr) repeat(${cols}, minmax(64px,1fr))">
+          <span></span>${st.presets.map((p, i) => `<button class="ph" data-h="${i}"><i style="background:${esc(p.color)}"></i>${esc(p.name)}</button>`).join("")}
+          ${rooms.map((r) => `<span class="rn">${esc(r.label)}</span>${st.presets.map((p) => cellHtml(r, p)).join("")}`).join("")}
+        </div>
+        <div class="hint">Tap a temperature to change it, or a preset to rename it, pick its colour or remove it. Not used means Off in that room.</div>
+        ${editor}
+        <div class="opt" style="cursor:default"><span><b>Off</b><small>uses the system off temperature for every room</small></span></div>
+        <div class="dbtns"><button class="btn addp"${st.presets.length >= 10 ? " disabled" : ""}>+ Add preset</button><button class="btn primary save">Save</button></div>`;
+      this._openDialog(html, (d) => {
+        d.querySelectorAll(".cell").forEach((c) => c.addEventListener("click", () => { st.cell = [c.dataset.e, c.dataset.p]; st.head = null; render(); }));
+        d.querySelectorAll(".ph").forEach((c) => c.addEventListener("click", () => { st.head = Number(c.dataset.h); st.cell = null; render(); }));
+        const step = (dir) => {
+          const [e, pid] = st.cell;
+          const s = this._state(e).attributes;
+          const v = st.temps[e][pid];
+          st.temps[e][pid] = Math.round(Math.min(s.max_temp ?? 30, Math.max(s.min_temp ?? 5, v + dir * (s.target_temp_step || 0.5))) * 100) / 100;
+          render();
+        };
+        const down = d.querySelector(".cdown");
+        if (down) down.addEventListener("click", () => step(-1));
+        const up = d.querySelector(".cup");
+        if (up) up.addEventListener("click", () => step(1));
+        const nu = d.querySelector(".cedit .nu");
+        if (nu) nu.addEventListener("click", () => {
+          const [e, pid] = st.cell;
+          st.temps[e][pid] = st.temps[e][pid] === null ? num(this._state(e).attributes.presets.find((p) => p.id === "eco").temperature) ?? 18 : null;
+          render();
+        });
+        const name = d.querySelector(".pname");
+        if (name) name.addEventListener("change", () => { st.presets[st.head].name = name.value.trim() || st.presets[st.head].name; render(); });
+        const color = d.querySelector(".pcolor");
+        if (color) color.addEventListener("change", () => { st.presets[st.head].color = color.value; render(); });
+        const rm = d.querySelector(".premove");
+        if (rm) rm.addEventListener("click", () => {
+          const p = st.presets.splice(st.head, 1)[0];
+          Object.values(st.temps).forEach((t) => delete t[p.key || p.id]);
+          st.head = null;
+          render();
+        });
+        d.querySelector(".addp").addEventListener("click", () => {
+          const key = `new${Date.now()}`;
+          st.presets.push({ key, name: `Preset ${st.presets.length + 1}`, color: PALETTE[st.presets.length % PALETTE.length] });
+          Object.values(st.temps).forEach((t) => { t[key] = null; });
+          st.head = st.presets.length - 1;
+          st.cell = null;
+          render();
+        });
+        d.querySelector(".save").addEventListener("click", async () => {
+          // A new preset gets its id here (as the integration would from its name), so its
+          // temperatures go in the same call
+          const taken = new Set(st.presets.filter((p) => !p.key).map((p) => p.id).concat(["off"]));
+          const ids = {};
+          st.presets.filter((p) => p.key).forEach((p) => {
+            const base = (p.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 28)) || "preset";
+            let id = base;
+            for (let n = 2; taken.has(id); n++) id = `${base}_${n}`;
+            taken.add(id);
+            ids[p.key] = id;
+          });
+          const presets = st.presets.map((p) => ({ id: p.key ? ids[p.key] : p.id, name: p.name, color: p.color }));
+          const temperatures = Object.fromEntries(Object.entries(st.temps).map(([e, t]) => [e, Object.fromEntries(Object.entries(t).map(([k, v]) => [ids[k] || k, v]))]));
+          if (!(await this._call(INTEGRATION, "set_presets", { presets, temperatures }))) return;
+          this._closeDialog();
+        });
+      });
+    };
+    render();
   }
 
   // --------------------------------------------------------------- editor
@@ -1159,6 +1360,7 @@ class HeatingControlCard extends HTMLElement {
     const palette = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
     const tooMany = this._tooMany();
     const html = `${this._head("Edit schedule", ed.label)}
+      <div class="dbtns" style="justify-content:flex-end;margin-top:-6px"><button class="btn openpresets" style="flex:none">Presets…</button></div>
       <div class="edgrid">
         <div>
           <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">Add a block: tap a preset, then tap a day</span>
@@ -1247,6 +1449,7 @@ class HeatingControlCard extends HTMLElement {
       }));
       d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
       d.querySelector(".save").addEventListener("click", () => this._saveWeek());
+      d.querySelector(".openpresets").addEventListener("click", () => this._presetsDialog());
     });
   }
 
