@@ -24,6 +24,9 @@ Each room is a device with these entities.
 | `is_winner` | `true` while this room drives the heat source |
 | `drives_heat_source` | The room's **Drives the heat source** setting. See [Rooms](rooms.md#drives-the-heat-source) |
 | `external_sensor_ignored` | `true` while a TRV external sensor select is not on its remote option and the room sensor works. See [Rooms](rooms.md#trv-external-sensor-selects) |
+| `schedule_state` | `active` (follows its schedule), `none` (no schedule: holds the Temperature without schedule), `off` (scheduling off), `suspended`, `blocked` (schedule file can't be used). See [Schedules](schedules.md) |
+| `next_change` | Next schedule change: `at` (local time) and `preset`, or none |
+| `override_until` | When a change by hand ends (local time), or none |
 
 The room's `hvac_action` is heating while it is the winner or a passenger and the heat source runs, idle otherwise, and off while it is off or paused.
 
@@ -67,6 +70,10 @@ Attributes added since v1.9:
 | `cloudless_multiroom_thermostat.pause_room` | target: room climate entities | Hold a room off until resumed, keeping its mode and target |
 | `cloudless_multiroom_thermostat.resume_room` | target: room climate entities | End a manual pause |
 | `cloudless_multiroom_thermostat.set_all_off` | `config_entry_id` (optional) | Set every room to Off, or only the rooms of that heating system |
+| `cloudless_multiroom_thermostat.set_schedule` | room climate; `week`, `scheduling` | Save a room's week schedule, or turn scheduling on or off. See [Schedules](schedules.md#actions) |
+| `cloudless_multiroom_thermostat.resume_schedule` | room climate | End a change by hand: back to the schedule |
+| `cloudless_multiroom_thermostat.suspend_schedules` | `config_entry_id` (optional) | Rooms with a schedule hold the Temperature without schedule |
+| `cloudless_multiroom_thermostat.resume_schedules` | `config_entry_id` (optional) | Rooms follow their schedules again |
 | `cloudless_multiroom_thermostat.experimental_report` | `config_entry_id` (optional) | Post the learning features report now |
 
 The room climates also take the standard climate services: `climate.set_hvac_mode` (`heat`, `off`), `climate.set_temperature` and `climate.set_preset_mode` (`eco`, `warm`).

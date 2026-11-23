@@ -18,6 +18,11 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_INITIAL_SCHEDULE,
+    CONF_NO_SCHEDULE_TEMP,
+    DEFAULT_INITIAL_SCHEDULE,
+    DEFAULT_NO_SCHEDULE_TEMP,
+    SCHEDULING_OFF_CHOICE,
     PRESET_ECO,
     PRESET_WARM,
     AWAY_MODES,
@@ -156,6 +161,7 @@ def heat_source_schema(source_type: str) -> vol.Schema:
 SETTINGS_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_OFF_TEMP, default=DEFAULT_OFF_TEMP): _temp(5, 16),
+        vol.Required(CONF_NO_SCHEDULE_TEMP, default=DEFAULT_NO_SCHEDULE_TEMP): _temp(5, 21),
         vol.Optional(CONF_PRESENCE): _entities(
             ["binary_sensor", "input_boolean", "person", "zone", "group", "device_tracker"]
         ),
@@ -459,6 +465,36 @@ class RoomSubentryFlow(ConfigSubentryFlow):
             errors=errors,
         )
 
+    # Step 3 (Add room only) ---------------------------------------------------
+    async def async_step_schedule(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """A new room never starts without a schedule: one block all day, or scheduling off (#115)."""
+        if user_input is not None:
+            data = {**self._data, CONF_INITIAL_SCHEDULE: user_input[CONF_INITIAL_SCHEDULE]}
+            return self.async_create_entry(title=data[CONF_ROOM_NAME], data=data)
+        controller = getattr(self._get_entry(), "runtime_data", None)
+        scheduler = getattr(controller, "scheduler", None)
+        data = scheduler.data if scheduler is not None else None
+        presets = data["presets"] if data is not None else [
+            {"id": PRESET_ECO, "name": "Eco"}, {"id": PRESET_WARM, "name": "Warm"}
+        ]
+        options = [
+            selector.SelectOptionDict(value=p["id"], label=f"{p['name']} all day") for p in presets
+        ] + [selector.SelectOptionDict(value=SCHEDULING_OFF_CHOICE, label=SCHEDULING_OFF_CHOICE)]
+        return self.async_show_form(
+            step_id="schedule",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_INITIAL_SCHEDULE, default=DEFAULT_INITIAL_SCHEDULE): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options, translation_key=CONF_INITIAL_SCHEDULE,
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+            description_placeholders={"room": self._data[CONF_ROOM_NAME]},
+        )
+
     # Step 2 -----------------------------------------------------------------
     async def async_step_sensors(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         if user_input is not None:
@@ -469,7 +505,8 @@ class RoomSubentryFlow(ConfigSubentryFlow):
                 return self.async_update_and_abort(
                     self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
                 )
-            return self.async_create_entry(title=title, data=data)
+            self._data = data
+            return await self.async_step_schedule()
         return self.async_show_form(
             step_id="sensors",
             data_schema=self.add_suggested_values_to_schema(SENSORS_SCHEMA, self._current),

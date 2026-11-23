@@ -20,3 +20,36 @@ experimental_report:
       selector:
         config_entry:
           integration: cloudless_multiroom_thermostat
+set_schedule:
+  target:
+    entity:
+      integration: cloudless_multiroom_thermostat
+      domain: climate
+  fields:
+    week:
+      selector:
+        object:
+    scheduling:
+      default: "on"
+      selector:
+        select:
+          options:
+            - "on"
+            - "off"
+resume_schedule:
+  target:
+    entity:
+      integration: cloudless_multiroom_thermostat
+      domain: climate
+suspend_schedules:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: cloudless_multiroom_thermostat
+resume_schedules:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: cloudless_multiroom_thermostat

@@ -180,6 +180,9 @@ class HeatingController:
         self.present = True
         self.experimental: Any = None  # ExperimentalRunner when enabled in options
         self.schedules: Any = None  # ScheduleStore, loaded in async_setup_entry (#112)
+        from .scheduler import Scheduler  # noqa: PLC0415 - imports Room from here
+
+        self.scheduler = Scheduler(hass, self)
         self.system_device_id: str | None = None  # set in async_setup_entry
         self._unsubs: list[CALLBACK_TYPE] = []
         self._sent: dict[str, tuple[Any, float]] = {}
@@ -301,16 +304,6 @@ class HeatingController:
         self.request_recompute()
 
     @callback
-    def set_room_preset(self, room_id: str, preset: str | None) -> None:
-        room = self.rooms[room_id]
-        if preset == PRESET_ECO:
-            self.set_room_state(room_id, target=room.eco_temp, preset=PRESET_ECO)
-        elif preset == PRESET_WARM:
-            self.set_room_state(room_id, target=room.warm_temp, preset=PRESET_WARM)
-        else:
-            self.set_room_state(room_id, preset=None)
-
-    @callback
     def request_recompute(self) -> None:
         if self._started:
             self._debouncer.async_schedule_call()
@@ -367,6 +360,7 @@ class HeatingController:
             )
         )
         self._unsubs.append(async_at_started(self.hass, self._async_on_started))
+        self.scheduler.async_start()
 
     async def _async_on_started(self, _hass: HomeAssistant) -> None:
         self._started = True
@@ -376,6 +370,7 @@ class HeatingController:
         await self._async_apply()
 
     async def async_stop(self) -> None:
+        self.scheduler.async_stop()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()

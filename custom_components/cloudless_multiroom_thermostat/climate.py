@@ -11,6 +11,7 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
+import voluptuous as vol
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
@@ -26,15 +27,18 @@ from .const import (
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
     DEFAULT_STEP,
-    PRESET_ECO,
     PRESET_WARM,
+    SCHEDULE_ACTIVE,
     SERVICE_PAUSE_ROOM,
     SERVICE_RESUME_ROOM,
+    SERVICE_RESUME_SCHEDULE,
+    SERVICE_SET_SCHEDULE,
     SUBENTRY_ROOM,
     signal_update,
 )
 from .controller import HeatingController, Room
 from .entity import room_device_info
+from .schedule import PRESET_OFF, SCHEDULING_OFF, SCHEDULING_ON
 
 ATTR_PRESET = "preset_mode"
 ATTR_MANUAL_PAUSE = "manual_pause"
@@ -57,6 +61,15 @@ async def async_setup_entry(
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(SERVICE_PAUSE_ROOM, None, "async_pause")
     platform.async_register_entity_service(SERVICE_RESUME_ROOM, None, "async_resume")
+    platform.async_register_entity_service(
+        SERVICE_SET_SCHEDULE,
+        {
+            vol.Optional("week"): vol.All(list),
+            vol.Optional("scheduling", default=SCHEDULING_ON): vol.In([SCHEDULING_ON, SCHEDULING_OFF]),
+        },
+        "async_set_schedule",
+    )
+    platform.async_register_entity_service(SERVICE_RESUME_SCHEDULE, None, "async_resume_schedule")
 
 
 class RoomClimate(ClimateEntity, RestoreEntity):
@@ -74,7 +87,6 @@ class RoomClimate(ClimateEntity, RestoreEntity):
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
-    _attr_preset_modes = [PRESET_NONE, PRESET_ECO, PRESET_WARM]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
@@ -100,14 +112,14 @@ class RoomClimate(ClimateEntity, RestoreEntity):
         if last is not None:
             room.hvac_on = last.state == HVACMode.HEAT
             preset = last.attributes.get(ATTR_PRESET)
-            room.preset = preset if preset in (PRESET_ECO, PRESET_WARM) else None
+            scheduler = self._controller.scheduler
+            room.preset = preset if preset in scheduler.preset_ids() else None
             target = last.attributes.get(ATTR_TEMPERATURE)
-            # A preset takes its temperature from the room settings, which an
-            # edit may have changed; a manual target stays within min and max
-            if room.preset == PRESET_ECO:
-                room.target = room.eco_temp
-            elif room.preset == PRESET_WARM:
-                room.target = room.warm_temp
+            # A preset takes its temperature from the presets, which an edit
+            # may have changed; a manual target stays within min and max.
+            # A room with a schedule gets both from the scheduler afterwards.
+            if room.preset is not None:
+                room.target = scheduler.preset_temp(room, room.preset)
             elif target is not None:
                 room.target = min(max(float(target), self.min_temp), self.max_temp)
             room.manual_pause = bool(last.attributes.get(ATTR_MANUAL_PAUSE, False))
@@ -147,6 +159,13 @@ class RoomClimate(ClimateEntity, RestoreEntity):
         return HVACMode.HEAT if self._room.hvac_on else HVACMode.OFF
 
     @property
+    def preset_modes(self) -> list[str]:
+        modes = [PRESET_NONE, *self._controller.scheduler.preset_ids()]
+        if self._controller.scheduler.state(self._room) == SCHEDULE_ACTIVE:
+            modes.append(PRESET_OFF)  # a switch point to Off
+        return modes
+
+    @property
     def preset_mode(self) -> str:
         return self._room.preset or PRESET_NONE
 
@@ -172,6 +191,7 @@ class RoomClimate(ClimateEntity, RestoreEntity):
             "is_winner": ctl.winner.room_id == room.room_id,
             "drives_heat_source": room.drives,
             "external_sensor_ignored": bool(ctl.external_sensor_ignored(room)),
+            **ctl.scheduler.attributes(room),
         }
 
     # -------------------------------------------------------------- commands
@@ -184,14 +204,14 @@ class RoomClimate(ClimateEntity, RestoreEntity):
             )
         if temperature is not None:
             value = min(max(float(temperature), self.min_temp), self.max_temp)
-            self._controller.set_room_state(self._room.room_id, target=value, preset=None)
+            await self._controller.scheduler.async_request_target(self._room, value)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         self._controller.set_room_state(self._room.room_id, hvac_on=hvac_mode == HVACMode.HEAT)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        self._controller.set_room_preset(
-            self._room.room_id, None if preset_mode == PRESET_NONE else preset_mode
+        await self._controller.scheduler.async_request_preset(
+            self._room, None if preset_mode == PRESET_NONE else preset_mode
         )
 
     async def async_turn_on(self) -> None:
@@ -205,3 +225,9 @@ class RoomClimate(ClimateEntity, RestoreEntity):
 
     async def async_resume(self) -> None:
         self._controller.set_room_state(self._room.room_id, manual_pause=False)
+
+    async def async_set_schedule(self, scheduling: str, week: list[Any] | None = None) -> None:
+        await self._controller.scheduler.async_set_schedule(self._room, week, scheduling)
+
+    async def async_resume_schedule(self) -> None:
+        await self._controller.scheduler.async_resume(self._room)

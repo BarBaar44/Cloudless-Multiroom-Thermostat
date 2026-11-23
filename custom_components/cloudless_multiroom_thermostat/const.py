@@ -18,6 +18,7 @@ CONF_PRESENCE: Final = "presence_entity"
 CONF_AWAY_MODE: Final = "away_mode"
 CONF_SKIP_UNCHANGED: Final = "skip_unchanged_writes"
 CONF_HEARTBEAT_MIN: Final = "external_temp_heartbeat"
+CONF_NO_SCHEDULE_TEMP: Final = "temperature_without_schedule"  # v2 (#115)
 
 HEAT_SOURCE_SWITCH: Final = "switch"
 HEAT_SOURCE_CLIMATE: Final = "climate"
@@ -44,6 +45,10 @@ CONF_MAX_TEMP: Final = "max_temp"
 CONF_STEP: Final = "target_temp_step"
 CONF_ECO_TEMP: Final = "eco_temperature"
 CONF_WARM_TEMP: Final = "warm_temperature"
+# Handed over by Add room and moved into the schedule file on load (#115):
+# a preset id for one block all day, or SCHEDULING_OFF_CHOICE
+CONF_INITIAL_SCHEDULE: Final = "initial_schedule"
+SCHEDULING_OFF_CHOICE: Final = "scheduling_off"
 
 # Defaults
 DEFAULT_OFF_TEMP: Final = 10.0
@@ -60,6 +65,15 @@ DEFAULT_MAX_TEMP: Final = 25.0
 DEFAULT_STEP: Final = 0.5
 DEFAULT_ECO_TEMP: Final = 15.0
 DEFAULT_WARM_TEMP: Final = 19.0
+DEFAULT_NO_SCHEDULE_TEMP: Final = 15.0
+DEFAULT_INITIAL_SCHEDULE: Final = "warm"
+
+# Schedule state of a room (#114, #115), attribute schedule_state
+SCHEDULE_ACTIVE: Final = "active"
+SCHEDULE_NONE: Final = "none"  # no schedule: holds the temperature without schedule
+SCHEDULE_OFF: Final = "off"  # scheduling off: the room is the user's
+SCHEDULE_SUSPENDED: Final = "suspended"
+SCHEDULE_BLOCKED: Final = "blocked"  # the schedule file can't be used
 
 # Experimental features (options)
 CONF_EXPERIMENTAL: Final = "experimental"
@@ -124,6 +138,10 @@ PAUSE_MANUAL: Final = "manual"
 SERVICE_PAUSE_ROOM: Final = "pause_room"
 SERVICE_RESUME_ROOM: Final = "resume_room"
 SERVICE_SET_ALL_OFF: Final = "set_all_off"
+SERVICE_SET_SCHEDULE: Final = "set_schedule"
+SERVICE_RESUME_SCHEDULE: Final = "resume_schedule"
+SERVICE_SUSPEND_SCHEDULES: Final = "suspend_schedules"
+SERVICE_RESUME_SCHEDULES: Final = "resume_schedules"
 
 # Seconds an issued write counts as "in flight" before it may be resent
 WRITE_GRACE_S: Final = 120
