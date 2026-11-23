@@ -20,6 +20,7 @@ from .const import (
 )
 from .controller import HeatingController
 from .frontend import async_remove_frontend, async_setup_frontend
+from .schedule_store import ScheduleStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +109,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> bool:
     )
     controller.system_device_id = system_device.id
 
+    # v2 schedule data (#112). Loaded and kept in line with the rooms; nothing
+    # acts on it yet. A problem here stops scheduling, never the heating.
+    controller.schedules = ScheduleStore(hass, entry.entry_id)
+    await controller.schedules.async_load(
+        {room_id: (room.eco_temp, room.warm_temp) for room_id, room in controller.rooms.items()}
+    )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await controller.async_start()
     if controller.experimental is not None:
@@ -144,6 +152,7 @@ async def _async_reload(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
-    """Remove the card's dashboard resource with the last heating system."""
+    """Remove the system's schedules, and the card's dashboard resource with the last system."""
+    await ScheduleStore(hass, entry.entry_id).async_remove()
     if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
         await async_remove_frontend(hass)
