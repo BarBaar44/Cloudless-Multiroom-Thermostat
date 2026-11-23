@@ -11,6 +11,7 @@ Layout of the data (schema version 1):
       "rooms": {room_id: {"scheduling": "on" | "off", "week": [[point, ...] x 7]}},
       "overrides": {room_id: {...}},
       "suspended": false,
+      "unsuspended": [room_id, ...],   # taken out of the suspend by a change by hand
     }
 
 A point is {"time": "HH:MM", "preset": preset_id | "off", "mode": "at"}.
@@ -22,6 +23,8 @@ from __future__ import annotations
 
 import copy
 import re
+from datetime import UTC, date, datetime, timedelta, tzinfo
+from datetime import time as dt_time
 from collections.abc import Mapping
 from typing import Any, Final
 
@@ -174,6 +177,7 @@ def empty_data() -> dict[str, Any]:
         "rooms": {},
         "overrides": {},
         "suspended": False,
+        "unsuspended": [],
     }
 
 
@@ -210,6 +214,10 @@ def validate_data(data: Any) -> dict[str, Any]:
         raise ScheduleError("Overrides must be an object per room")
     clean["overrides"] = copy.deepcopy(dict(overrides))  # shape is defined with #116
     clean["suspended"] = bool(data.get("suspended", False))
+    unsuspended = data.get("unsuspended", [])
+    if not isinstance(unsuspended, list):
+        raise ScheduleError("Rooms taken out of the suspend must be a list")
+    clean["unsuspended"] = [str(r) for r in unsuspended] if clean["suspended"] else []
     return clean
 
 
@@ -244,4 +252,72 @@ def sync_rooms(
     for key in ("temperatures", "rooms", "overrides"):
         for room_id in [r for r in data[key] if r not in rooms]:
             del data[key][room_id]
+    data["unsuspended"] = [r for r in data.get("unsuspended", []) if r in rooms]
     return data != before
+
+
+# ------------------------------------------------------------ evaluation
+# Switch points are local wall time. Instants are aware datetimes. Working with
+# instants (never wall times) keeps the daylight saving days right: a point in
+# the skipped hour fires at the jump, a point in the repeated hour fires once.
+def local_instant(day: date, minutes: int, tz: tzinfo) -> datetime:
+    """The first instant the wall clock in `tz` reads day + minutes, or the jump past it."""
+    wall = datetime.combine(day, dt_time()) + timedelta(minutes=minutes)
+    first = wall.replace(tzinfo=tz, fold=0)
+    utc = first.astimezone(UTC)
+    if utc.astimezone(tz).replace(tzinfo=None) == wall:
+        return utc  # exists; fold=0 is the first of a repeated time
+    # In the skipped hour: fire at the jump, the first instant that reads later
+    low = wall.replace(tzinfo=tz, fold=1).astimezone(UTC)
+    high = utc
+    while high - low > timedelta(minutes=1):
+        mid = low + (high - low) / 2
+        if mid.astimezone(tz).replace(tzinfo=None) >= wall:
+            high = mid
+        else:
+            low = mid
+    for step in range(0, 61):  # land on the whole minute of the jump
+        cand = (low + timedelta(minutes=step)).replace(second=0, microsecond=0)
+        if cand.astimezone(tz).replace(tzinfo=None) >= wall:
+            return cand
+    return high
+
+
+def occurrences(
+    week: list[list[Mapping[str, Any]]], now: datetime, tz: tzinfo
+) -> list[tuple[datetime, Mapping[str, Any]]]:
+    """Every switch point of last week, this week and next week as (instant, point), in order."""
+    today = now.astimezone(tz).date()
+    monday = today - timedelta(days=today.weekday())
+    out: list[tuple[datetime, Mapping[str, Any]]] = []
+    for weeks in (-1, 0, 1):
+        for index, day in enumerate(week):
+            date_ = monday + timedelta(days=7 * weeks + index)
+            out.extend((local_instant(date_, parse_time(p["time"]), tz), p) for p in day)
+    out.sort(key=lambda item: item[0])
+    return out
+
+
+def current_point(
+    week: list[list[Mapping[str, Any]]], now: datetime, tz: tzinfo
+) -> Mapping[str, Any]:
+    """The switch point in force now (the last one at or before now, also over midnight)."""
+    past = [point for instant, point in occurrences(week, now, tz) if instant <= now]
+    return past[-1]  # a week has at least one point, and last week is in the list
+
+
+def next_change(
+    week: list[list[Mapping[str, Any]]], now: datetime, tz: tzinfo
+) -> tuple[datetime, Mapping[str, Any]] | None:
+    """The next switch point to another preset than the one in force now.
+
+    With a single preset all week (one block) there is no change; the next
+    switch point is returned instead, so an override until the next change
+    still ends (at the next midnight for one block).
+    """
+    current = current_point(week, now, tz)["preset"]
+    upcoming = [(i, p) for i, p in occurrences(week, now, tz) if i > now]
+    for instant, point in upcoming:
+        if point["preset"] != current:
+            return instant, point
+    return upcoming[0] if upcoming else None

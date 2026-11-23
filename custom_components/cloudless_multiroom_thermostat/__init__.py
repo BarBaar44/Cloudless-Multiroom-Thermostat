@@ -15,6 +15,10 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_ECO_TEMP,
     CONF_EXPERIMENTAL,
+    CONF_INITIAL_SCHEDULE,
+    SCHEDULING_OFF_CHOICE,
+    SERVICE_RESUME_SCHEDULES,
+    SERVICE_SUSPEND_SCHEDULES,
     CONF_WARM_TEMP,
     DEFAULT_ECO_TEMP,
     DEFAULT_WARM_TEMP,
@@ -24,7 +28,11 @@ from .const import (
 )
 from .controller import HeatingController
 from .frontend import async_remove_frontend, async_setup_frontend
+from homeassistant.helpers import issue_registry as ir
+
+from .schedule import SCHEDULING_OFF, SCHEDULING_ON, one_block_week
 from .schedule_store import ScheduleStore
+from .scheduler import issue_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +82,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _set_all_off,
         schema=vol.Schema({vol.Optional("config_entry_id"): vol.All(cv.ensure_list, [cv.string])}),
     )
+
+    def _suspend(suspended: bool):
+        async def _handler(call: ServiceCall) -> None:
+            entry_ids = call.data.get("config_entry_id")
+            for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+                if entry_ids and entry.entry_id not in entry_ids:
+                    continue
+                await entry.runtime_data.scheduler.async_suspend(suspended)
+
+        return _handler
+
+    for service, suspended in ((SERVICE_SUSPEND_SCHEDULES, True), (SERVICE_RESUME_SCHEDULES, False)):
+        hass.services.async_register(
+            DOMAIN,
+            service,
+            _suspend(suspended),
+            schema=vol.Schema({vol.Optional("config_entry_id"): vol.All(cv.ensure_list, [cv.string])}),
+        )
 
     async def _experimental_report(call: ServiceCall) -> None:
         _LOGGER.warning("The experimental_report service is removed in v2.0.0 (deprecated)")
@@ -127,8 +153,9 @@ async def _async_load_schedules(hass: HomeAssistant, entry: CMTConfigEntry, cont
     """Load the v2 schedule data (#112) and make it the only home of the preset temperatures.
 
     Eco and Warm handed over by the room form (Add room, Edit room) or left by
-    v1 move into the schedule file and are then removed from the room. This
-    runs before the update listener is added, so removing them doesn't reload.
+    v1, and the schedule chosen in Add room, move into the schedule file and are
+    then removed from the room. This runs before the update listener is added,
+    so removing them doesn't reload.
     Nothing acts on schedules yet. A problem here stops scheduling, never the
     heating: the values then stay with the room until the file can be used.
     """
@@ -143,11 +170,22 @@ async def _async_load_schedules(hass: HomeAssistant, entry: CMTConfigEntry, cont
     )
     if store.blocked is not None:
         return
+    handed_over = (CONF_ECO_TEMP, CONF_WARM_TEMP, CONF_INITIAL_SCHEDULE)
+    schedules_added = False
     for room_id, room in controller.rooms.items():
         room.preset_temps = store.temperatures(room_id)
-        if CONF_ECO_TEMP in room.config or CONF_WARM_TEMP in room.config:
-            room.config = {k: v for k, v in room.config.items() if k not in (CONF_ECO_TEMP, CONF_WARM_TEMP)}
+        choice = room.config.get(CONF_INITIAL_SCHEDULE)
+        if choice and room_id not in store.data["rooms"]:
+            if choice == SCHEDULING_OFF_CHOICE:
+                store.data["rooms"][room_id] = {"scheduling": SCHEDULING_OFF, "week": None}
+            elif choice in store.data["temperatures"].get(room_id, {}):
+                store.data["rooms"][room_id] = {"scheduling": SCHEDULING_ON, "week": one_block_week(choice)}
+            schedules_added = True
+        if any(key in room.config for key in handed_over):
+            room.config = {k: v for k, v in room.config.items() if k not in handed_over}
             hass.config_entries.async_update_subentry(entry, entry.subentries[room_id], data=room.config)
+    if schedules_added:
+        await store.async_save()
 
 
 async def _async_start_learning(controller: HeatingController) -> None:
@@ -180,5 +218,7 @@ async def _async_reload(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
 async def async_remove_entry(hass: HomeAssistant, entry: CMTConfigEntry) -> None:
     """Remove the system's schedules, and the card's dashboard resource with the last system."""
     await ScheduleStore(hass, entry.entry_id).async_remove()
+    for issue_id in issue_ids(entry.entry_id):
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
     if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
         await async_remove_frontend(hass)

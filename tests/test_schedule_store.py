@@ -18,6 +18,8 @@ from custom_components.cloudless_multiroom_thermostat.schedule_store import Sche
 
 from .test_integration import setup  # noqa: F401 - fixture
 
+pytestmark = pytest.mark.v2_schedules
+
 ROOMS = {"living": (15.0, 20.5), "office": (15.0, 19.0)}
 DEFAULTS = (15.0, 19.0)
 

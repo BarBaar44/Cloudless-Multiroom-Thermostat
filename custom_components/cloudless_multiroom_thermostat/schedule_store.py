@@ -105,6 +105,11 @@ class ScheduleStore:
             return  # never overwrite a file this version couldn't read
         await self._file.async_save(self.data)
 
+    def async_delay_save(self) -> None:
+        """Save soon, for changes made from a callback."""
+        if self.blocked is None and self.data is not None:
+            self._file.async_delay_save(lambda: self.data, 1)
+
     def temperatures(self, room_id: str) -> dict[str, float | None] | None:
         """The room's preset temperatures, None while the file can't be used."""
         if self.data is None:

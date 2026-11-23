@@ -412,7 +412,8 @@ def _room_step(name: str, **extra) -> dict:
     return {**ROOM_STEP, "name": name, "target_temp_step": "0.5", **extra}
 
 
-async def test_add_room_two_steps(hass: HomeAssistant, setup) -> None:
+@pytest.mark.v2_schedules
+async def test_add_room_three_steps(hass: HomeAssistant, setup) -> None:
     entry, _ = setup
     flows = hass.config_entries.subentries
     result = await flows.async_init((entry.entry_id, "room"), context={"source": config_entries.SOURCE_USER})
@@ -428,6 +429,8 @@ async def test_add_room_two_steps(hass: HomeAssistant, setup) -> None:
     assert result["step_id"] == "sensors"
 
     result = await flows.async_configure(result["flow_id"], {**SENSOR_STEP, "trvs": []})
+    assert result["step_id"] == "schedule"
+    result = await flows.async_configure(result["flow_id"], {"initial_schedule": "eco"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     sub = next(s for s in entry.subentries.values() if s.title == "Attic")
@@ -435,6 +438,10 @@ async def test_add_room_two_steps(hass: HomeAssistant, setup) -> None:
     # Eco and Warm live in the schedule file only (#112)
     assert "warm_temperature" not in sub.data
     assert entry.runtime_data.schedules.data["temperatures"][sub.subentry_id] == {"eco": 15.0, "warm": 18.0}
+    # The schedule chosen in step 3: Eco all day, moved into the file too (#115)
+    assert "initial_schedule" not in sub.data
+    week = entry.runtime_data.schedules.data["rooms"][sub.subentry_id]["week"]
+    assert week[0] == [{"time": "00:00", "preset": "eco", "mode": "at"}]
     assert hass.states.get("climate.attic") is not None
 
 

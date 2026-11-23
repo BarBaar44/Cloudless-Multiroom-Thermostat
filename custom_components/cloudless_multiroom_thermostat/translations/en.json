@@ -29,14 +29,16 @@
           "presence_entity": "Presence",
           "away_mode": "When everybody is away",
           "skip_unchanged_writes": "Skip unchanged TRV writes",
-          "external_temp_heartbeat": "Heartbeat"
+          "external_temp_heartbeat": "Heartbeat",
+          "temperature_without_schedule": "Temperature without schedule"
         },
         "data_description": {
           "off_temperature": "Sent to the heat source and TRVs when nothing should heat (frost protection).",
           "presence_entity": "Optional. home / on means somebody is home. Unknown counts as home.",
           "away_mode": "Rooms that are set to heat go off, or are lowered to their eco temperature.",
           "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
-          "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours)."
+          "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours).",
+          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room."
         }
       }
     }
@@ -54,7 +56,8 @@
           "away_mode": "When everybody is away",
           "skip_unchanged_writes": "Skip unchanged TRV writes",
           "external_temp_heartbeat": "Heartbeat",
-          "experimental": "Enable learning features (observe only)"
+          "experimental": "Enable learning features (observe only)",
+          "temperature_without_schedule": "Temperature without schedule"
         },
         "data_description": {
           "heat_source_entity": "Switch: the boiler relay. Climate: the ESPHome / DIYLess thermostat climate entity. OTGW: the OpenTherm Gateway climate entity. It receives the winning room target. Climate and OTGW regulate on their own room temperature unless they read the Winning room temperature sensor (the ESPHome PID in thermostat.yaml does); see How it works in the docs (docs/how-it-works.md). What the thermostat must offer: Thermostat requirements (docs/thermostat.md).",
@@ -65,7 +68,8 @@
           "away_mode": "Rooms that are set to heat go off, or are lowered to their eco temperature.",
           "skip_unchanged_writes": "Saves TRV batteries. When off, the heartbeat also resends every TRV target.",
           "external_temp_heartbeat": "How often room temperatures are resent to TRV external inputs, even when unchanged (Sonoff TRVZB falls back to its own sensor after 2 hours).",
-          "experimental": "They learn how the house and boiler behave: warm-up and PID advice, night cooldown prediction, gas per degree-day and an evening report. Observe only: they never change the heating. On: the next page asks for the entities they use. What each feature does and how mature it is: [Learning features]({docs_url})"
+          "experimental": "They learn how the house and boiler behave: warm-up and PID advice, night cooldown prediction, gas per degree-day and an evening report. Observe only: they never change the heating. On: the next page asks for the entities they use. What each feature does and how mature it is: [Learning features]({docs_url})",
+          "temperature_without_schedule": "Held by a room that has no schedule yet, and by every room with a schedule while schedules are suspended (a change by hand starts that room's schedule again). Make a schedule or turn scheduling off for each room."
         }
       },
       "experimental": {
@@ -135,7 +139,7 @@
       "step": {
         "user": {
           "title": "Add room",
-          "description": "Step 1 of 2: name and temperatures.",
+          "description": "Step 1 of 3: name and temperatures.",
           "data": {
             "name": "Room name",
             "eco_temperature": "Eco temperature",
@@ -171,7 +175,7 @@
         },
         "sensors": {
           "title": "Sensors and valves",
-          "description": "Step 2 of 2 for {room}.",
+          "description": "Sensors and valves for {room}.",
           "data": {
             "temperature_sensor": "Room temperature sensor",
             "trvs": "Radiator valves (TRVs)",
@@ -186,6 +190,13 @@
             "external_temperature_inputs": "Optional. Number entities that receive the room temperature (for example Sonoff TRVZB or Shelly BLU TRV).",
             "external_sensor_selects": "Optional. Select entities that tell a TRV to use the external temperature (Sonoff TRVZB: temperature sensor select). Kept on the remote option while the room sensor works.",
             "window_sensors": "Optional. Heating in this room pauses while any of them is open."
+          }
+        },
+        "schedule": {
+          "title": "Schedule",
+          "description": "Step 3 of 3 for {room}. A room always starts with a schedule: one preset all day, which you change on the card later. Or turn scheduling off: then the room is yours, with presets, targets and your own automations as before.",
+          "data": {
+            "initial_schedule": "Start with"
           }
         }
       },
@@ -220,6 +231,13 @@
         "events": "Events only",
         "summary": "Short summary",
         "full": "Full report"
+      }
+    },
+    "initial_schedule": {
+      "options": {
+        "eco": "Eco all day",
+        "warm": "Warm all day",
+        "scheduling_off": "Scheduling off: I control this room myself"
       }
     }
   },
@@ -330,6 +348,68 @@
           "description": "Optional. Only this heating system."
         }
       }
+    },
+    "set_schedule": {
+      "name": "Set schedule",
+      "description": "Save a room's week schedule, or turn scheduling on or off for the room.",
+      "fields": {
+        "week": {
+          "name": "Week",
+          "description": "Seven days, Monday first; each day a list of switch points {time: HH:MM on 15 minute steps, preset}. Optional when turning scheduling off, or on again with the schedule the room already has."
+        },
+        "scheduling": {
+          "name": "Scheduling",
+          "description": "on: the room follows the schedule. off: the room is yours, as before v2."
+        }
+      }
+    },
+    "resume_schedule": {
+      "name": "Back to schedule",
+      "description": "End a manual change on a room, so it follows its schedule again."
+    },
+    "suspend_schedules": {
+      "name": "Suspend schedules",
+      "description": "Every room with a schedule holds the temperature without schedule until schedules are resumed. A change by hand starts that room's schedule again.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Heating system",
+          "description": "Optional. Only this heating system."
+        }
+      }
+    },
+    "resume_schedules": {
+      "name": "Resume schedules",
+      "description": "Rooms with a schedule follow it again.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Heating system",
+          "description": "Optional. Only this heating system."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_schedule": {
+      "message": "{room} has no schedule: make one or turn scheduling off"
+    },
+    "schedules_blocked": {
+      "message": "Schedules can't be used right now (see Repairs), so {room} can't be changed"
+    },
+    "unknown_preset": {
+      "message": "Unknown preset {preset}"
+    },
+    "no_week": {
+      "message": "{room} has no schedule to turn on: send a week"
+    }
+  },
+  "issues": {
+    "rooms_without_schedule": {
+      "title": "Rooms without a schedule in {system}",
+      "description": "These rooms have no schedule and hold {temperature} °C: {rooms}.\n\nMake a schedule for each (one preset all day is enough to start), or turn scheduling off for a room you control yourself."
+    },
+    "schedules_blocked": {
+      "title": "Schedules of {system} can't be used",
+      "description": "{reason}. Every room holds the temperature without schedule, and the schedule file is left as it is. Restore a backup or install the version that wrote it."
     }
   }
 }
