@@ -28,18 +28,22 @@ from .features import (
 )
 from .sun import (
     CONF_SUN_CHECK_DELAY,
+    CONF_SUN_COLD_BELOW,
     CONF_SUN_CONDITIONS,
     CONF_SUN_DARK_BELOW,
     CONF_SUN_FORECAST,
     CONF_SUN_HOLD,
     CONF_SUN_LUX,
+    CONF_SUN_MILD_ABOVE,
     CONF_SUN_ROOMS,
     CONF_SUN_WINDOW_END,
     CONF_SUN_WINDOW_START,
     DEFAULT_SUN_CHECK_DELAY,
+    DEFAULT_SUN_COLD_BELOW,
     DEFAULT_SUN_CONDITIONS,
     DEFAULT_SUN_DARK_BELOW,
     DEFAULT_SUN_HOLD,
+    DEFAULT_SUN_MILD_ABOVE,
     DEFAULT_SUN_WINDOW_END,
     DEFAULT_SUN_WINDOW_START,
     SUN_CONDITIONS,
@@ -452,6 +456,7 @@ class SettingsOptionsFlow(OptionsFlow):
         if user_input is not None:
             changes = dict(user_input)
             changes.setdefault(CONF_SUN_LUX, None)  # cleared really clears
+            changes.setdefault(CONF_SUN_MILD_ABOVE, None)
             changes[CONF_SUN_CHECK_DELAY] = int(changes[CONF_SUN_CHECK_DELAY])
             return await self._save(changes)
         rooms = [
@@ -470,9 +475,11 @@ class SettingsOptionsFlow(OptionsFlow):
                 vol.Required(CONF_SUN_ROOMS, default=[]): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=rooms, multiple=True)
                 ),
+                vol.Optional(CONF_SUN_MILD_ABOVE): _temp(-10, 30),
                 vol.Required(CONF_SUN_HOLD, default=DEFAULT_SUN_HOLD): _temp(5, 21),
                 vol.Required(CONF_SUN_WINDOW_START, default=DEFAULT_SUN_WINDOW_START): selector.TimeSelector(),
                 vol.Required(CONF_SUN_WINDOW_END, default=DEFAULT_SUN_WINDOW_END): selector.TimeSelector(),
+                vol.Required(CONF_SUN_COLD_BELOW, default=DEFAULT_SUN_COLD_BELOW): _temp(5, 25),
                 vol.Optional(CONF_SUN_LUX): _entities("sensor", device_class="illuminance"),
                 vol.Required(CONF_SUN_DARK_BELOW, default=DEFAULT_SUN_DARK_BELOW): selector.NumberSelector(
                     selector.NumberSelectorConfig(
@@ -487,6 +494,8 @@ class SettingsOptionsFlow(OptionsFlow):
             }
         )
         current = self._current
+        if CONF_SUN_MILD_ABOVE not in current:  # first time: suggest the default, can be cleared
+            current = {**current, CONF_SUN_MILD_ABOVE: DEFAULT_SUN_MILD_ABOVE}
         return self.async_show_form(
             step_id="sun_assist",
             data_schema=self.add_suggested_values_to_schema(

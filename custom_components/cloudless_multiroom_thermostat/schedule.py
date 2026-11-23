@@ -230,7 +230,12 @@ def validate_data(data: Any) -> dict[str, Any]:
     sun = data.get("sun", {})
     if isinstance(sun, Mapping):  # sun assist decisions: dropped rather than refused when odd
         clean["sun"] = {
-            str(rid): {"point": rec["point"], "status": rec["status"], "check_at": rec.get("check_at")}
+            str(rid): {
+                "point": rec["point"],
+                "status": rec["status"],
+                "check_at": rec.get("check_at"),
+                **({"retries": int(rec["retries"]), "retry_at": rec.get("retry_at")} if "retries" in rec else {}),
+            }
             for rid, rec in sun.items()
             if isinstance(rec, Mapping) and isinstance(rec.get("point"), str)
             and rec.get("status") in ("pending", "holding", "started")

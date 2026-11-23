@@ -184,7 +184,7 @@
       },
       "sun_assist": {
         "title": "Sun assist",
-        "description": "A switch point in the morning window to a preset warmer than the hold temperature, in a room that gets sun: on a sunny forecast the room holds the hold temperature instead. With a lux sensor, the preset still starts at the check time when it reads dark; without one the forecast alone decides, and the room holds until its next switch point.",
+        "description": "A switch point in the morning window to a preset warmer than the hold temperature, in a room that gets sun: on a sunny (and mild) forecast the room holds the hold temperature instead. At the check the preset starts when the room is still cold, or when the lux sensor still reads dark; otherwise the room keeps waiting for the sun until its next switch point. A forecast that can't be read warms up as scheduled and is tried again twice, an hour apart.",
         "data": {
           "sun_forecast": "Weather forecast",
           "sun_conditions": "Counts as sunny",
@@ -194,7 +194,9 @@
           "sun_window_end": "Morning window until",
           "sun_lux_sensor": "Lux sensor",
           "sun_dark_below": "Still dark below",
-          "sun_check_delay": "Check after"
+          "sun_check_delay": "Check after",
+          "sun_mild_above": "Only when the forecast is above",
+          "sun_cold_below": "Still cold below"
         },
         "data_description": {
           "sun_forecast": "The hourly forecast from the switch point to the check time decides: sunny when at least half of those hours are in Counts as sunny.",
@@ -203,9 +205,11 @@
           "sun_hold_temperature": "Held instead of the preset while waiting. Presets at or below it are not affected.",
           "sun_window_start": "Switch points from this time on can wait for the sun.",
           "sun_window_end": "Switch points from this time on never wait.",
-          "sun_lux_sensor": "Optional. Without it, sun assist trusts the forecast only, which is weaker.",
-          "sun_dark_below": "At the check time the preset starts when the lux sensor reads less than this (or can't be read).",
-          "sun_check_delay": "Time after the switch point when the lux sensor is checked."
+          "sun_lux_sensor": "Optional. At the check the preset also starts when it reads dark.",
+          "sun_dark_below": "With a lux sensor: dark below this (or when it can't be read).",
+          "sun_check_delay": "Time after the switch point when the room (and the lux sensor) is checked. Once.",
+          "sun_mild_above": "Today's forecast high must be above this as well. Leave empty for no temperature condition.",
+          "sun_cold_below": "At the check the preset starts when the room is below this."
         }
       }
     }

@@ -22,16 +22,19 @@ EARLY = datetime(2026, 11, 23, 4, 0, tzinfo=UTC)
 SEVEN = datetime(2026, 11, 23, 6, 0, tzinfo=UTC)  # 07:00 local
 
 
-def _forecast(hass: HomeAssistant, condition: str) -> list[ServiceCall]:
+def _forecast(hass: HomeAssistant, condition: str, high: float = 14.0) -> list[ServiceCall]:
     calls: list[ServiceCall] = []
 
     async def _get(call: ServiceCall):
         calls.append(call)
+        entity = call.data["entity_id"][0] if isinstance(call.data["entity_id"], list) else call.data["entity_id"]
+        if call.data["type"] == "daily":
+            return {entity: {"forecast": [{"datetime": SEVEN.isoformat(), "condition": condition, "temperature": high}]}}
         start = SEVEN - timedelta(hours=1)
         return {
-            call.data["entity_id"][0] if isinstance(call.data["entity_id"], list) else call.data["entity_id"]: {
+            entity: {
                 "forecast": [
-                    {"datetime": (start + timedelta(hours=h)).isoformat(), "condition": condition}
+                    {"datetime": (start + timedelta(hours=h)).isoformat(), "condition": condition, "temperature": 8}
                     for h in range(8)
                 ]
             }
@@ -86,8 +89,10 @@ async def test_sunny_morning_holds_until_the_check(hass: HomeAssistant, sunny_ho
     assert living["sun_assist"] == {"status": "holding", "hold": 15.0, "check_at": "2026-11-23T10:00:00+01:00"}
     assert _room(hass, "office")["temperature"] == 18.0  # doesn't get sun
     assert calls and calls[0].data["type"] == "hourly"
-    # Bright at the check: keeps waiting for the sun
+    # Bright and the room warm enough at the check: keeps waiting for the sun (one check)
+    hass.states.async_set("sensor.living_temp", "17.0", {"device_class": "temperature"})
     await _at(hass, freezer, SEVEN + timedelta(hours=3))
+    assert _room(hass, "living")["sun_assist"]["check_at"] is None
     assert _room(hass, "living")["temperature"] == 15.0
     # The next switch point ends it
     await _at(hass, freezer, datetime(2026, 11, 23, 21, 0, tzinfo=UTC))
@@ -102,6 +107,33 @@ async def test_still_dark_at_the_check_starts_the_preset(hass: HomeAssistant, su
     await _at(hass, freezer, SEVEN + timedelta(hours=3))
     living = _room(hass, "living")
     assert living["temperature"] == 19.0 and living["sun_assist"] is None
+
+
+async def test_still_cold_at_the_check_starts_the_preset(hass: HomeAssistant, sunny_house, freezer) -> None:
+    _forecast(hass, "sunny")
+    await _schedule(hass, "climate.living", WEEK)
+    await _at(hass, freezer, SEVEN)
+    hass.states.async_set("sensor.living_temp", "15.5", {"device_class": "temperature"})
+    await _at(hass, freezer, SEVEN + timedelta(hours=3))
+    assert _room(hass, "living")["temperature"] == 19.0
+
+
+async def test_sunny_but_not_mild_warms_up(hass: HomeAssistant, sunny_house, freezer) -> None:
+    _forecast(hass, "sunny", high=9.0)
+    await _schedule(hass, "climate.living", WEEK)
+    await _at(hass, freezer, SEVEN)
+    await hass.async_block_till_done()
+    assert _room(hass, "living")["temperature"] == 19.0
+
+
+async def test_without_mild_condition_sun_alone_decides(hass: HomeAssistant, sunny_house, freezer) -> None:
+    hass.config_entries.async_update_entry(sunny_house, options={**sunny_house.options, "sun_mild_above": None})
+    await hass.async_block_till_done()
+    _forecast(hass, "sunny", high=5.0)
+    await _schedule(hass, "climate.living", WEEK)
+    await _at(hass, freezer, SEVEN)
+    await hass.async_block_till_done()
+    assert _room(hass, "living")["temperature"] == 15.0
 
 
 async def test_cloudy_morning_warms_up_as_scheduled(hass: HomeAssistant, sunny_house, freezer) -> None:
@@ -120,15 +152,38 @@ async def test_outside_the_window_never_waits(hass: HomeAssistant, sunny_house, 
     assert _room(hass, "living")["temperature"] == 19.0
 
 
-async def test_forecast_failure_warms_up_as_scheduled(hass: HomeAssistant, sunny_house, freezer) -> None:
+async def test_failed_forecast_warms_up_and_is_tried_again(hass: HomeAssistant, sunny_house, freezer) -> None:
     async def _broken(call: ServiceCall):
         raise RuntimeError("no forecast")
 
     hass.services.async_register("weather", "get_forecasts", _broken, supports_response=SupportsResponse.ONLY)
-    hass.states.async_set("weather.home", "cloudy")
     await _schedule(hass, "climate.living", WEEK)
     await _at(hass, freezer, SEVEN)
     await hass.async_block_till_done()
+    assert _room(hass, "living")["temperature"] == 19.0
+    # An hour later the forecast works and says sunny: back to holding, checked after the delay
+    hass.services.async_remove("weather", "get_forecasts")
+    _forecast(hass, "sunny")
+    await _at(hass, freezer, SEVEN + timedelta(hours=1))
+    await hass.async_block_till_done()
+    living = _room(hass, "living")
+    assert living["temperature"] == 15.0
+    assert living["sun_assist"]["check_at"] == "2026-11-23T11:00:00+01:00"
+
+
+async def test_forecast_is_tried_twice_at_most(hass: HomeAssistant, sunny_house, freezer) -> None:
+    calls: list[ServiceCall] = []
+
+    async def _broken(call: ServiceCall):
+        calls.append(call)
+        raise RuntimeError("no forecast")
+
+    hass.services.async_register("weather", "get_forecasts", _broken, supports_response=SupportsResponse.ONLY)
+    await _schedule(hass, "climate.living", WEEK)
+    for hours in (0, 1, 2, 3, 4):
+        await _at(hass, freezer, SEVEN + timedelta(hours=hours, seconds=1))
+        await hass.async_block_till_done()
+    assert len(calls) == 3 * 2  # the first try and two retries, hourly and daily each
     assert _room(hass, "living")["temperature"] == 19.0
 
 
