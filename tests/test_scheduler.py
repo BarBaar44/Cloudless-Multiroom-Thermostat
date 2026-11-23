@@ -397,3 +397,48 @@ async def test_override_kept_when_away_ranks_above_away(hass: HomeAssistant, hou
     assert office["override"]["keep_when_away"] is True
     assert office["paused_reason"] is None
     assert office["effective_target"] == 20.0
+
+
+# ---------------------------------------------------------------- #117
+async def test_guest_mode_ignores_presence(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.living", one_block_week("warm"))
+    await _call(hass, "set_hvac_mode", "climate.living", hvac_mode="heat")
+    await _call(hass, "turn_on", "switch.heating_someone_is_home_guest_mode", domain="switch")
+    await _presence(hass, False)
+    living = _room(hass, "living")
+    assert living["paused_reason"] is None and living["effective_target"] == 19.0
+    await _call(hass, "turn_off", "switch.heating_someone_is_home_guest_mode", domain="switch")
+    assert _room(hass, "living")["paused_reason"] == "away"
+
+
+async def test_overrides_stay_while_guest_mode_is_on_and_go_when_it_ends(
+    hass: HomeAssistant, house, freezer
+) -> None:
+    await _schedule(hass, "climate.living", one_block_week("warm"))
+    await _call(hass, "set_hvac_mode", "climate.living", hvac_mode="heat")
+    await _override(hass, "climate.living", temperature=21, until="permanent")
+    await hass.services.async_call(DOMAIN, "set_guest_mode", {"duration": {"hours": 2}}, blocking=True)
+    await hass.async_block_till_done()
+    guest = hass.states.get("switch.heating_someone_is_home_guest_mode")
+    assert guest.state == "on" and guest.attributes["until"] == "2026-11-23T14:00:00+01:00"
+    await _presence(hass, False)
+    assert _room(hass, "living")["temperature"] == 21.0  # someone is home: away hasn't started
+    await _at(hass, freezer, MONDAY_NOON + timedelta(hours=2))
+    assert hass.states.get("switch.heating_someone_is_home_guest_mode").state == "off"
+    living = _room(hass, "living")
+    assert living["override"] is None and living["paused_reason"] == "away"
+
+
+async def test_guest_mode_survives_a_restart(hass: HomeAssistant, house) -> None:
+    await hass.services.async_call(DOMAIN, "set_guest_mode", {}, blocking=True)
+    assert await hass.config_entries.async_reload(house.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.heating_someone_is_home_guest_mode").state == "on"
+
+
+async def test_guest_mode_end_in_the_past_is_refused(hass: HomeAssistant, house) -> None:
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            DOMAIN, "set_guest_mode", {"until": "2026-11-23T10:00:00+01:00"}, blocking=True
+        )
+    assert err.value.translation_key == "guest_end_in_past"

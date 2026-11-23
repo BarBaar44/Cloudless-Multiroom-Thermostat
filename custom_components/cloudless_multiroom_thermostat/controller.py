@@ -177,7 +177,8 @@ class HeatingController:
         self.entry = entry
         self.rooms: dict[str, Room] = {}
         self.winner = Winner(None, WINNER_OFF, self.off_temp, None, 0.0)
-        self.present = True
+        self.presence_home = True  # what the presence entity says
+        self._was_home = True  # effective, guest mode included: away starts when it turns False
         self.experimental: Any = None  # ExperimentalRunner when enabled in options
         self.schedules: Any = None  # ScheduleStore, loaded in async_setup_entry (#112)
         from .scheduler import Scheduler  # noqa: PLC0415 - imports Room from here
@@ -203,6 +204,20 @@ class HeatingController:
     @property
     def settings(self) -> dict[str, Any]:
         return {**self.entry.data, **self.entry.options}
+
+    @property
+    def present(self) -> bool:
+        """Somebody is home: the presence entity, or guest mode (#117)."""
+        return self.presence_home or self.scheduler.guest_active()
+
+    @callback
+    def check_home(self) -> None:
+        """Away starts when nobody is home any more, guest mode included: overrides go then."""
+        home = self.present
+        if home != self._was_home:
+            self._was_home = home
+            if not home:
+                self.scheduler.drop_overrides_for_away()
 
     @property
     def off_temp(self) -> float:
@@ -342,7 +357,8 @@ class HeatingController:
 
         presence = self.settings.get(CONF_PRESENCE)
         if presence:
-            self.present = self._read_presence()
+            self.presence_home = self._read_presence()
+            self._was_home = self.present
             watched[presence] = self._on_presence_change
         for key in (CONF_HEAT_SOURCE_ENTITY, CONF_CH_SWITCH):
             if self.settings.get(key):
@@ -444,11 +460,10 @@ class HeatingController:
     @callback
     def _on_presence_change(self, _event: Event[EventStateChangedData]) -> None:
         present = self._read_presence()
-        if present != self.present:
-            self.present = present
-            if not present:
-                self.scheduler.drop_overrides_for_away()
+        if present != self.presence_home:
+            self.presence_home = present
             _LOGGER.debug("Presence: %s", "home" if present else "away")
+            self.check_home()
             self.request_recompute()
 
     @callback

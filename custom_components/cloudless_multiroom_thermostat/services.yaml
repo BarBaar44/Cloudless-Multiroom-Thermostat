@@ -82,3 +82,19 @@ set_override:
       default: false
       selector:
         boolean:
+set_guest_mode:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: cloudless_multiroom_thermostat
+    "on":
+      default: true
+      selector:
+        boolean:
+    until:
+      selector:
+        datetime:
+    duration:
+      selector:
+        duration:

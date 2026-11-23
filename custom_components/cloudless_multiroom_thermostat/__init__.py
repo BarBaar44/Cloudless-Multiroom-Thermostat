@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ECO_TEMP,
@@ -18,6 +19,7 @@ from .const import (
     CONF_INITIAL_SCHEDULE,
     SCHEDULING_OFF_CHOICE,
     SERVICE_RESUME_SCHEDULES,
+    SERVICE_SET_GUEST_MODE,
     SERVICE_SUSPEND_SCHEDULES,
     CONF_WARM_TEMP,
     DEFAULT_ECO_TEMP,
@@ -56,7 +58,7 @@ def _log_v2_notice(notice: str) -> None:
         _NOTICES_LOGGED.add(notice)
         _LOGGER.warning(notice)
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -100,6 +102,30 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             _suspend(suspended),
             schema=vol.Schema({vol.Optional("config_entry_id"): vol.All(cv.ensure_list, [cv.string])}),
         )
+
+    async def _set_guest_mode(call: ServiceCall) -> None:
+        entry_ids = call.data.get("config_entry_id")
+        until = call.data.get("until")
+        if (duration := call.data.get("duration")) is not None:
+            until = dt_util.utcnow() + duration
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+            if entry_ids and entry.entry_id not in entry_ids:
+                continue
+            await entry.runtime_data.scheduler.async_set_guest(call.data["on"], until)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_GUEST_MODE,
+        _set_guest_mode,
+        schema=vol.Schema(
+            {
+                vol.Optional("config_entry_id"): vol.All(cv.ensure_list, [cv.string]),
+                vol.Optional("on", default=True): cv.boolean,
+                vol.Exclusive("until", "end"): cv.datetime,
+                vol.Exclusive("duration", "end"): vol.All(cv.time_period, cv.positive_timedelta),
+            }
+        ),
+    )
 
     async def _experimental_report(call: ServiceCall) -> None:
         _LOGGER.warning("The experimental_report service is removed in v2.0.0 (deprecated)")

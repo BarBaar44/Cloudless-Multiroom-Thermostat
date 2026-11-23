@@ -141,6 +141,31 @@ class Scheduler:
             return None
         return found
 
+    def guest(self, now: datetime | None = None) -> dict[str, Any] | None:
+        data = self.data
+        guest = None if data is None else data.get("guest")
+        if guest is None:
+            return None
+        until = guest.get("until")
+        if until is not None and dt_util.parse_datetime(until) <= (now or dt_util.utcnow()):
+            return None
+        return guest
+
+    def guest_active(self) -> bool:
+        """Someone is home (#117): the whole house runs its schedules, whatever presence says."""
+        return self.guest() is not None
+
+    async def async_set_guest(self, on: bool, until: datetime | None = None) -> None:
+        data = self.data
+        if data is None:
+            raise _refuse("schedules_blocked", room=self.controller.entry.title)
+        if on and until is not None and until <= dt_util.utcnow():
+            raise _refuse("guest_end_in_past")
+        data["guest"] = {"until": None if until is None else dt_util.as_utc(until).isoformat()} if on else None
+        await self.store.async_save()
+        self.controller.check_home()
+        self.apply()
+
     def keeps_when_away(self, room: Room) -> bool:
         """An override with keep when away ranks above away for its room."""
         override = self.override(room)
@@ -214,6 +239,11 @@ class Scheduler:
         data = self.data
         if data is None:
             return
+        guest = data.get("guest")
+        if guest is not None and guest.get("until") and dt_util.parse_datetime(guest["until"]) <= now:
+            data["guest"] = None
+            self.store.async_delay_save()
+            self.controller.check_home()
         expired = [
             rid for rid, o in data["overrides"].items()
             if o.get("until") is not None and dt_util.parse_datetime(o["until"]) <= now
@@ -235,6 +265,9 @@ class Scheduler:
             override = self.override(room, now)
             if override is not None and override.get("until") is not None:
                 moments.append(dt_util.parse_datetime(override["until"]))
+        guest = self.guest(now)
+        if guest is not None and guest.get("until") is not None:
+            moments.append(dt_util.parse_datetime(guest["until"]))
         if moments:
             self._timer = async_track_point_in_utc_time(self.hass, self._on_timer, min(moments))
 
