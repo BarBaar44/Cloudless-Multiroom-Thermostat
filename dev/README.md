@@ -67,12 +67,13 @@ The integration is mounted read only from `../custom_components/`, so after chan
 
 ### Option 2: VM in Virtual Machine Manager (Fedora)
 
-`vm/create-vm.sh` builds a Debian 13 VM on your machine and lets cloud-init do the rest: it installs Docker, clones this repo, starts the same test HA and, unless you pass `--no-setup`, does onboarding, creates the heating system with all rooms, switches on the learning features with every field filled in, and sets the sim to real time. The VM shows up in Virtual Machine Manager like any other.
+`vm/create-vm.sh` builds a Debian 13 VM on your machine and lets cloud-init do the rest: it installs Docker, clones this repo on the `dev` branch (where v2 pull requests are merged first), starts the same test HA and, unless you pass `--no-setup`, does onboarding, creates the heating system with all rooms, switches on the learning features with every field filled in, and sets the sim to real time. The VM shows up in Virtual Machine Manager like any other.
 
 ```bash
 sudo dnf install virt-install qemu-img   # once, if not installed yet
 cd dev/vm
-./create-vm.sh                           # VM "cmt-test", runs the branch you have checked out
+./create-vm.sh                           # VM "cmt-test", runs the dev branch
+./create-vm.sh --branch main --name cmt-main   # or another branch
 ./create-vm.sh --auto-apply              # also let it apply PID advice by itself
 ```
 
