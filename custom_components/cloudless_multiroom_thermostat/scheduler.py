@@ -48,6 +48,7 @@ from .const import (
     SCHEDULE_OFF,
     SCHEDULE_SUSPENDED,
 )
+from .features import FEATURE_GUEST
 from .schedule import (
     PRESET_OFF,
     SCHEDULING_OFF,
@@ -153,12 +154,14 @@ class Scheduler:
 
     def guest_active(self) -> bool:
         """Someone is home (#117): the whole house runs its schedules, whatever presence says."""
-        return self.guest() is not None
+        return self.controller.feature(FEATURE_GUEST) and self.guest() is not None
 
     async def async_set_guest(self, on: bool, until: datetime | None = None) -> None:
         data = self.data
         if data is None:
             raise _refuse("schedules_blocked", room=self.controller.entry.title)
+        if not self.controller.feature(FEATURE_GUEST):
+            raise _refuse("feature_off", feature="Guest mode", system=self.controller.entry.title)
         if on and until is not None and until <= dt_util.utcnow():
             raise _refuse("guest_end_in_past")
         data["guest"] = {"until": None if until is None else dt_util.as_utc(until).isoformat()} if on else None

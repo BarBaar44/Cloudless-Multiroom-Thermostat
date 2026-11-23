@@ -86,6 +86,7 @@ async def house(hass: HomeAssistant, hass_storage, freezer):
         domain=DOMAIN,
         title="Heating",
         data=SYSTEM,
+        options={"feature_guest_mode": True},
         subentries_data=[
             ConfigSubentryData(data=data, subentry_type="room", title=data["name"], unique_id=None)
             for data in (LIVING, OFFICE, HALLWAY)

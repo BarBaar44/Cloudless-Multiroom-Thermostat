@@ -295,6 +295,7 @@ async def test_pause_resume_and_all_off_services(hass: HomeAssistant, setup) -> 
     assert hass.states.get("climate.living").state == "off"
 
 
+@pytest.mark.v2_schedules
 async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
@@ -305,14 +306,27 @@ async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"heat_source_entity": "switch.boiler", "hysteresis": 0.3}
     )
-    assert result["step_id"] == "settings"
+    # Setup asks only for the heat source and the first room (#120)
+    assert result["step_id"] == "room"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], _room_step("Living"))
+    assert result["step_id"] == "room_sensors"
+    fields = {str(k) for k in result["data_schema"].schema}
+    assert "window_sensors" not in fields  # the Windows feature is off on a new system
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"off_temperature": 10, "away_mode": "eco", "skip_unchanged_writes": True, "external_temp_heartbeat": 60},
+        result["flow_id"], {"temperature_sensor": "sensor.living_temp"}
     )
+    assert result["step_id"] == "room_schedule"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"initial_schedule": "eco"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "House"
     assert result["data"]["heat_source_type"] == "switch"
+    entry = result["result"]
+    await hass.async_block_till_done()
+    [room] = entry.subentries.values()
+    assert room.title == "Living"
+    week = entry.runtime_data.schedules.data["rooms"][room.subentry_id]["week"]
+    assert week[0][0]["preset"] == "eco"
+    assert entry.runtime_data.feature("feature_presence") is False
 
 
 async def test_switch_heat_source_hysteresis(hass: HomeAssistant) -> None:
@@ -347,20 +361,22 @@ async def test_switch_heat_source_hysteresis(hass: HomeAssistant) -> None:
 async def test_options_flow_clears_optional_entities(hass: HomeAssistant, setup) -> None:
     entry, _ = setup
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] is FlowResultType.FORM
+    assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == ["settings", "features", "presence"]  # presence in use: on
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "settings"})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
             "heat_source_entity": "climate.boiler",
             "off_temperature": 8,
-            "away_mode": "eco",
             "skip_unchanged_writes": True,
             "external_temp_heartbeat": 30,
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    assert entry.options["ch_switch"] is None and entry.options["presence_entity"] is None
+    assert entry.options["ch_switch"] is None
+    assert entry.options.get("presence_entity", entry.data["presence_entity"]) == "input_boolean.somebody_home"
     assert entry.runtime_data.off_temp == 8
 
 
