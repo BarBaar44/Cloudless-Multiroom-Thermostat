@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
@@ -17,21 +21,20 @@ from .const import (
     CONF_ECO_TEMP,
     CONF_EXPERIMENTAL,
     CONF_INITIAL_SCHEDULE,
-    SCHEDULING_OFF_CHOICE,
-    SERVICE_RESUME_SCHEDULES,
-    SERVICE_SET_GUEST_MODE,
-    SERVICE_SUSPEND_SCHEDULES,
     CONF_WARM_TEMP,
     DEFAULT_ECO_TEMP,
     DEFAULT_WARM_TEMP,
     DOMAIN,
+    SCHEDULING_OFF_CHOICE,
     SERVICE_EXPERIMENTAL_REPORT,
+    SERVICE_RESUME_SCHEDULES,
     SERVICE_SET_ALL_OFF,
+    SERVICE_SET_GUEST_MODE,
+    SERVICE_SET_PRESETS,
+    SERVICE_SUSPEND_SCHEDULES,
 )
 from .controller import HeatingController
 from .frontend import async_remove_frontend, async_setup_frontend
-from homeassistant.helpers import issue_registry as ir
-
 from .schedule import SCHEDULING_OFF, SCHEDULING_ON, one_block_week
 from .schedule_store import ScheduleStore
 from .scheduler import issue_ids
@@ -102,6 +105,52 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             _suspend(suspended),
             schema=vol.Schema({vol.Optional("config_entry_id"): vol.All(cv.ensure_list, [cv.string])}),
         )
+
+    def _system(call: ServiceCall) -> CMTConfigEntry:
+        """The heating system a call is for: config_entry_id, or the only one there is."""
+        loaded = hass.config_entries.async_loaded_entries(DOMAIN)
+        wanted = call.data.get("config_entry_id")
+        if wanted:
+            loaded = [e for e in loaded if e.entry_id in wanted]
+        if len(loaded) != 1:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="which_system")
+        return loaded[0]
+
+    async def _set_presets(call: ServiceCall) -> None:
+        entry = _system(call)
+        registry = er.async_get(hass)
+        temperatures: dict[str, Any] = {}
+        for entity_id, values in (call.data.get("temperatures") or {}).items():
+            reg = registry.async_get(entity_id)
+            room_id = reg.unique_id.removesuffix("_climate") if reg and reg.config_entry_id == entry.entry_id else None
+            if room_id is None or room_id not in entry.runtime_data.rooms:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="not_a_room", translation_placeholders={"entity": entity_id}
+                )
+            temperatures[room_id] = values
+        await entry.runtime_data.scheduler.async_set_presets(call.data.get("presets"), temperatures)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_PRESETS,
+        _set_presets,
+        schema=vol.Schema(
+            {
+                vol.Optional("config_entry_id"): vol.All(cv.ensure_list, [cv.string]),
+                vol.Optional("presets"): [
+                    vol.Schema(
+                        {
+                            vol.Optional("id"): cv.string,
+                            vol.Required("name"): cv.string,
+                            vol.Optional("color"): vol.Any(None, cv.string),
+                        },
+                        extra=vol.REMOVE_EXTRA,
+                    )
+                ],
+                vol.Optional("temperatures"): {cv.entity_id: {cv.string: vol.Any(None, vol.Coerce(float))}},
+            }
+        ),
+    )
 
     async def _set_guest_mode(call: ServiceCall) -> None:
         entry_ids = call.data.get("config_entry_id")
