@@ -28,6 +28,18 @@ A schedule is a week, Monday first. Each day has up to 12 switch points on 15 mi
 | Scheduling off | Yours: presets, targets and your own automations work as before v2, nothing expires |
 | Schedules suspended | Rooms with a schedule hold the Temperature without schedule; rooms with scheduling off are not affected. A change by hand starts that one room's schedule again, with the change on top, until schedules are resumed |
 
+## Changes by hand
+
+A change by hand on a room with a schedule lasts until the next schedule change, unless you choose otherwise with the `set_override` action (the card's *Keep this until* dialog uses it):
+
+| Keep this until | Ends |
+|---|---|
+| Next schedule change (default) | At the next switch point to another preset |
+| For a time (1 or 3 hours in the card, up to 7 days) | After that time |
+| Until I change it | Only with Back to schedule: the schedule is skipped for this room until then |
+
+**When everyone leaves, changes by hand end,** straight away, also "until I change it". Coming home gives what the schedule says. Tick **Keep when everyone is away** for a change that must stay, for example for a visitor Home Assistant doesn't track: it then ranks above away for that room. An open window and a pause still win.
+
 **Off is off:** a room switched off stays off whatever its schedule says. Switch it back to heat and it does what the schedule says at that moment. A switch point to **Off** is different: the room stays on heat and holds the off temperature until the next point.
 
 Away, windows and pauses work on top of the schedule, as before. The schedule keeps running underneath, so coming home or closing a window gives what the schedule says now.
@@ -45,6 +57,7 @@ Away, windows and pauses work on top of the schedule, as before. The schedule ke
 | Action | Target | Fields |
 |---|---|---|
 | `cloudless_multiroom_thermostat.set_schedule` | a room climate | `week`: seven lists of `{time, preset}`, Monday first. `scheduling`: `on` (default) or `off`. Without `week`, turning on uses the schedule the room already had |
+| `cloudless_multiroom_thermostat.set_override` | a room climate | A change by hand: `temperature` or `preset`; `until` (`next_change`, default, or `permanent`) or `duration`; `keep_when_away` (default off) |
 | `cloudless_multiroom_thermostat.resume_schedule` | a room climate | Ends a change by hand: back to the schedule |
 | `cloudless_multiroom_thermostat.suspend_schedules` | optional heating system | Every room with a schedule holds the Temperature without schedule; a change by hand starts that room's schedule again |
 | `cloudless_multiroom_thermostat.resume_schedules` | optional heating system | Rooms follow their schedules again |
@@ -68,4 +81,4 @@ data:
 
 ## Technical detail
 
-Room climate attributes: `schedule_state` (`active`, `none`, `off`, `suspended`, `blocked`), `next_change` (`at`, local time, and `preset`), `override_until`. Schedules, preset temperatures and overrides are kept in `.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`, versioned: a copy `<file>.v<N>.bak` is made before every migration, and a file written by a newer version is never overwritten (`blocked`: every room holds the Temperature without schedule, Repairs says why).
+Room climate attributes: `schedule_state` (`active`, `none`, `off`, `suspended`, `blocked`), `next_change` (`at`, local time, and `preset`), `override` (`target`, `preset`, `until` or none for until I change it, `keep_when_away`), `override_until`. Schedules, preset temperatures and overrides are kept in `.storage/cloudless_multiroom_thermostat.schedule.<entry_id>`, versioned: a copy `<file>.v<N>.bak` is made before every migration, and a file written by a newer version is never overwritten (`blocked`: every room holds the Temperature without schedule, Repairs says why).

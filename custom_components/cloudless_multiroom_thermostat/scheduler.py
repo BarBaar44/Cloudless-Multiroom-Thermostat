@@ -3,8 +3,10 @@
 Each room is in one of five schedule states:
 
 - active: the room follows its week schedule; a target or preset set by hand
-  (service call, card, HA's own thermostat card) is an override until the
-  next schedule change;
+  (service call, card, HA's own thermostat card) is an override: until the
+  next schedule change unless `set_override` says otherwise (a duration, or
+  until Back to schedule). Overrides are dropped when everyone leaves, except
+  those with keep when away, which rank above away for their room (#116);
 - none: the room has no schedule and holds the Temperature without schedule
   (15 °C by default); target and preset calls are refused;
 - off: scheduling off, the room is the user's (presets and targets as in v1);
@@ -25,7 +27,7 @@ top, as in v1.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -37,6 +39,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_NO_SCHEDULE_TEMP,
     DEFAULT_NO_SCHEDULE_TEMP,
+    UNTIL_NEXT_CHANGE,
+    UNTIL_PERMANENT,
     DOMAIN,
     SCHEDULE_ACTIVE,
     SCHEDULE_BLOCKED,
@@ -137,6 +141,11 @@ class Scheduler:
             return None
         return found
 
+    def keeps_when_away(self, room: Room) -> bool:
+        """An override with keep when away ranks above away for its room."""
+        override = self.override(room)
+        return bool(override and override.get("keep_away"))
+
     def next_change(self, room: Room, now: datetime | None = None) -> tuple[datetime, str] | None:
         if self.state(room) != SCHEDULE_ACTIVE:
             return None
@@ -149,6 +158,16 @@ class Scheduler:
         override = self.override(room)
         return {
             "schedule_state": self.state(room),
+            "override": None
+            if override is None
+            else {
+                "target": override["target"],
+                "preset": override.get("preset"),
+                "until": None
+                if override.get("until") is None
+                else dt_util.as_local(dt_util.parse_datetime(override["until"])).isoformat(),
+                "keep_when_away": bool(override.get("keep_away")),
+            },
             "next_change": None
             if change is None
             else {"at": dt_util.as_local(change[0]).isoformat(), "preset": change[1]},
@@ -285,16 +304,63 @@ class Scheduler:
             return
         await self._async_set_override(room, self.preset_temp(room, preset), preset)
 
-    async def _async_set_override(self, room: Room, target: float, preset: str | None) -> None:
-        change = self.next_change(room)
+    async def _async_set_override(
+        self,
+        room: Room,
+        target: float,
+        preset: str | None,
+        until: str | timedelta = UNTIL_NEXT_CHANGE,
+        keep_away: bool = False,
+    ) -> None:
+        if isinstance(until, timedelta):
+            ends: datetime | None = dt_util.utcnow() + until
+        elif until == UNTIL_PERMANENT:
+            ends = None
+        else:
+            change = self.next_change(room)
+            ends = None if change is None else change[0]
         self.data["overrides"][room.room_id] = {
             "target": target,
             "preset": preset,
-            "until": None if change is None else change[0].isoformat(),
-            "keep_away": False,
+            "until": None if ends is None else ends.isoformat(),
+            "keep_away": keep_away,
         }
         await self.store.async_save()
         self.apply()
+
+    async def async_set_override(
+        self,
+        room: Room,
+        *,
+        target: float | None = None,
+        preset: str | None = None,
+        until: str | timedelta = UNTIL_NEXT_CHANGE,
+        keep_away: bool = False,
+    ) -> None:
+        """The override dialog: a target or preset, how long, and whether it stays when away."""
+        if (target is None) == (preset is None):
+            raise _refuse("override_target_or_preset")
+        state = self._check_can_change(room)
+        if state == SCHEDULE_OFF:
+            raise _refuse("scheduling_off", room=room.name)
+        if preset is not None:
+            if preset != PRESET_OFF and preset not in self.preset_ids():
+                raise _refuse("unknown_preset", preset=preset)
+            target = self.preset_temp(room, preset)
+        await self._async_set_override(room, float(target), preset, until, keep_away)
+
+    @callback
+    def drop_overrides_for_away(self) -> None:
+        """Everyone left: overrides go, except those kept when away. No grace time."""
+        data = self.data
+        if data is None:
+            return
+        dropped = [rid for rid, o in data["overrides"].items() if not o.get("keep_away")]
+        for rid in dropped:
+            del data["overrides"][rid]
+        if dropped:
+            self.store.async_delay_save()
+            self.apply()
 
     async def async_resume(self, room: Room) -> None:
         """Back to schedule: drop the room's override."""

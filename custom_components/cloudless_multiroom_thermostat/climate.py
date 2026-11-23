@@ -11,9 +11,12 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
+from datetime import timedelta
+
 import voluptuous as vol
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -32,7 +35,10 @@ from .const import (
     SERVICE_PAUSE_ROOM,
     SERVICE_RESUME_ROOM,
     SERVICE_RESUME_SCHEDULE,
+    SERVICE_SET_OVERRIDE,
     SERVICE_SET_SCHEDULE,
+    UNTIL_NEXT_CHANGE,
+    UNTIL_PERMANENT,
     SUBENTRY_ROOM,
     signal_update,
 )
@@ -70,6 +76,19 @@ async def async_setup_entry(
         "async_set_schedule",
     )
     platform.async_register_entity_service(SERVICE_RESUME_SCHEDULE, None, "async_resume_schedule")
+    platform.async_register_entity_service(
+        SERVICE_SET_OVERRIDE,
+        {
+            vol.Exclusive("temperature", "what"): vol.Coerce(float),
+            vol.Exclusive("preset", "what"): cv.string,
+            vol.Exclusive("until", "how_long"): vol.In([UNTIL_NEXT_CHANGE, UNTIL_PERMANENT]),
+            vol.Exclusive("duration", "how_long"): vol.All(
+                cv.time_period, cv.positive_timedelta, vol.Range(max=timedelta(days=7))
+            ),
+            vol.Optional("keep_when_away", default=False): cv.boolean,
+        },
+        "async_set_override",
+    )
 
 
 class RoomClimate(ClimateEntity, RestoreEntity):
@@ -228,6 +247,24 @@ class RoomClimate(ClimateEntity, RestoreEntity):
 
     async def async_set_schedule(self, scheduling: str, week: list[Any] | None = None) -> None:
         await self._controller.scheduler.async_set_schedule(self._room, week, scheduling)
+
+    async def async_set_override(
+        self,
+        keep_when_away: bool,
+        temperature: float | None = None,
+        preset: str | None = None,
+        until: str | None = None,
+        duration: timedelta | None = None,
+    ) -> None:
+        if temperature is not None:
+            temperature = min(max(temperature, self.min_temp), self.max_temp)
+        await self._controller.scheduler.async_set_override(
+            self._room,
+            target=temperature,
+            preset=preset,
+            until=duration if duration is not None else (until or UNTIL_NEXT_CHANGE),
+            keep_away=keep_when_away,
+        )
 
     async def async_resume_schedule(self) -> None:
         await self._controller.scheduler.async_resume(self._room)

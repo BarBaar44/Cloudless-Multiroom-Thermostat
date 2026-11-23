@@ -140,6 +140,9 @@ SERVICE_RESUME_ROOM: Final = "resume_room"
 SERVICE_SET_ALL_OFF: Final = "set_all_off"
 SERVICE_SET_SCHEDULE: Final = "set_schedule"
 SERVICE_RESUME_SCHEDULE: Final = "resume_schedule"
+SERVICE_SET_OVERRIDE: Final = "set_override"
+UNTIL_NEXT_CHANGE: Final = "next_change"
+UNTIL_PERMANENT: Final = "permanent"  # until I change it: Back to schedule ends it
 SERVICE_SUSPEND_SCHEDULES: Final = "suspend_schedules"
 SERVICE_RESUME_SCHEDULES: Final = "resume_schedules"
 

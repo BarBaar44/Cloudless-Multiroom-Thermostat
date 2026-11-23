@@ -221,7 +221,7 @@ class HeatingController:
             return PAUSE_WINDOW
         if room.manual_pause:
             return PAUSE_MANUAL
-        if not self.present and self.away_mode == AWAY_OFF:
+        if not self.present and self.away_mode == AWAY_OFF and not self.scheduler.keeps_when_away(room):
             return PAUSE_AWAY
         return None
 
@@ -231,7 +231,7 @@ class HeatingController:
     def effective_target(self, room: Room) -> float:
         if not self.is_heating(room):
             return self.off_temp
-        if not self.present and self.away_mode == AWAY_ECO:
+        if not self.present and self.away_mode == AWAY_ECO and not self.scheduler.keeps_when_away(room):
             return min(room.target, room.eco_temp)
         return room.target
 
@@ -446,6 +446,8 @@ class HeatingController:
         present = self._read_presence()
         if present != self.present:
             self.present = present
+            if not present:
+                self.scheduler.drop_overrides_for_away()
             _LOGGER.debug("Presence: %s", "home" if present else "away")
             self.request_recompute()
 

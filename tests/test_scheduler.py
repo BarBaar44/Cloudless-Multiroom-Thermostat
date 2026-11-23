@@ -324,3 +324,76 @@ def test_dst_helpers_cover_the_week_around_now() -> None:
     week = _every_day(_pt("07:00", "warm"))
     assert len(occurrences(week, MONDAY_NOON, AMS)) == 21
     assert occurrences(week, MONDAY_NOON, AMS)[0][0] < MONDAY_NOON - timedelta(days=6)
+
+
+# ---------------------------------------------------------------- #116
+async def _override(hass: HomeAssistant, entity: str, **data) -> None:
+    await _call(hass, "set_override", entity, domain=DOMAIN, **data)
+
+
+async def _presence(hass: HomeAssistant, home: bool) -> None:
+    hass.states.async_set("input_boolean.somebody_home", "on" if home else "off")
+    await hass.async_block_till_done()
+
+
+async def test_override_for_a_duration(hass: HomeAssistant, house, freezer) -> None:
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("22:00", "eco")))
+    await _override(hass, "climate.living", temperature=21, duration={"hours": 1})
+    living = _room(hass, "living")
+    assert living["temperature"] == 21.0
+    assert living["override"]["until"] == "2026-11-23T13:00:00+01:00"
+    await _at(hass, freezer, MONDAY_NOON + timedelta(hours=1))
+    assert _room(hass, "living")["temperature"] == 19.0
+
+
+async def test_override_until_back_to_schedule(hass: HomeAssistant, house, freezer) -> None:
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("22:00", "eco")))
+    await _override(hass, "climate.living", preset="eco", until="permanent")
+    await _at(hass, freezer, datetime(2026, 11, 24, 7, 0, tzinfo=UTC))  # past several changes
+    living = _room(hass, "living")
+    assert living["preset_mode"] == "eco" and living["override"]["until"] is None
+    await _call(hass, "resume_schedule", "climate.living", domain=DOMAIN)
+    assert _room(hass, "living")["preset_mode"] == "warm"
+
+
+async def test_override_without_until_uses_next_change(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("22:00", "eco")))
+    await _override(hass, "climate.living", temperature=20.5)
+    assert _room(hass, "living")["override_until"] == "2026-11-23T22:00:00+01:00"
+
+
+async def test_override_needs_a_temperature_or_a_preset(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.living", one_block_week("warm"))
+    with pytest.raises(ServiceValidationError) as err:
+        await _override(hass, "climate.living", until="permanent")
+    assert err.value.translation_key == "override_target_or_preset"
+
+
+async def test_override_on_scheduling_off_is_refused(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.office", scheduling="off")
+    with pytest.raises(ServiceValidationError) as err:
+        await _override(hass, "climate.office", temperature=21)
+    assert err.value.translation_key == "scheduling_off"
+
+
+async def test_overrides_go_when_everyone_leaves(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.living", one_block_week("warm"))
+    await _call(hass, "set_hvac_mode", "climate.living", hvac_mode="heat")
+    await _override(hass, "climate.living", temperature=21, until="permanent")
+    await _presence(hass, False)
+    living = _room(hass, "living")
+    assert living["override"] is None and living["temperature"] == 19.0
+    assert living["paused_reason"] == "away"
+    await _presence(hass, True)
+    assert _room(hass, "living")["temperature"] == 19.0  # what the schedule says now
+
+
+async def test_override_kept_when_away_ranks_above_away(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.office", one_block_week("eco"))
+    await _call(hass, "set_hvac_mode", "climate.office", hvac_mode="heat")
+    await _override(hass, "climate.office", temperature=20, duration={"hours": 3}, keep_when_away=True)
+    await _presence(hass, False)
+    office = _room(hass, "office")
+    assert office["override"]["keep_when_away"] is True
+    assert office["paused_reason"] is None
+    assert office["effective_target"] == 20.0
