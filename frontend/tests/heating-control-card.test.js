@@ -612,6 +612,63 @@ test("the schedule line opens the editor", () => {
   assert(c.shadowRoot.querySelector(".dlg .edgrid"));
 });
 
+/* ---------------- v2 today and presets ---------------- */
+
+test("today view: every room on one timeline, coming up grouped", () => {
+  const later = Array.from({ length: 7 }, () => [{ time: "00:00", preset: "eco" }, { time: "23:45", preset: "warm" }]);
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 15, sched({ schedule: later })),
+    [OFFICE]: room("Office", 19, 15, sched({ schedule: later })),
+    [HALL]: room("Hallway", 15, 15, sched({ schedule_state: "none", schedule: null })),
+  });
+  const c = render(h);
+  c.shadowRoot.querySelector('.tab[data-v="today"]').click();
+  const v = c._el.todayv;
+  assert.strictEqual(v.querySelectorAll(".tlane").length, 3);
+  assert(v.querySelector(".nosch").textContent.startsWith("No schedule"));
+  const items = [...v.querySelectorAll(".citem")].map((x) => x.textContent);
+  if (new Date().getHours() * 60 + new Date().getMinutes() < 23 * 60 + 45) {
+    assert.strictEqual(items.length, 1, "two rooms at the same time and preset share a line");
+    assert(items[0].includes("Living Room, Office") && items[0].includes("Eco → Warm 19.0°"));
+  }
+});
+
+test("presets dialog: change a temperature, add a preset, not used, save in one call", async () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()), [OFFICE]: room("Office", 19, 19, sched()) });
+  const c = render(h);
+  c._presetsDialog();
+  const d = () => c.shadowRoot.querySelector(".dlg");
+  assert.strictEqual(d().querySelectorAll(".ph").length, 3);
+  d().querySelector(`.cell[data-e="${LIVING}"][data-p="warm"]`).click();
+  d().querySelector(".cup").click();
+  d().querySelector(".addp").click();
+  const name = d().querySelector(".pname");
+  name.value = "Comfort Plus";
+  name.dispatchEvent(new w.Event("change"));
+  const newCell = d().querySelector(`.cell[data-e="${OFFICE}"][data-p^="new"]`);
+  newCell.click();
+  d().querySelector(".cedit .nu").click();
+  d().querySelector(".save").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const [, svc, data] = JSON.parse(JSON.stringify(h.calls.pop()));
+  assert.strictEqual(svc, "set_presets");
+  same(data.presets.map((p) => p.id), ["eco", "warm", "sleep", "comfort_plus"]);
+  assert.strictEqual(data.temperatures[LIVING].warm, 19.5);
+  assert.strictEqual(data.temperatures[OFFICE].comfort_plus, 15);
+  assert.strictEqual(data.temperatures[LIVING].comfort_plus, null);
+  assert(!c.shadowRoot.querySelector(".dlg"));
+});
+
+test("presets dialog: Eco and Warm can't be removed, others can", () => {
+  const c = render(intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }));
+  c._presetsDialog();
+  c.shadowRoot.querySelector('.ph[data-h="0"]').click();
+  assert(!c.shadowRoot.querySelector(".premove"));
+  c.shadowRoot.querySelector('.ph[data-h="2"]').click();
+  c.shadowRoot.querySelector(".premove").click();
+  assert.strictEqual(c.shadowRoot.querySelectorAll(".ph").length, 2);
+});
+
 test("registers once, also when another copy of the card loaded first", () => {
   const before = w.customCards.length;
   w.eval(fs.readFileSync(CARD, "utf8").replace(/^const /gm, "var "));
