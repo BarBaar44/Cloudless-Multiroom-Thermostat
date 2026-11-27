@@ -122,6 +122,6 @@ Nothing happens? See [Troubleshooting](troubleshooting.md).
 
 ## What next
 
-- **Scheduling** is left to you for now: an automation or a scheduler card that sets presets or temperatures on the room climates. Schedules in the integration are planned for v2.0, see the [roadmap](../ROADMAP.md).
+- [Schedules](schedules.md): shape each room's week in the card's **Week** view, and add presets of your own.
 - [Away](away.md) and [Windows](windows.md), if you set a presence entity or window sensors.
 - [Learning features](experimental.md), to see how your house heats.

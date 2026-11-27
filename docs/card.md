@@ -115,6 +115,8 @@ With several rooms every room shows its role, and the room the boiler heats for 
 
 Each room gets a schedule line and a thin strip for today in its presets' colours, with a now marker. See [Schedules](schedules.md).
 
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-schedules.png" alt="Rooms view: schedule lines and today strips, a change by hand on the Office hatched until 13:15, the Hallway with scheduling off" width="412"></p>
+
 | The line says | Means |
 |---|---|
 | Eco · Warm at 16:00 | Follows its schedule: Eco now, Warm from 16:00 |
@@ -126,6 +128,8 @@ Each room gets a schedule line and a thin strip for today in its presets' colour
 | No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (one preset all day; Eco is preselected) and **Scheduling off** |
 
 **Today.** Every room on one timeline for today, with changes by hand hatched and a now marker, and **Coming up**: the changes still to come today (rooms that switch at the same time to the same preset share a line).
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-today.png" alt="Today view: every room on one timeline with a now marker, and the changes coming up" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-week.png" alt="Week view: the Living Room's week in Eco and Warm, with Presets, Copy to room and Turn off schedule" width="412"></p>
 
 **Presets.** **Presets…** in the Week view or the editor opens a grid of rooms by presets. Tap a temperature to change it (or to set *not used* for a preset you added: Off in that room), tap a preset to rename it, pick its colour or remove it (Eco and Warm stay), and **+ Add preset** (up to 10). **Save** sends everything at once.
 

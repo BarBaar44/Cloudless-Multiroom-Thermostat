@@ -173,7 +173,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     async def _experimental_report(call: ServiceCall) -> None:
-        _LOGGER.warning("The experimental_report service is removed in v2.0.0 (deprecated)")
+        _LOGGER.warning("The experimental_report service is removed in v2.1.0 (deprecated)")
         entry_ids = call.data.get("config_entry_id")
         for entry in hass.config_entries.async_loaded_entries(DOMAIN):
             if entry_ids and entry.entry_id not in entry_ids:
@@ -226,7 +226,7 @@ async def _async_load_schedules(hass: HomeAssistant, entry: CMTConfigEntry, cont
     v1, and the schedule chosen in Add room, move into the schedule file and are
     then removed from the room. This runs before the update listener is added,
     so removing them doesn't reload.
-    Nothing acts on schedules yet. A problem here stops scheduling, never the
+    A problem here stops scheduling, never the
     heating: the values then stay with the room until the file can be used.
     """
     store = ScheduleStore(hass, entry.entry_id)

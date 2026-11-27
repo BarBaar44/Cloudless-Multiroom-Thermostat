@@ -41,7 +41,7 @@ The heating system's **Winning room** sensor has a `present` attribute; each roo
 
 **Does away overrule an open window?** No: an open window comes first, then a manual pause, then away.
 
-**I have visitors Home Assistant doesn't track.** With an input boolean as the presence entity you can switch it on by hand. Otherwise pick **Lower rooms to eco** so the house doesn't go cold. A guest mode is planned for v2.0, see the [roadmap](../ROADMAP.md).
+**I have visitors Home Assistant doesn't track.** With an input boolean as the presence entity you can switch it on by hand. Otherwise switch on [Guest mode](#guest-mode), or pick **Lower rooms to eco** so the house doesn't go cold.
 
 **Does it change my presets or targets?** No. Away only changes what is sent to the heat source and the TRVs while nobody is home.
 
