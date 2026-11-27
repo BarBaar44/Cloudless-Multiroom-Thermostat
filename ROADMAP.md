@@ -46,7 +46,7 @@ Done. Fixes and upkeep, plus one thing that has to be right before v2: how the P
 
 ### v1.9.x: preparing v2
 
-Everything v2 needs to know, measured now, without changing how the house heats. Each item is observe only unless it says otherwise. Milestones [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2) and [v1.9.1](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/4) (released), and [v1.9.2](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/7).
+Done. Everything v2 needs to know, measured without changing how the house heats. Each item is observe only unless it says otherwise. Milestones [v1.9.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/2), [v1.9.1](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/4) and [v1.9.2](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/7).
 
 - **Learning per room** ([#101](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/101)): warm-up episodes and PID advice for every room, not only the room to follow. Shows whether rooms really need their own PID values before v2 builds it.
 - **A heat-up model per room** ([#152](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/152), step 2 of [#135](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/135)): from the kept samples, fit how each room heats up (delay, speed, and how much a degree of flow does) against outdoor temperature, predict every warm-up and report how far off it was. Observe only: the model has to predict well before any gains are calculated from it. Replaces trial and error with a model; probing becomes the check on it.
@@ -71,7 +71,7 @@ A major version: presets become a list, schedules get their own storage, the car
 
 ### v2.0: schedules, presets, sun assist
 
-Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/3).
+Released 2026-11-27, and in the Marketplace catalog. Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/3).
 
 - **Schedules in the integration** ([#112](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/112), [#114](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/114)): a week schedule per room with switch points at 15 minutes that set a preset; copy days and weeks; schedule off per room, suspend all at once. Replaces schedule automations.
 - **Features page** ([#120](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/120)): one options page with a switch per feature (away, windows, sun assist, guest mode, learning features). Off means gone.
@@ -82,6 +82,15 @@ Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/m
 - **Sun assist in the integration** ([#118](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/118)): rooms that get sun hold a lower temperature on a sunny, mild morning (a window you set, 05:00 to 12:00 by default) and warm up only if the room is still cold at the check (or an optional light sensor reads dark).
 - **Heating Control Card** ([#121](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/121)): schedule line and today strip per room, a whole house timeline, a week view, and editors for schedules, presets and overrides.
 
+### v2.0.x: a scheduler that is easy to use
+
+Small updates on v2.0 before v2.1, mostly the schedule editor: more drag and drop, fewer taps. Milestone [v2.0.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/8).
+
+- **Easier to start** (v2.0.1, v2.0.2): a new schedule starts with Eco, Warm from 07:00 to 22:00, Eco; switch rooms inside the editor with a room dropdown; tap a room in the Today view to open its schedule; tap a copied day again to undo; rooms that only heat along are labelled so.
+- **Drag to edit** ([#191](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/191), [#192](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/192)): grips on every switch point, drag a whole block, tap twice to split, and paint a preset by dragging, also down over more days.
+- **Copy by dragging** ([#193](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/193)): drag a day's name onto other days.
+- **Undo and redo** ([#194](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/194)) in the editor.
+
 ### v2.1: warm when you need it, live learning data
 
 The step from "switch on at" to "be warm at". Built on the per room cooling and warm-up data from v1.9. Milestone [v2.1.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/5).
@@ -90,6 +99,9 @@ The step from "switch on at" to "be warm at". Built on the per room cooling and 
 - **Comfort times** ([#155](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/155)): a switch point to a warmer preset means "be at this temperature by then". The room starts as late as its learned warm-up time allows, given the outdoor temperature and how far it cooled. Off by default per room until the room has enough warm-ups; the plain switch time stays the fallback.
 - **Early stop:** before a switch point to a cooler preset, stop heating when the room will coast to the end within a set margin.
 - **Show it:** the card and the room attributes show the planned start and why ("starts 06:20, needs 40 min at 3 °C outside").
+- **No heat request into closed valves** ([#186](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/186)): when every TRV in the rooms that drive the heat source is closed, the heat request stops.
+- **Balance fanless radiators** ([#187](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/187)): a radiator with an inlet and an outlet sensor but no fans is balanced on its ΔT through the TRV's valve opening (Sonoff TRVZB first). The TRV still opens and closes for the room.
+- **Always open bypass room** ([#188](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/188)): an option that keeps one radiator fully open, for houses where every radiator has a TRV and there is no bypass.
 
 ### v2.2: a controller per room, cooler water, a safe boiler
 
