@@ -11,6 +11,7 @@ from custom_components.cloudless_multiroom_thermostat.schedule import (
     ScheduleError,
     builtin_presets,
     empty_data,
+    default_week,
     one_block_week,
     preset_temperature,
     sync_rooms,
@@ -117,6 +118,12 @@ def test_one_block_week() -> None:
     week = one_block_week("eco")
     assert validate_week(week, IDS) == week
     assert all(day == [{"time": "00:00", "preset": "eco", "mode": "at"}] for day in week)
+
+
+def test_default_week() -> None:
+    week = default_week()
+    assert validate_week(week, IDS) == week
+    assert all([(p["time"], p["preset"]) for p in day] == [("00:00", "eco"), ("07:00", "warm"), ("22:00", "eco")] for day in week)
 
 
 # ------------------------------------------------------ room temperatures

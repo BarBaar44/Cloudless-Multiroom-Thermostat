@@ -125,9 +125,9 @@ Each room gets a schedule line and a thin strip for today in its presets' colour
 | Sleep → Off (not used here) | A preset this room doesn't use means Off |
 | Scheduling off · you control it | The room is yours, as before v2 |
 | Suspended · holds 15° | Schedules are suspended for the house |
-| No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (one preset all day; Eco is preselected) and **Scheduling off** |
+| No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (starts with Warm from 07:00 to 22:00 and Eco the rest of the day, every day) and **Scheduling off** |
 
-**Today.** Every room on one timeline for today, with changes by hand hatched and a now marker, and **Coming up**: the changes still to come today (rooms that switch at the same time to the same preset share a line).
+**Today.** Every room on one timeline for today, with changes by hand hatched and a now marker, and **Coming up**: the changes still to come today (rooms that switch at the same time to the same preset share a line). Tap a room to edit its schedule on today, or to make one.
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-today.png" alt="Today view: every room on one timeline with a now marker, and the changes coming up" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-week.png" alt="Week view: the Living Room's week in Eco and Warm, with Presets, Copy to room and Turn off schedule" width="412"></p>
 
@@ -135,7 +135,8 @@ Each room gets a schedule line and a thin strip for today in its presets' colour
 
 **Week and editing.** With schedules, the card has three views: **Rooms**, **Today** and **Week** (one room, seven day lanes, its presets with their temperatures). Tap a day, or a room's schedule line, to edit:
 
-- On a wide screen (900 px or more, a tablet or a desktop) the editor shows the whole week. Tap a block to select it and drag its handles (switch points snap to 15 minutes, the time shows while you drag), or step its start and end with − and + in the side panel. Pick a preset there to change the block. To add a block, tap a preset in the palette, then tap a day: it gets an hour of that preset. **Copy day to…** copies the selected day to other days; **Remove block** gives its time to the block before it.
+- The room chips at the top switch to another room's schedule; with unsaved changes the editor asks first (**Save and switch**, **Discard** or **Stay**).
+- On a wide screen (900 px or more, a tablet or a desktop) the editor shows the whole week. Tap a block to select it and drag its handles (switch points snap to 15 minutes, the time shows while you drag), or step its start and end with − and + in the side panel. Drag a handle onto the next switch point to remove the block next to it, so a block can run to 00:00 or 24:00. Pick a preset there to change the block. **Split block** cuts the selected block in two at its middle, the second half in another preset: the way to start on a day that is one block. To add a block, tap a preset in the palette, then tap a day: it gets an hour of that preset (one block per tap on the preset). **Copy day to…** copies the selected day to other days; **Remove block** gives its time to the block before it.
 - On a phone the editor shows one day as a list of switch points, each with a time (15 minute steps) and a preset, plus **Add switch point**, and **Also use for** to save the same day for other days.
 - **Save** sends the whole week. A day has at most 12 switch points; the editor says which day has too many.
 - **Copy to room…** in the Week view gives other rooms this week. It warns first when a room doesn't use one of its presets (there it means Off), and changes by hand in those rooms end.
@@ -146,6 +147,8 @@ Each room gets a schedule line and a thin strip for today in its presets' colour
 **Header pills.** **Schedule** suspends every room's schedule (the pill then reads **Suspended**; tap to resume). **Guest mode** appears when the [Guest mode](away.md#guest-mode) feature is on: start it until you turn it off or until a set time.
 
 A refused change (a room without a schedule, for example) shows its reason at the bottom of the screen.
+
+**Rooms the card doesn't list.** A card with a `thermostats` list still counts every room in the header: tap **N rooms without a schedule** for a list of all of them, each with **Make schedule** and **Scheduling off**.
 
 The card writes only to the room climates, the single source of truth per room. Everything downstream (TRVs, the overshoot buffer for the winner, the boiler setpoint) is the integration's job, exactly as with any other change to a room. The rooms tell the card which one is the winner, each room's role and why a room is paused, so no extra sensor is needed.
 

@@ -46,8 +46,10 @@ CONF_STEP: Final = "target_temp_step"
 CONF_ECO_TEMP: Final = "eco_temperature"
 CONF_WARM_TEMP: Final = "warm_temperature"
 # Handed over by Add room and moved into the schedule file on load (#115):
-# a preset id for one block all day, or SCHEDULING_OFF_CHOICE
+# DEFAULT_WEEK_CHOICE, SCHEDULING_OFF_CHOICE, or (rooms added before 2.0.1)
+# a preset id for one block all day
 CONF_INITIAL_SCHEDULE: Final = "initial_schedule"
+DEFAULT_WEEK_CHOICE: Final = "default_week"
 SCHEDULING_OFF_CHOICE: Final = "scheduling_off"
 
 # Defaults
@@ -66,7 +68,7 @@ DEFAULT_STEP: Final = 0.5
 DEFAULT_ECO_TEMP: Final = 15.0
 DEFAULT_WARM_TEMP: Final = 19.0
 DEFAULT_NO_SCHEDULE_TEMP: Final = 15.0
-DEFAULT_INITIAL_SCHEDULE: Final = "eco"
+DEFAULT_INITIAL_SCHEDULE: Final = "default_week"
 
 # Schedule state of a room (#114, #115), attribute schedule_state
 SCHEDULE_ACTIVE: Final = "active"

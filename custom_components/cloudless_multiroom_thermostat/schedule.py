@@ -164,8 +164,17 @@ def validate_week(week: Any, presets: list[str]) -> list[list[dict[str, Any]]]:
 
 
 def one_block_week(preset: str) -> list[list[dict[str, Any]]]:
-    """The easy start: one preset for the whole day, every day."""
+    """One preset for the whole day, every day."""
     return [[{"time": "00:00", "preset": preset, "mode": MODE_AT}] for _ in range(DAYS)]
+
+
+def default_week() -> list[list[dict[str, Any]]]:
+    """The easy start (2.0.1): Eco, Warm 07:00 to 22:00, Eco, every day.
+
+    Two switch points, so the card's editor shows handles to drag right away.
+    """
+    day = [("00:00", "eco"), ("07:00", "warm"), ("22:00", "eco")]
+    return [[{"time": t, "preset": p, "mode": MODE_AT} for t, p in day] for _ in range(DAYS)]
 
 
 def presets_in_week(week: list[list[Mapping[str, Any]]]) -> set[str]:

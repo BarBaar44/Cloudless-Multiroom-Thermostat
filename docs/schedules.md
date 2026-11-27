@@ -8,8 +8,8 @@ Always: from v2.0 every room has a schedule, or you turn scheduling off for a ro
 
 ## How to turn it on
 
-- **New rooms:** the last step of **Add room** asks how the room starts: one preset all day (Eco by default), or scheduling off.
-- **Rooms you already had:** they have no schedule after the upgrade and hold 15 °C. **Settings > Repairs** lists them. Give each one a schedule with **Make schedule** in the [Heating Control Card](card.md#schedules) or the `set_schedule` action, or turn scheduling off for it. [Upgrading to v2.0](upgrade-v2.md) walks through it.
+- **New rooms:** the last step of **Add room** asks how the room starts: Warm from 07:00 to 22:00 and Eco the rest of the day, every day, or scheduling off.
+- **Rooms you already had:** they have no schedule after the upgrade and hold 15 °C. **Settings > Repairs** lists them, and so does the card's **N rooms without a schedule** note. Give each one a schedule with **Make schedule** in the [Heating Control Card](card.md#schedules) or the `set_schedule` action, or turn scheduling off for it. [Upgrading to v2.0](upgrade-v2.md) walks through it.
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-week.png" alt="The Week view of the Heating Control Card: one room's week in Eco and Warm" width="412"></p>
 

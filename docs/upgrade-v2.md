@@ -8,7 +8,7 @@ Read this page before you install v2.0. The upgrade takes about ten minutes for 
 
 After the upgrade **every room holds 15 °C** (the new setting **Temperature without schedule**) until you choose one of two things for it:
 
-- **Make schedule:** the room follows its own week of presets (Eco, Warm, Off and presets of your own). One block for the whole day is enough to start.
+- **Make schedule:** the room follows its own week of presets (Eco, Warm, Off and presets of your own). It starts with Warm from 07:00 to 22:00 and Eco the rest of the day, every day.
 - **Scheduling off:** the room is yours, as in v1: presets, targets and your own automations work as before and nothing expires.
 
 A room on Warm 20.5 °C goes to 15 °C at the first start of v2.0. That is on purpose: the heating never guesses a schedule for you. **Settings > Repairs** lists the rooms without a schedule, and the card shows each one hatched with **Make schedule** and **Scheduling off**.
@@ -27,7 +27,7 @@ While a room has no schedule, `climate.set_temperature` and `climate.set_preset_
 
 1. **Install the update** under **Settings > Updates**, restart Home Assistant, then reload the browser once so dashboards load Heating Control Card 2.0.
 2. **Open the card.** Every room says **No schedule · holds 15°**.
-3. **For each room, tap Make schedule or Scheduling off.** Make schedule asks for one preset for all day, every day (Eco is preselected): pick it, **Save schedule**, and the room follows it. Shape the week later in the **Week** view: drag switch points on a tablet or desktop, a list of times on a phone, **Copy day to…** and **Copy to room…** to repeat it. See [Schedules](schedules.md) and [the card](card.md#schedules).
+3. **For each room, tap Make schedule or Scheduling off.** Make schedule starts with Warm from 07:00 to 22:00 and Eco the rest of the day, every day: **Save schedule**, and the room follows it. A card that lists only some rooms (`thermostats`): tap **N rooms without a schedule** in the header for all of them. Shape the week later in the **Week** view: drag switch points on a tablet or desktop, a list of times on a phone, **Copy day to…** and **Copy to room…** to repeat it. See [Schedules](schedules.md) and [the card](card.md#schedules).
 4. **Check Settings > Repairs.** *Rooms without a schedule* goes once every room has a schedule or scheduling off.
 5. **Check Configure > Features** on the heating system. Features you used in v1 (presence and away, windows, learning features) are on, with their settings kept. Switch on what you want from the new ones: **Guest mode** and **Sun assist**.
 6. **Turn off the automations** that the integration replaces (below).
@@ -52,7 +52,7 @@ Prefer YAML? `set_schedule` sets a whole week, or scheduling off, in one call. [
 - **A preset set by hand** on a room with a schedule is a change by hand too: it lasts until the next switch point.
 - **Off is off.** A room switched off stays off whatever its schedule says; switched back to heat, it does what the schedule says at that moment. A switch point *to* Off is different: the room stays on heat and holds the off temperature.
 - **Presets of your own.** Eco and Warm are built in; add up to 8 more (Sleep, for example), each with a temperature per room or *not used* (a switch point to it means Off in that room), and a colour. The room form still edits Eco and Warm: same values, one place.
-- **Add room** has a third step: how the new room starts (one preset all day, Eco by default, or scheduling off).
+- **Add room** has a third step: how the new room starts (Warm from 07:00 to 22:00 and Eco the rest of the day, every day, or scheduling off).
 - **Suspend schedules** (the **Schedule** pill in the card, or `suspend_schedules`): every room with a schedule holds the Temperature without schedule until you resume. A change by hand on one room starts that room's schedule again; the others stay suspended.
 
 ### Away
