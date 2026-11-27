@@ -4,7 +4,7 @@ How updates arrive, what to do after one, and what changes between major version
 
 ## Installing an update
 
-Updates appear under **Settings > Updates** (from the Marketplace on Home Assistant 2026.11 and newer, from HACS on 2026.10). Install it, restart Home Assistant, then reload the browser once so dashboards load the new [Heating Control Card](card.md).
+Updates appear under **Settings > Updates**, from the Marketplace. Install it, restart Home Assistant, then reload the browser once so dashboards load the new [Heating Control Card](card.md).
 
 Rooms, settings, presets and targets are kept. So is the data of the [learning features](experimental.md): it lives in files in your own Home Assistant (`config/cloudless_multiroom_thermostat/`), not in the integration.
 

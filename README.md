@@ -2,8 +2,8 @@
 
 <p align="center">
   <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/releases"><img src="https://img.shields.io/github/v/release/BarBaar44/Cloudless-Multiroom-Thermostat?style=for-the-badge&label=release" alt="Release"></a>
-  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-orange?style=for-the-badge" alt="HACS custom"></a>
-  <img src="https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.10+">
+  <img src="https://img.shields.io/badge/Marketplace-listed-orange?style=for-the-badge" alt="In the Marketplace">
+  <img src="https://img.shields.io/badge/Home%20Assistant-2026.11%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.11+">
   <a href="https://community.home-assistant.io/t/cloudless-multiroom-thermostat/1032363"><img src="https://img.shields.io/badge/community-forum-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white" alt="Community forum thread"></a>
 </p>
 
@@ -30,9 +30,9 @@ The **Heating Control Card** shows every room with its temperature, target, Heat
 
 ## Running in 10 minutes
 
-You need Home Assistant 2026.10 or newer, a temperature sensor in every room and a heat source Home Assistant can control. TRVs are optional. [What you need](docs/getting-started.md#what-you-need) explains the choices.
+You need Home Assistant 2026.11 or newer, a temperature sensor in every room and a heat source Home Assistant can control. TRVs are optional. [What you need](docs/getting-started.md#what-you-need) explains the choices.
 
-1. **Install.** Search for **Cloudless Multiroom Thermostat** in the Marketplace (Home Assistant 2026.11 and newer) or HACS, install it and restart Home Assistant. Not found? The catalog listing is still in review: use the button below, or [add the repository by hand](docs/getting-started.md#install).
+1. **Install.** Search for **Cloudless Multiroom Thermostat** in the Marketplace, install it and restart Home Assistant. Search doesn't find it? Use the button below, or [add the repository by hand](docs/getting-started.md#install).
 
    [![Open your Home Assistant instance and open this repository.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=BarBaar44&repository=Cloudless-Multiroom-Thermostat&category=integration)
 
@@ -81,5 +81,5 @@ Where it is going next: [ROADMAP.md](ROADMAP.md).
 ## Development
 
 - [`dev/`](dev/README.md): a simulated house (rooms that warm up and cool down, TRVs, a thermostat with a PID like `thermostat.yaml`, a boiler that short cycles like a real one, gas meter and weather) to try everything without hardware, as a Docker container or a VM for Virtual Machine Manager, with a script that sets it all up through the real forms.
-- `tests/`: tests on a real Home Assistant core (`pip install -r requirements_test.txt`, then `pytest`). CI also runs ruff, shellcheck, hassfest and the HACS validation.
+- `tests/`: tests on a real Home Assistant core (`pip install -r requirements_test.txt`, then `pytest`). CI also runs ruff, shellcheck, hassfest and the Marketplace validation.
 - Every pull request that changes what users see or do also changes its page in [`docs/`](docs/).

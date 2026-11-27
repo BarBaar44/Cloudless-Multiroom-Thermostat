@@ -26,7 +26,7 @@ lovelace:
 ```
 
 
-**Had the separate Heating Control Card installed?** Remove it in HACS or the Marketplace, and remove its entry under **Settings > Dashboards > ⋮ > Resources** if it is still there. Your dashboards keep working: the card type stays `custom:heating-control-card`. The log warns while both copies are installed.
+**Had the separate Heating Control Card installed?** Remove it in the Marketplace, and remove its entry under **Settings > Dashboards > ⋮ > Resources** if it is still there. Your dashboards keep working: the card type stays `custom:heating-control-card`. The log warns while both copies are installed.
 
 When you remove the last heating system, the integration removes its resource again.
 
