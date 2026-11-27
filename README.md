@@ -2,8 +2,8 @@
 
 <p align="center">
   <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/releases"><img src="https://img.shields.io/github/v/release/BarBaar44/Cloudless-Multiroom-Thermostat?style=for-the-badge&label=release" alt="Release"></a>
-  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-orange?style=for-the-badge" alt="HACS custom"></a>
-  <img src="https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.10+">
+  <img src="https://img.shields.io/badge/Marketplace-listed-orange?style=for-the-badge" alt="In the Marketplace">
+  <img src="https://img.shields.io/badge/Home%20Assistant-2026.11%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.11+">
   <a href="https://community.home-assistant.io/t/cloudless-multiroom-thermostat/1032363"><img src="https://img.shields.io/badge/community-forum-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white" alt="Community forum thread"></a>
 </p>
 
@@ -17,20 +17,22 @@ Other integrations put a smart controller on the boiler. This one puts a [virtua
 
 - **No cloud:** Home Assistant, your TRVs and your boiler thermostat, nothing else.
 - **Any number of rooms**, each with its own target, presets and window sensors.
+- **A week schedule per room**, run by the integration itself: presets of your own, changes by hand that expire, suspend for the whole house and a guest mode.
+- **Sun assist:** rooms that get sun wait for it on a sunny, mild morning.
 - **One heat source**, as an on/off relay, an OpenTherm thermostat (ESPHome, DIYLess) or an OpenTherm Gateway. Full multi-room control needs a relay or an OpenTherm controller without its own room sensor, see [Hardware](docs/hardware.md).
 - **Presence aware:** rooms go off or to eco when everybody is away, and come back when someone is home.
 - **Open window detection** per room.
 - **Its own dashboard card**, included.
 
-<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card.png" alt="Heating Control Card" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-multi-room.png" alt="Heating Control Card with several rooms" width="412"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-schedules.png" alt="Heating Control Card: every room with its schedule line and today strip, the Office heating with a change by hand until 13:15" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-week.png" alt="Heating Control Card Week view: the Living Room's week in Eco and Warm" width="412"></p>
 
-The **Heating Control Card** shows every room with its temperature, target, Heat/Off and role, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings. It comes with the integration, no separate install: [docs/card.md](docs/card.md).
+The **Heating Control Card** shows every room with its temperature, target, Heat/Off, role and schedule, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings. Its Today and Week views and the schedule editor (drag on a tablet, a list on a phone) are where you make the schedules. It comes with the integration, no separate install: [docs/card.md](docs/card.md).
 
 ## Running in 10 minutes
 
-You need Home Assistant 2026.10 or newer, a temperature sensor in every room and a heat source Home Assistant can control. TRVs are optional. [What you need](docs/getting-started.md#what-you-need) explains the choices.
+You need Home Assistant 2026.11 or newer, a temperature sensor in every room and a heat source Home Assistant can control. TRVs are optional. [What you need](docs/getting-started.md#what-you-need) explains the choices.
 
-1. **Install.** Search for **Cloudless Multiroom Thermostat** in the Marketplace (Home Assistant 2026.11 and newer) or HACS, install it and restart Home Assistant. Not found? The catalog listing is still in review: use the button below, or [add the repository by hand](docs/getting-started.md#install).
+1. **Install.** Search for **Cloudless Multiroom Thermostat** in the Marketplace, install it and restart Home Assistant. Search doesn't find it? Use the button below, or [add the repository by hand](docs/getting-started.md#install).
 
    [![Open your Home Assistant instance and open this repository.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=BarBaar44&repository=Cloudless-Multiroom-Thermostat&category=integration)
 
@@ -38,8 +40,8 @@ You need Home Assistant 2026.10 or newer, a temperature sensor in every room and
 
    [![Open your Home Assistant instance and start setting up Cloudless Multiroom Thermostat.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=cloudless_multiroom_thermostat)
 
-3. **Add your rooms.** On the integration page, **Add room** for every room: a name and temperatures, then its temperature sensor and TRVs.
-4. **Add the card.** Reload the browser once, then add a card of type `custom:heating-control-card` to a dashboard. It finds the rooms by itself.
+3. **Add your rooms.** On the integration page, **Add room** for every room: a name and temperatures, its temperature sensor and TRVs, then how it starts (one preset all day, or scheduling off).
+4. **Add the card.** Reload the browser once, then add a card of type `custom:heating-control-card` to a dashboard. It finds the rooms by itself. Tap a room's schedule line to shape its week.
 
 Set a room to Heat and give it a target above its temperature: it becomes the winner and the heat source gets its target. [Getting started](docs/getting-started.md) walks through every step and what to check.
 
@@ -50,6 +52,8 @@ Set a room to Heat and give it a target above its temperature: it becomes the wi
 | [Getting started](docs/getting-started.md) | What you need, install, the heating system settings, your first room |
 | [How it works](docs/how-it-works.md) | A virtual thermostat in every room, the winner and the two tiers |
 | [Rooms](docs/rooms.md) | Room settings, presets, rooms that only heat along, roles |
+| [Schedules](docs/schedules.md) | Week schedules per room, presets, changes by hand, scheduling off |
+| [Sun assist](docs/sun-assist.md) | Rooms that get sun wait for the sun on a sunny morning |
 | [Away](docs/away.md) | What happens when everybody leaves |
 | [Windows](docs/windows.md) | Open window detection per room |
 | [Heating Control Card](docs/card.md) | The dashboard card and its options |
@@ -58,6 +62,7 @@ Set a room to Heat and give it a target above its temperature: it becomes the wi
 | [Thermostat requirements](docs/thermostat.md) | What the thermostat must offer, and how to add it to your own ESPHome config |
 | [Boiler notes](docs/boiler-notes.md) | Known problems with specific boilers |
 | [Upgrading](docs/upgrading.md) | Updates, release notes, what to do after one |
+| [Upgrading to v2.0](docs/upgrade-v2.md) | **Read before installing v2.0:** every room needs a schedule |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and how to find the cause |
 | [Reference](docs/reference.md) | Every entity, attribute and service |
 
@@ -76,5 +81,5 @@ Where it is going next: [ROADMAP.md](ROADMAP.md).
 ## Development
 
 - [`dev/`](dev/README.md): a simulated house (rooms that warm up and cool down, TRVs, a thermostat with a PID like `thermostat.yaml`, a boiler that short cycles like a real one, gas meter and weather) to try everything without hardware, as a Docker container or a VM for Virtual Machine Manager, with a script that sets it all up through the real forms.
-- `tests/`: tests on a real Home Assistant core (`pip install -r requirements_test.txt`, then `pytest`). CI also runs ruff, shellcheck, hassfest and the HACS validation.
+- `tests/`: tests on a real Home Assistant core (`pip install -r requirements_test.txt`, then `pytest`). CI also runs ruff, shellcheck, hassfest and the Marketplace validation.
 - Every pull request that changes what users see or do also changes its page in [`docs/`](docs/).

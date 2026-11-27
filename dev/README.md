@@ -67,12 +67,13 @@ The integration is mounted read only from `../custom_components/`, so after chan
 
 ### Option 2: VM in Virtual Machine Manager (Fedora)
 
-`vm/create-vm.sh` builds a Debian 13 VM on your machine and lets cloud-init do the rest: it installs Docker, clones this repo, starts the same test HA and, unless you pass `--no-setup`, does onboarding, creates the heating system with all rooms, switches on the learning features with every field filled in, and sets the sim to real time. The VM shows up in Virtual Machine Manager like any other.
+`vm/create-vm.sh` builds a Debian 13 VM on your machine and lets cloud-init do the rest: it installs Docker, clones this repo on the `dev` branch (where v2 pull requests are merged first), starts the same test HA and, unless you pass `--no-setup`, does onboarding, creates the heating system with all rooms, switches on the learning features with every field filled in, and sets the sim to real time. The VM shows up in Virtual Machine Manager like any other.
 
 ```bash
 sudo dnf install virt-install qemu-img   # once, if not installed yet
 cd dev/vm
-./create-vm.sh                           # VM "cmt-test", runs the branch you have checked out
+./create-vm.sh                           # VM "cmt-test", runs the dev branch
+./create-vm.sh --branch main --name cmt-main   # or another branch
 ./create-vm.sh --auto-apply              # also let it apply PID advice by itself
 ```
 
@@ -104,10 +105,14 @@ python3 setup_heating.py --token <token> --learning --auto-apply --notify full
 
 On a fresh HA it can do onboarding as well: `python3 setup_heating.py --onboard --username test --password testtest`.
 
-It creates "Sim heating" with all five rooms, presence `input_boolean.sim_somebody_home`, away mode off. With `--learning` it fills every field on the learning features page with a sim entity, following Living Room. Only one entry at a time: delete it first to switch heat source type.
+It creates "Sim heating" the v2 way: setup with the heat source and the first room (Office), then **Features** on (presence and away with `input_boolean.sim_somebody_home` and away mode off, windows, sun assist for the Office on `weather.sim_weather`, guest mode), then the other four rooms through Add room. It adds a Sleep preset (16 °C, not used in the Office) and a week schedule per room (weekdays Warm 06:30 to 08:30 and 17:00 to 22:30, Sleep at night; the Office Warm 08:00 to 17:00 on weekdays, then Off), and sets every room to heat. With `--learning` it also fills every field on the learning features page with a sim entity, following Living Room. Only one entry at a time: delete it first to switch heat source type.
 
 ## Things to try
 
+- **Schedules (v2).** Add the Heating Control Card to a dashboard (it is registered by the integration: Add card > Heating Control Card). Rooms shows each room's schedule line and today strip; Today shows the whole house and what comes next; Week shows one room's week. Tap a day to edit (drag on a wide screen, a list on a phone), **Presets…** for the presets dialog, tap a target for **Keep this until**. At speed 30 a day passes in 48 minutes, so switch points come by quickly.
+- **Rooms without a schedule:** add the Guest Room or the Bathroom with Add room and pick **Scheduling off**, or try the upgrade path below.
+- **Suspend and guest mode:** the header pills. Turn off `input_boolean.sim_somebody_home` with a change by hand on a room: it ends at once, unless Keep when everyone is away was ticked; with guest mode on nothing pauses.
+- **Sun assist:** the Office waits for the sun at 08:00 on a sunny, mild forecast and checks its temperature an hour later (Configure > Sun assist).
 - Set rooms to Heat and watch `sensor.sim_heating_winning_room`: the room with the biggest gap wins, its TRVs get the +1 °C buffer, `climate.sim_boiler` gets its target and starts asking for heat.
 - Heat only the Master Bedroom and watch the burner start and stop; then heat the Living Room as well and see it calm down.
 - Turn on `input_boolean.sim_living_room_garden_door`: after 30 s the living room pauses (`binary_sensor.living_room_paused`), its TRVs go to 10 °C; turn it off and it resumes.
@@ -115,6 +120,17 @@ It creates "Sim heating" with all five rooms, presence `input_boolean.sim_somebo
 - Presets eco and warm on the room climates, pause/resume services, `set_all_off`.
 - Learning features (at speed 1): a warm-up of the Living Room becomes an episode with water temperatures, overshoot and PID advice; with `--auto-apply` the advice is written to `number.sim_central_heating_kp` or `_ki` and checked on the next warm-ups. The evening report is in `sensor.sim_heating_learning_features_report`; call `cloudless_multiroom_thermostat.experimental_report` for one now. The night prediction runs at 21:00. Gas per degree-day needs a few real days of history, so it stays `unknown` at first. See [../docs/experimental.md](../docs/experimental.md).
 - Restart HA: rooms come back in the same mode, preset and target. The sim itself starts over (room temperatures from the config), but its settings (Kp, Ki, Kd, flow limit, speed) are kept.
+
+## The upgrade path from v1
+
+To see what an upgrade does to an existing house (every room without a schedule holds 15 °C, Repairs lists them, the card shows Make schedule and Scheduling off), set up the sim on v1 first and then switch to v2:
+
+```bash
+git checkout v1.9.2 && docker compose restart          # on the VM: cd /opt/thermostat/dev first
+python3 setup_heating.py --token <token>               # the v1.9.2 version of this script
+git checkout -                                         # back to the v2 branch
+docker compose restart
+```
 
 ## Tuning the simulation
 

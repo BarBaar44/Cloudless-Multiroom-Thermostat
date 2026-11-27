@@ -102,6 +102,7 @@ from .const import (
     WRITE_GRACE_S,
     signal_update,
 )
+from .features import FEATURE_PRESENCE, FEATURE_WINDOWS, feature_on
 from .logic import (
     RoomDemand,
     Winner,
@@ -136,19 +137,28 @@ class Room:
     manual_pause: bool = False
     window_open: bool = False
     current: float | None = None
+    # Preset temperatures from the schedule file (#112), the only place they are
+    # kept. None while that file can't be used: then a value the room form
+    # handed over and that couldn't be moved yet, else the default.
+    preset_temps: dict[str, float | None] | None = None
     _window_timer: CALLBACK_TYPE | None = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
         return self.config[CONF_ROOM_NAME]
 
+    def _preset_temp(self, preset: str, key: str, default: float) -> float:
+        if self.preset_temps is not None and self.preset_temps.get(preset) is not None:
+            return float(self.preset_temps[preset])
+        return float(self.config.get(key, default))
+
     @property
     def eco_temp(self) -> float:
-        return float(self.config.get(CONF_ECO_TEMP, DEFAULT_ECO_TEMP))
+        return self._preset_temp(PRESET_ECO, CONF_ECO_TEMP, DEFAULT_ECO_TEMP)
 
     @property
     def warm_temp(self) -> float:
-        return float(self.config.get(CONF_WARM_TEMP, DEFAULT_WARM_TEMP))
+        return self._preset_temp(PRESET_WARM, CONF_WARM_TEMP, DEFAULT_WARM_TEMP)
 
     @property
     def buffer(self) -> float:
@@ -168,8 +178,13 @@ class HeatingController:
         self.entry = entry
         self.rooms: dict[str, Room] = {}
         self.winner = Winner(None, WINNER_OFF, self.off_temp, None, 0.0)
-        self.present = True
+        self.presence_home = True  # what the presence entity says
+        self._was_home = True  # effective, guest mode included: away starts when it turns False
         self.experimental: Any = None  # ExperimentalRunner when enabled in options
+        self.schedules: Any = None  # ScheduleStore, loaded in async_setup_entry (#112)
+        from .scheduler import Scheduler  # noqa: PLC0415 - imports Room from here
+
+        self.scheduler = Scheduler(hass, self)
         self.system_device_id: str | None = None  # set in async_setup_entry
         self._unsubs: list[CALLBACK_TYPE] = []
         self._sent: dict[str, tuple[Any, float]] = {}
@@ -191,6 +206,26 @@ class HeatingController:
     def settings(self) -> dict[str, Any]:
         return {**self.entry.data, **self.entry.options}
 
+    def feature(self, key: str) -> bool:
+        """Whether a feature on the Features page is on (#120)."""
+        return feature_on(self.settings, (room.config for room in self.rooms.values()), key)
+
+    @property
+    def present(self) -> bool:
+        """Somebody is home: the presence entity, or guest mode (#117)."""
+        if not self.feature(FEATURE_PRESENCE):
+            return True
+        return self.presence_home or self.scheduler.guest_active()
+
+    @callback
+    def check_home(self) -> None:
+        """Away starts when nobody is home any more, guest mode included: overrides go then."""
+        home = self.present
+        if home != self._was_home:
+            self._was_home = home
+            if not home:
+                self.scheduler.drop_overrides_for_away()
+
     @property
     def off_temp(self) -> float:
         return float(self.settings.get(CONF_OFF_TEMP, DEFAULT_OFF_TEMP))
@@ -208,7 +243,7 @@ class HeatingController:
             return PAUSE_WINDOW
         if room.manual_pause:
             return PAUSE_MANUAL
-        if not self.present and self.away_mode == AWAY_OFF:
+        if not self.present and self.away_mode == AWAY_OFF and not self.scheduler.keeps_when_away(room):
             return PAUSE_AWAY
         return None
 
@@ -218,7 +253,7 @@ class HeatingController:
     def effective_target(self, room: Room) -> float:
         if not self.is_heating(room):
             return self.off_temp
-        if not self.present and self.away_mode == AWAY_ECO:
+        if not self.present and self.away_mode == AWAY_ECO and not self.scheduler.keeps_when_away(room):
             return min(room.target, room.eco_temp)
         return room.target
 
@@ -291,16 +326,6 @@ class HeatingController:
         self.request_recompute()
 
     @callback
-    def set_room_preset(self, room_id: str, preset: str | None) -> None:
-        room = self.rooms[room_id]
-        if preset == PRESET_ECO:
-            self.set_room_state(room_id, target=room.eco_temp, preset=PRESET_ECO)
-        elif preset == PRESET_WARM:
-            self.set_room_state(room_id, target=room.warm_temp, preset=PRESET_WARM)
-        else:
-            self.set_room_state(room_id, preset=None)
-
-    @callback
     def request_recompute(self) -> None:
         if self._started:
             self._debouncer.async_schedule_call()
@@ -322,7 +347,7 @@ class HeatingController:
                     self.hass, [sensor], self._make_temp_listener(room.room_id)
                 )
             )
-            windows = cfg.get(CONF_WINDOWS) or []
+            windows = (cfg.get(CONF_WINDOWS) or []) if self.feature(FEATURE_WINDOWS) else []
             if windows:
                 room.window_open = self._windows_open(room)
                 self._unsubs.append(
@@ -337,9 +362,10 @@ class HeatingController:
             for select in cfg.get(CONF_EXT_SELECT) or []:
                 watched[select] = self._make_select_listener(room.room_id)
 
-        presence = self.settings.get(CONF_PRESENCE)
+        presence = self.settings.get(CONF_PRESENCE) if self.feature(FEATURE_PRESENCE) else None
         if presence:
-            self.present = self._read_presence()
+            self.presence_home = self._read_presence()
+            self._was_home = self.present
             watched[presence] = self._on_presence_change
         for key in (CONF_HEAT_SOURCE_ENTITY, CONF_CH_SWITCH):
             if self.settings.get(key):
@@ -357,6 +383,7 @@ class HeatingController:
             )
         )
         self._unsubs.append(async_at_started(self.hass, self._async_on_started))
+        self.scheduler.async_start()
 
     async def _async_on_started(self, _hass: HomeAssistant) -> None:
         self._started = True
@@ -366,6 +393,7 @@ class HeatingController:
         await self._async_apply()
 
     async def async_stop(self) -> None:
+        self.scheduler.async_stop()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -439,9 +467,10 @@ class HeatingController:
     @callback
     def _on_presence_change(self, _event: Event[EventStateChangedData]) -> None:
         present = self._read_presence()
-        if present != self.present:
-            self.present = present
+        if present != self.presence_home:
+            self.presence_home = present
             _LOGGER.debug("Presence: %s", "home" if present else "away")
+            self.check_home()
             self.request_recompute()
 
     @callback

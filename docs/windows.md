@@ -8,7 +8,7 @@ In rooms where a window or a garden door is opened for a while, so the radiators
 
 ## How to turn it on
 
-Edit the room (the gear next to it on the integration page) and pick its **Window and door sensors** in the second step. Any binary sensor works, as long as `on` means open.
+Switch on **Windows** under **Configure > Features** on the heating system. Then edit the room (the gear next to it on the integration page) and pick its **Window and door sensors** in the second step; without the feature the fields aren't there. Any binary sensor works, as long as `on` means open.
 
 ## Settings
 

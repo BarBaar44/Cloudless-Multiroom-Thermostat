@@ -12,7 +12,7 @@ When you want to know how your house heats: what a degree colder costs in gas, h
 
 ## How to turn it on
 
-They are off by default. **Settings > Devices & services > Cloudless Multiroom Thermostat > Configure**, tick **Enable learning features (observe only)**, then fill in the entities on the next page. Every entity is optional; each feature runs as soon as the entities it needs are set. [The entities on the settings page](#the-entities-on-the-settings-page) explains each one and where to get it.
+They are off by default. **Settings > Devices & services > Cloudless Multiroom Thermostat > Configure > Features**, switch on **Learning features (observe only)**, then fill in the entities on the next page (later under **Configure > Learning features**). Every entity is optional; each feature runs as soon as the entities it needs are set. [The entities on the settings page](#the-entities-on-the-settings-page) explains each one and where to get it.
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/learning-settings.png" alt="The learning features page with the room to follow, comfort times, outdoor temperature, weather forecast and people at home" width="420"></p>
 
@@ -26,16 +26,16 @@ The aim is to learn how one room and the boiler behave, so the heating can later
 
 The end goal is **dynamic parameters**: PID values per outdoor band instead of one fixed set, and a morning start time that reaches the comfort temperature just in time (optimum start).
 
-## When a feature becomes stable
+## When a feature is proven
 
-Most of what keeps a feature from stable is not waiting for data but proof: does the model predict well, does the advice actually help, in more than one kind of weather. Each feature has a bar to clear. Until it does, it stays observe only. After it does, it may act on the heating, but only once you switch that on separately.
+What a feature needs is not only data but proof: does the model predict well, does the advice actually help, in more than one kind of weather. Each feature has a bar to clear. Until it does, it stays observe only. After it does, it may act on the heating, but only once you switch that on separately.
 
-| Feature | Stable when | Then it may |
+| Feature | Proven when | Then it may |
 |---|---|---|
 | Gas per degree-day | A full year of data (so a whole heating season), and with the boiler signals set, a measured (or set) hot-water rate | Serve as the official check for the other features |
 | Night cooldown model | At least 30 predicted nights; in every outdoor band that occurs (5 or more of those nights) the average error is 0.3 °C or less and no night is off by more than 0.6 °C. Bands that don't occur aren't waited for | Optimum start: begin heating at the predicted time, only in confirmed bands |
 | Warm-up episodes and PID advice | Confirmed in every outdoor band the house actually gets: each band with at least 5 of the last 30 warm-ups. A band is confirmed by [probing](#probing-values-that-get-no-advice) (neither a step up nor a step down was better, so the values were already right) or by a PID change (by hand or automatically): in that band, 5 or more valid episodes of the followed room after the change with less overshoot or a faster warm-up on average than the 5 before it in that band (or, when nothing before it can be compared, 5 that hold steady against a baseline of the first 5 after it), and gas per degree-day not worse | Set the PID values per outdoor band (gain scheduling) |
-| Evening report | The features it reports on are stable | Stay as it is |
+| Evening report | The features it reports on are proven | Stay as it is |
 
 The night model counts its last 30 valid nights that had a prediction. A change is noticed when the effective gains of a warm-up differ from the warm-up before, whether you made it or [the advice was applied automatically](#applying-the-advice-automatically). Effective gains are Kp, Ki and Kd times what the PID output is multiplied by: the flow limit with `thermostat.yaml` (records from schema 3 on), otherwise 100. So a firmware change that rescales the output and the gains together, as `thermostat.yaml` did on 2026-11-07 (output times the flow limit instead of 0 to 100, Kp and Ki times 2.5), is the same controller and no change. There is one set of PID values for all weather, so a change is judged in every band it runs in: per band, its warm-ups on the new values against the 5 before the change in that band. One change can confirm several bands once the weather has varied; a later change replaces it.
 
@@ -49,24 +49,24 @@ Only warm-ups count (top-ups are left out of the advice), so expect about one a 
 
 The [evening report](#evening-report) shows where each feature stands against these numbers. They are a starting point and may be adjusted as more data comes in.
 
-## Maturity at a glance
+## Where each feature stands
 
-| Feature | Maturity | Needs | Output |
+| Feature | Stage | Needs | Output |
 |---|---|---|---|
-| [Gas per degree-day](#gas-per-degree-day) | **Beta**: running daily since October 2026, the figures are usable for comparing weeks | Gas meter, outdoor temperature. For the hot-water split also burner flame, hot water active, central heating active. Optional: people at home | `sensor.<system>_gas_per_degree_day`, plus [statistics sensors](#long-term-statistics) |
-| [Night cooldown model](#night-cooldown-model) | **Alpha**: still learning; first back-test was 0.2 to 0.8 °C off | Outdoor temperature, weather forecast, a room to follow | `sensor.<system>_night_prediction`, plus [statistics sensors](#long-term-statistics) |
-| [Warm-up episodes and PID advice](#warm-up-episodes-and-pid-advice) | **Alpha**: records reliably, advice not yet validated; applied only when you switch that on | Room to follow. Helpful: burner flame, outdoor temperature. For advice: Kp, Ki, Kd of a firmware PID (for example ESPHome) | `sensor.<system>_last_warm_up_overshoot`, `sensor.<system>_pid_advice`, plus [statistics sensors](#long-term-statistics) |
-| [Evening report](#evening-report) | **Beta**: a summary of the above | Any of the above | `sensor.<system>_learning_features_report` at 21:00, plus a notification as chosen |
+| [Gas per degree-day](#gas-per-degree-day) | **Checking**: running daily since October 2026, the figures are usable for comparing weeks | Gas meter, outdoor temperature. For the hot-water split also burner flame, hot water active, central heating active. Optional: people at home | `sensor.<system>_gas_per_degree_day`, plus [statistics sensors](#long-term-statistics) |
+| [Night cooldown model](#night-cooldown-model) | **Learning**: first back-test was 0.2 to 0.8 °C off | Outdoor temperature, weather forecast, a room to follow | `sensor.<system>_night_prediction`, plus [statistics sensors](#long-term-statistics) |
+| [Warm-up episodes and PID advice](#warm-up-episodes-and-pid-advice) | **Learning**: records reliably, advice not yet validated; applied only when you switch that on | Room to follow. Helpful: burner flame, outdoor temperature. For advice: Kp, Ki, Kd of a firmware PID (for example ESPHome) | `sensor.<system>_last_warm_up_overshoot`, `sensor.<system>_pid_advice`, plus [statistics sensors](#long-term-statistics) |
+| [Evening report](#evening-report) | **Checking**: a summary of the above | Any of the above | `sensor.<system>_learning_features_report` at 21:00, plus a notification as chosen |
 
-Maturity means:
+The stages:
 
-- **Alpha**: the data collection works, the conclusions are not trustworthy yet. Read them, don't act on them.
-- **Beta**: the numbers are useful; details may still change.
+- **Learning**: collecting data and building the model. Read what it says, don't act on it yet.
+- **Checking**: the numbers are useful and are being checked against what really happens; details may still change.
+- **Proven**: it cleared its bar (see [When a feature is proven](#when-a-feature-is-proven)) and may act on the heating once you allow it. None has got there yet.
 
-These labels describe the learning features only. They are optional and off by default; the heating control itself (rooms, TRVs, winner, heat source) is stable and does not depend on them.
-- **Stable**: not used yet; nothing here is stable. See [When a feature becomes stable](#when-a-feature-becomes-stable).
+The stages describe the learning features only: they learn and monitor, they don't run the heating. They are optional and off by default; the heating control itself (rooms, TRVs, winner, heat source, schedules) does not depend on them.
 
-The analysis has run in one house (an Atag boiler on OpenTherm with an ESPHome PID) since October 2026; the maturity above describes that analysis. If something looks wrong, please [open an issue](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues).
+The analysis has run in one house (an Atag boiler on OpenTherm with an ESPHome PID) since October 2026; the stages above describe that analysis. If something looks wrong, please [open an issue](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues).
 
 ## The entities on the settings page
 
@@ -186,7 +186,7 @@ The settings page asks for a lot of entities. You do not need all of them: each 
 ### Boiler maximum flow temperature, Boiler hot water setpoint
 
 - **What:** two entities in °C: the highest flow temperature the thermostat asks for, and the boiler's hot water setpoint (OpenTherm ID 56). They are only read, never written.
-- **Why:** the maximum flow temperature caps what the PID can ask for. Lower it from 50 to 40 °C and warm-ups get slower with less overshoot, whatever the PID values are. The PID advice limits also follow it (see [the PID values](#pid-kp-pid-ki-pid-kd)). Each warm-up stores the limit (`max_ch`), advice only combines warm-ups with the same limit, and the [progress check](#when-a-feature-becomes-stable) only compares warm-ups before and after a PID change that had the same limit. A warm-up during which the limit changed is skipped (`max_ch_changed`). Each gas day stores both settings in effect at the end of the day (`max_ch`, `dhw_setpoint` in `gas_days.jsonl`), so you can see what a lower hot water setpoint did to the hot-water gas. When either setting changes, the next evening report says so.
+- **Why:** the maximum flow temperature caps what the PID can ask for. Lower it from 50 to 40 °C and warm-ups get slower with less overshoot, whatever the PID values are. The PID advice limits also follow it (see [the PID values](#pid-kp-pid-ki-pid-kd)). Each warm-up stores the limit (`max_ch`), advice only combines warm-ups with the same limit, and the [progress check](#when-a-feature-is-proven) only compares warm-ups before and after a PID change that had the same limit. A warm-up during which the limit changed is skipped (`max_ch_changed`). Each gas day stores both settings in effect at the end of the day (`max_ch`, `dhw_setpoint` in `gas_days.jsonl`), so you can see what a lower hot water setpoint did to the hot-water gas. When either setting changes, the next evening report says so.
 - **Required:** no. Without them nothing changes; older records without `max_ch` are only compared with each other.
 - **Where from:** for the flow limit, the entity that sets the limit: with [`thermostat.yaml`](../thermostat.yaml) the **Central heating max flow temperature** number. The boiler's own maximum (ESPHome OpenTherm `max_t_set`, an OpenTherm Gateway) only fits when the thermostat really stops there; on the ATAG this was built on, the boiler followed requests above its panel maximum. For the hot water setpoint: ESPHome OpenTherm `t_dhw_set`, DIYLess, or an OpenTherm Gateway. **Don't make the hot water setpoint changeable from Home Assistant** just to see it: some boilers stop working when a thermostat sends it (see [Atag E325EC](boiler-notes.md#atag-e325ec-set-the-hot-water-temperature-on-the-boiler-never-from-the-thermostat-c1-51)).
 
@@ -253,7 +253,7 @@ When the heating goes off in the evening (no room that drives the heat source he
 
 At 21:00 it takes the hourly forecast and predicts the room temperature at your **comfort time** (weekday and weekend times are settings). From the warm-up speed of earlier morning warm-ups in a similar outdoor temperature, it says when heating would have to start to reach the room's **warm** temperature by then. The next morning the prediction is compared with what really happened.
 
-**Why alpha:** predictions start after 2 valid nights and 2 morning warm-ups. In the house it was built in, a back-test on the first 9 evenings was off by 0.2 to 0.8 °C. It needs many more nights before it can drive anything (for example an optimum start).
+**Why still learning:** predictions start after 2 valid nights and 2 morning warm-ups. In the house it was built in, a back-test on the first 9 evenings was off by 0.2 to 0.8 °C. It needs many more nights before it can drive anything (for example an optimum start).
 
 **The weather it gets** ([#139](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/139)): outdoor temperature is an input of the model, so it has to prove itself in each kind of night separately. But it doesn't wait for weather that doesn't come: only the bands with 5 or more of the last 30 predicted nights must hold. A new kind of night (the first frost) shows as "not confirmed yet" until it has 5 nights that hold; optimum start won't act in a band before that. The evening report shows it per band:
 
@@ -289,7 +289,7 @@ Each episode is judged on time to target (more than 60 minutes is slow), oversho
 - **Advice needs agreement:** the last 2 valid episodes in the same outdoor band (below 0, 0 to 8, 8 to 15, above 15 °C) and with the same boiler maximum flow temperature must point the same way. Only records of one schema are compared, here and in the before and after comparison of a PID change. Schema 1 (before 1.5.0) watched 90 minutes, so it measured other heat too. Schema 3 (1.6.0) starts the history over once more: top-ups are left out, and with the flow limit number of `thermostat.yaml` the recorded limit is the one the thermostat really asks for, where a schema 2 record with limit 40 could have run with 50. Then exactly one value moves by 10%: overshoot means lower Ki; swinging or short-cycling means lower Kp; slow without overshoot means raise Kp. Hard limits: Kp 0.3 to 1.5, Ki 0.0005 to 0.01, Kd 0 to 2000 for a 0 to 100 °C flow range, scaled by 100 / the recorded flow limit when there is one. A value outside its range gets no advice ("outside the range the advice knows"): moving it into the range could go against the verdict, and it usually means another PID scale.
 - **Advice only appears when Kp, Ki and Kd are all set.** Without them the advice sensor says "no PID numbers configured". When they are set but have no value (the device is offline, or still connecting after a restart) it says "PID numbers unavailable", keeps the stored advice, and shows it again as soon as the numbers have values. Those limits fit an ESPHome PID climate driving an OpenTherm flow temperature; for another controller they may not make sense.
 
-**Why alpha:** no advice has been applied and checked yet. Without the option below it says what it *would* do, nothing more.
+**Why still learning:** no advice has been applied and checked yet. Without the option below it says what it *would* do, nothing more.
 
 ### Advice per room
 
@@ -324,7 +324,7 @@ Advice only comes when a warm-up misses a target, so values that are already goo
 - **Safety:** a probe warm-up that misses a target ends the probe at once and writes the old value back. A probe without 5 warm-ups after 14 days is reverted too: unlike advice, nothing asked for it.
 - **Advice first:** advice always wins; a probe only starts when there is none. Changing Kp, Ki or Kd yourself ends a probe without a revert, as with advice.
 
-A confirmed optimum counts towards [stable](#when-a-feature-becomes-stable) the same way as a change that helped.
+A confirmed optimum counts towards [proven](#when-a-feature-is-proven) the same way as a change that helped.
 
 The evening report shows every change (applied, probed, kept, reverted, dropped, inconclusive, failed), confirmed optima and the check or probe in progress. The PID advice sensor's `mode` attribute says `auto` or `observe`.
 
@@ -332,9 +332,9 @@ Turning it on doesn't change the 21:00 report's other parts or any other feature
 
 ## Evening report
 
-> **Removed in v2.0.0:** the 21:00 report, this report sensor, the Evening notification option and the `experimental_report` service. The information moves to live sensors (with long-term statistics), events and a learning view in the card ([#119](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/119)). Don't build new dashboards or automations on the report.
+> **Moves in v2.1.0:** the 21:00 report, this report sensor, the Evening notification option and the `experimental_report` service stay in v2.0 and go in v2.1. The information moves to live sensors (with long-term statistics), events and a learning view in the card ([#119](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/119)). Don't build new dashboards or automations on the report.
 
-Every evening at 21:00 the report is written to **`sensor.<system>_learning_features_report`**. It lists today's warm-up episodes, the current PID values and advice, a line when the boiler's maximum flow temperature or hot water setpoint changed since the last report, the last night, tonight's prediction, gas per degree-day and the progress of each feature towards stable, with a link to this page. Call the service `cloudless_multiroom_thermostat.experimental_report` to get it on demand as a notification (it then shows the stored prediction instead of making a new one). "Since the last report" means since the last 21:00 report: a report on demand shows a boiler change but doesn't count as a report, so the evening report still shows it.
+Every evening at 21:00 the report is written to **`sensor.<system>_learning_features_report`**. It lists today's warm-up episodes, the current PID values and advice, a line when the boiler's maximum flow temperature or hot water setpoint changed since the last report, the last night, tonight's prediction, gas per degree-day and the learning progress of each feature (when it is proven), with a link to this page. Call the service `cloudless_multiroom_thermostat.experimental_report` to get it on demand as a notification (it then shows the stored prediction instead of making a new one). "Since the last report" means since the last 21:00 report: a report on demand shows a boiler change but doesn't count as a report, so the evening report still shows it.
 
 ### The report sensor
 
@@ -380,7 +380,7 @@ content: >
 
 The option **Evening notification** on the learning features page decides what the 21:00 report posts as a persistent notification:
 
-- **Events only** (default): only when something happened that day: an automatic PID change applied, kept, reverted, dropped, inconclusive or failed; a boiler setting changed; a feature became ready for stable or no longer is; an unreadable learning file was moved aside. A quiet day posts nothing.
+- **Events only** (default): only when something happened that day: an automatic PID change applied, kept, reverted, dropped, inconclusive or failed; a boiler setting changed; a feature proved itself or needs more data again; an unreadable learning file was moved aside. A quiet day posts nothing.
 - **Short summary**: up to three lines every evening, plus the events.
 - **Full report**: the whole report every evening, as before 1.7.0.
 - **Off**: no notification. The sensor and the report on demand still work.
@@ -407,7 +407,7 @@ The same is in the `heatup` attribute of the report sensor; the records are in `
 
 **Sensor resolution matters:** a room sensor in steps of 0.1 °C makes the time constant come out too low (fewer than 1 in 10 minutes shows a change). Sensors with 0.01 °C steps, such as reflashed LYWSD03MMC, fit well.
 
-**Why alpha:** a first model, observe only.
+**Why still learning:** a first model, observe only.
 
 ## Hold profile: coast after top-ups
 
@@ -427,7 +427,7 @@ The same is in the `hold` attribute of the report sensor; the records are in `ho
 
 **What it is for:** stopping a top-up early by the predicted coast, so the room lands on target instead of above it ([#164](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/164), after v2.0). That changes the heating, so this only learns and checks itself until then.
 
-**Why alpha:** a first model, observe only.
+**Why still learning:** a first model, observe only.
 
 ## Cost per warm-up and per day
 
@@ -439,7 +439,7 @@ The same is in the `hold` attribute of the report sensor; the records are in `ho
 
 The amount is in the unit of the price sensors (for example euro). A fixed price contract works too: point both fields at the same sensor (a template sensor with your price).
 
-**Why alpha:** data collection only.
+**Why still learning:** data collection only.
 
 ## Low-load detection
 
@@ -460,7 +460,7 @@ Samples are one a minute, so burns and pauses are rounded to whole minutes. Burn
 
 **Boiler minimum power:** measured from low-load warm-ups without hot water, where the boiler burns at its minimum: gas used over burner minutes, converted with the calorific value of Dutch gas (9.77 kWh/m³). It needs a gas meter and 60 burner minutes in low-load warm-ups; until then the report says "measuring". A gas meter that reports every few minutes makes this an estimate. The [setting](#boiler-minimum-power) replaces it, and so does what the boiler reports ([maximum capacity and minimum modulation](#boiler-member-id-boiler-maximum-capacity-boiler-minimum-modulation)): setting first, then the boiler, then measured. The report shows the line once there is a low-load warm-up or a value.
 
-**Why alpha:** observe only; nothing changes in the heating. What helps against low load (buffer rooms, a fixed burn and pause in the firmware) comes after v2.0 (#80).
+**Why still learning:** observe only; nothing changes in the heating. What helps against low load (buffer rooms, a fixed burn and pause in the firmware) comes after v2.0 (#80).
 
 ## Condensing share
 
@@ -470,7 +470,7 @@ Each warm-up stores the share of minutes the burner heated (not hot water) with 
 
 Together with the [heating curve data](#heating-curve-data) it lets a lower flow limit be judged on gas, not only on comfort: a lower limit usually raises the share. Needs the [return water temperature](#flow-water-temperature-return-water-temperature).
 
-**Why alpha:** data collection only; 55 °C is a rule of thumb, the real dew point depends on the boiler and the gas.
+**Why still learning:** data collection only; 55 °C is a rule of thumb, the real dew point depends on the boiler and the gas.
 
 ## Heating curve data
 
@@ -489,7 +489,7 @@ Heating curve data at flow limit 40 °C: 14 warm-ups (outdoor below 0: 2, 0 to 8
 
 It counts warm-ups (not top-ups) of every room that weren't disturbed, at the limit of the latest warm-up. Change the limit and the count starts again, as warm-ups at another limit aren't comparable. Change one thing at a time.
 
-**Why alpha:** data collection only.
+**Why still learning:** data collection only.
 
 ## Heating curve learned
 
@@ -515,7 +515,7 @@ The same is in the `curve` attribute of the report sensor; the records are in `c
 
 **What it is for:** the starting values of the heating curve in v2.2.0 ([#75](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/75)). That changes the heating, so this only learns and checks itself until then. The integration never writes the flow limit.
 
-**Why alpha:** a first model, observe only.
+**Why still learning:** a first model, observe only.
 
 ## Long-term statistics
 

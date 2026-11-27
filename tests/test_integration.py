@@ -295,6 +295,7 @@ async def test_pause_resume_and_all_off_services(hass: HomeAssistant, setup) -> 
     assert hass.states.get("climate.living").state == "off"
 
 
+@pytest.mark.v2_schedules
 async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
@@ -305,14 +306,27 @@ async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"heat_source_entity": "switch.boiler", "hysteresis": 0.3}
     )
-    assert result["step_id"] == "settings"
+    # Setup asks only for the heat source and the first room (#120)
+    assert result["step_id"] == "room"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], _room_step("Living"))
+    assert result["step_id"] == "room_sensors"
+    fields = {str(k) for k in result["data_schema"].schema}
+    assert "window_sensors" not in fields  # the Windows feature is off on a new system
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"off_temperature": 10, "away_mode": "eco", "skip_unchanged_writes": True, "external_temp_heartbeat": 60},
+        result["flow_id"], {"temperature_sensor": "sensor.living_temp"}
     )
+    assert result["step_id"] == "room_schedule"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"initial_schedule": "eco"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "House"
     assert result["data"]["heat_source_type"] == "switch"
+    entry = result["result"]
+    await hass.async_block_till_done()
+    [room] = entry.subentries.values()
+    assert room.title == "Living"
+    week = entry.runtime_data.schedules.data["rooms"][room.subentry_id]["week"]
+    assert week[0][0]["preset"] == "eco"
+    assert entry.runtime_data.feature("feature_presence") is False
 
 
 async def test_switch_heat_source_hysteresis(hass: HomeAssistant) -> None:
@@ -347,20 +361,22 @@ async def test_switch_heat_source_hysteresis(hass: HomeAssistant) -> None:
 async def test_options_flow_clears_optional_entities(hass: HomeAssistant, setup) -> None:
     entry, _ = setup
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] is FlowResultType.FORM
+    assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == ["settings", "features", "presence"]  # presence in use: on
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "settings"})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
             "heat_source_entity": "climate.boiler",
             "off_temperature": 8,
-            "away_mode": "eco",
             "skip_unchanged_writes": True,
             "external_temp_heartbeat": 30,
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    assert entry.options["ch_switch"] is None and entry.options["presence_entity"] is None
+    assert entry.options["ch_switch"] is None
+    assert entry.options.get("presence_entity", entry.data["presence_entity"]) == "input_boolean.somebody_home"
     assert entry.runtime_data.off_temp == 8
 
 
@@ -412,7 +428,8 @@ def _room_step(name: str, **extra) -> dict:
     return {**ROOM_STEP, "name": name, "target_temp_step": "0.5", **extra}
 
 
-async def test_add_room_two_steps(hass: HomeAssistant, setup) -> None:
+@pytest.mark.v2_schedules
+async def test_add_room_three_steps(hass: HomeAssistant, setup) -> None:
     entry, _ = setup
     flows = hass.config_entries.subentries
     result = await flows.async_init((entry.entry_id, "room"), context={"source": config_entries.SOURCE_USER})
@@ -428,10 +445,19 @@ async def test_add_room_two_steps(hass: HomeAssistant, setup) -> None:
     assert result["step_id"] == "sensors"
 
     result = await flows.async_configure(result["flow_id"], {**SENSOR_STEP, "trvs": []})
+    assert result["step_id"] == "schedule"
+    result = await flows.async_configure(result["flow_id"], {"initial_schedule": "eco"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     sub = next(s for s in entry.subentries.values() if s.title == "Attic")
     assert sub.data["target_temp_step"] == 0.5 and "area" not in sub.data
+    # Eco and Warm live in the schedule file only (#112)
+    assert "warm_temperature" not in sub.data
+    assert entry.runtime_data.schedules.data["temperatures"][sub.subentry_id] == {"eco": 15.0, "warm": 18.0}
+    # The schedule chosen in step 3: Eco all day, moved into the file too (#115)
+    assert "initial_schedule" not in sub.data
+    week = entry.runtime_data.schedules.data["rooms"][sub.subentry_id]["week"]
+    assert week[0] == [{"time": "00:00", "preset": "eco", "mode": "at"}]
     assert hass.states.get("climate.attic") is not None
 
 
@@ -454,7 +480,7 @@ async def test_edit_room_keeps_device_area_set_in_ha(hass: HomeAssistant, setup)
     result = await flows.async_configure(result["flow_id"], SENSOR_STEP)
     assert result["type"] is FlowResultType.ABORT and result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
-    assert entry.subentries[office.subentry_id].data["warm_temperature"] == 21.0
+    assert entry.runtime_data.rooms[office.subentry_id].warm_temp == 21.0  # kept in the schedule file (#112)
     assert devices.async_get_device_by_identifier((DOMAIN, office.subentry_id), entry.entry_id).area_id == study.id
 
 
@@ -535,16 +561,13 @@ def test_v2_notices_logged_once(caplog) -> None:
     from custom_components.cloudless_multiroom_thermostat import (  # noqa: PLC0415
         _NOTICES_LOGGED,
         V2_REPORT_NOTICE,
-        V2_SCHEDULE_NOTICE,
         _log_v2_notice,
     )
 
     _NOTICES_LOGGED.clear()
     for _ in range(2):
-        _log_v2_notice(V2_SCHEDULE_NOTICE)
         _log_v2_notice(V2_REPORT_NOTICE)
-    assert caplog.text.count("will need a schedule for every room") == 1
-    assert caplog.text.count("removes the 21:00 evening report") == 1
+    assert caplog.text.count("v2.1.0 removes the 21:00 evening report") == 1
 
 
 SELECT_OPTS = {"options": ["local_temperature", "remote_temperature", "remote_source_offline"]}
@@ -648,3 +671,20 @@ async def test_select_without_clear_remote_option_is_left_alone(hass: HomeAssist
         assert calls.last("select.trv_living_sensor") is None
         assert hass.states.get("climate.living").attributes["external_sensor_ignored"] is False
         assert caplog.text.count("is clearly the external sensor") == 1
+
+
+async def test_room_added_during_setup_waits_for_the_next_one(hass: HomeAssistant, setup) -> None:
+    """Rooms added in quick succession: a subentry the controller doesn't know yet is skipped, not a crash."""
+    from custom_components.cloudless_multiroom_thermostat import binary_sensor, climate  # noqa: PLC0415
+
+    entry, _ = setup
+    office = next(s.subentry_id for s in entry.subentries.values() if s.title == "Office")
+    room = entry.runtime_data.rooms.pop(office)
+    added: list = []
+    try:
+        with patch.object(climate.entity_platform, "async_get_current_platform"):
+            await climate.async_setup_entry(hass, entry, lambda ents, **kw: added.extend(ents))
+        await binary_sensor.async_setup_entry(hass, entry, lambda ents, **kw: added.extend(ents))
+    finally:
+        entry.runtime_data.rooms[office] = room
+    assert added and all(e._room.room_id != office for e in added if hasattr(e, "_room"))

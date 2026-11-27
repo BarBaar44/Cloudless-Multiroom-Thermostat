@@ -8,7 +8,7 @@
 # learning features, with the sim in real time (they time warm-ups in real
 # minutes).
 #
-#   ./create-vm.sh                       # VM "cmt-test", branch of this checkout
+#   ./create-vm.sh                       # VM "cmt-test", branch dev (v2 work collects there)
 #   ./create-vm.sh --branch main --name cmt-main
 #   ./create-vm.sh --delete              # remove the VM and its disk
 #
@@ -40,7 +40,7 @@ usage() {
 
 Options:
   --name NAME        VM name (default $NAME)
-  --branch BRANCH    repo branch to run (default: branch of this checkout, else main)
+  --branch BRANCH    repo branch to run (default: dev)
   --memory MB        default $MEMORY
   --vcpus N          default $VCPUS
   --disk GB          default $DISK_GB
@@ -107,10 +107,8 @@ if virsh_ dominfo "$NAME" >/dev/null 2>&1; then
   echo "VM $NAME already exists. Remove it first: $0 --name $NAME --delete" >&2; exit 1
 fi
 
-if [[ -z "$BRANCH" ]]; then
-  BRANCH=$(git -C "$(dirname "$0")" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-  [[ -z "$BRANCH" || "$BRANCH" == "HEAD" ]] && BRANCH="main"
-fi
+# The test VM runs the dev branch, where v2 pull requests are merged first
+[[ -z "$BRANCH" ]] && BRANCH="dev"
 if [[ -z "$SSH_KEY" ]]; then
   for k in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
     [[ -f "$k" ]] && { SSH_KEY="$k"; break; }

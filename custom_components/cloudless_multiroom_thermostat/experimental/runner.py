@@ -1272,7 +1272,7 @@ class ExperimentalRunner:
             message += f"\n\n{tuner_core.min_power_line(min_power)}"
         if identity_line:
             message += f"\n\n{identity_line}"
-        message += "\n\nProgress to stable:\n" + "\n".join(progress_lines)
+        message += "\n\nLearning progress:\n" + "\n".join(progress_lines)
         message += f"\n\n[What these mean]({DOCS_EXPERIMENTAL_URL})"
 
         # Events since the last evening report; only the 21:00 report moves that baseline

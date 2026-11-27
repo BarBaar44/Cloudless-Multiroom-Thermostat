@@ -1,9 +1,9 @@
 """
-progress - how far each learning feature is from stable
+progress - how far each learning feature is from proven
 -------------------------------------------------------
 Plain Python, no Home Assistant. Measures the stored records against the
 thresholds in docs/experimental.md ("When a feature becomes
-stable") and returns lines for the evening report. Keep the numbers
+proven") and returns lines for the evening report. Keep the numbers
 here and in the docs in step.
 """
 
@@ -77,7 +77,7 @@ def night_bands(nights):
 
 def night_progress(nights):
     """
-    Stable after NIGHTS predicted nights, when the errors hold in every
+    Proven after NIGHTS predicted nights, when the errors hold in every
     outdoor band that occurs (NIGHT_BAND_MIN of them), with at least one.
     Bands that don't occur aren't waited for (#139).
     """
@@ -366,17 +366,17 @@ def statuses(gas_summary, nights, episodes, room_id=None, room_name=None, optimu
 def lines_from(status):
     """Report lines, one per feature, from statuses()."""
     return [
-        "- " + status[key]["text"] + ("; ready to become stable" if status[key]["done"] else "")
+        "- " + status[key]["text"] + ("; proven" if status[key]["done"] else "")
         for key, _name in FEATURES
     ]
 
 
 def maturity_events(before, status):
-    """Lines for features whose ready-for-stable state changed since before ({key: done})."""
+    """Lines for features that became proven, or need more data again, since before ({key: done})."""
     events = []
     for key, name in FEATURES:
         if key in (before or {}) and before[key] != status[key]["done"]:
-            events.append(f"- {name}: " + ("ready to become stable" if status[key]["done"] else "no longer ready for stable"))
+            events.append(f"- {name}: " + ("proven" if status[key]["done"] else "needs more data again"))
     return events
 
 

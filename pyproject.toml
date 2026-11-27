@@ -2,6 +2,7 @@
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+markers = ["v2_schedules: real v2 schedule behaviour (no scheduling off for rooms without a schedule)"]
 
 [tool.ruff]
 target-version = "py314"

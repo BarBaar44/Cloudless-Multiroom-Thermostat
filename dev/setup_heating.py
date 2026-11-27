@@ -22,6 +22,12 @@ Learning features, with every field on their page pointed at a sim entity:
 
 They time warm-ups in real minutes, so --learning sets the sim to real time
 (number.sim_speed 1) unless --speed says otherwise.
+
+v2: setup asks for the heat source and the first room only; the script then
+switches on the features (presence and away, windows, sun assist, guest
+mode; learning with --learning), adds the other rooms, a Sleep preset and a
+week schedule per room. The upgrade path from v1 (rooms without a schedule
+hold 15 °C, Repairs lists them) is in the README.
 """
 
 from __future__ import annotations
@@ -36,10 +42,11 @@ import urllib.request
 
 DOMAIN = "cloudless_multiroom_thermostat"
 
-# Must match heating_sim in config/configuration.yaml
+# Must match heating_sim in config/configuration.yaml. The first room is added
+# in setup, before the Windows feature is on, so it is one without a window.
 ROOMS = [
-    {"name": "Living Room", "trvs": 3, "window": "input_boolean.sim_living_room_garden_door", "warm": 19.0},
     {"name": "Office", "trvs": 1, "window": None, "warm": 19.5},
+    {"name": "Living Room", "trvs": 3, "window": "input_boolean.sim_living_room_garden_door", "warm": 19.0},
     {"name": "Sports Room", "trvs": 1, "window": None, "warm": 16.0},
     {"name": "Master Bedroom", "trvs": 2, "window": "input_boolean.sim_master_bedroom_window", "warm": 17.0},
     {"name": "Attic", "trvs": 0, "window": None, "warm": 16.0},
@@ -123,10 +130,21 @@ def onboard(api: Api, username: str, password: str) -> None:
     print(f"Onboarding done, owner '{username}' created")
 
 
-def room_steps(room: dict) -> list[dict]:
-    """The two room form steps: room and temperatures, then sensors."""
+def room_steps(room: dict, windows: bool = True) -> list[dict]:
+    """The room form steps: room and temperatures, sensors, how it starts (Eco all day)."""
     key = slug(room["name"])
     count = room["trvs"]
+    sensors = {
+        "temperature_sensor": f"sensor.sim_{key}_temperature",
+        "trvs": [f"climate.sim_{key}_trv_{i}" for i in range(1, count + 1)],
+        "external_temperature_inputs": [f"number.sim_{key}_trv_{i}_external_temperature" for i in range(1, count + 1)],
+    }
+    if windows:
+        sensors.update({
+            "window_sensors": [room["window"]] if room["window"] else [],
+            "window_open_delay": 30,
+            "window_close_delay": 15,
+        })
     return [
         {
             "name": room["name"],
@@ -137,14 +155,8 @@ def room_steps(room: dict) -> list[dict]:
             "max_temp": 25.0,
             "target_temp_step": "0.5",
         },
-        {
-            "temperature_sensor": f"sensor.sim_{key}_temperature",
-            "trvs": [f"climate.sim_{key}_trv_{i}" for i in range(1, count + 1)],
-            "external_temperature_inputs": [f"number.sim_{key}_trv_{i}_external_temperature" for i in range(1, count + 1)],
-            "window_sensors": [room["window"]] if room["window"] else [],
-            "window_open_delay": 30,
-            "window_close_delay": 15,
-        },
+        sensors,
+        {"initial_schedule": "eco"},
     ]
 
 
@@ -165,25 +177,20 @@ def create_heating(api: Api, source: str) -> str:
         api.step(flow, fid, {"heat_source_entity": "switch.sim_boiler_relay", "hysteresis": 0.3})
     else:
         api.step(flow, fid, {"heat_source_entity": "climate.sim_boiler", "ch_switch": "switch.sim_ch_enabled"})
-    result = api.step(
-        flow,
-        fid,
-        {
-            "off_temperature": 10,
-            "presence_entity": "input_boolean.sim_somebody_home",
-            "away_mode": "off",
-            "skip_unchanged_writes": True,
-            "external_temp_heartbeat": 60,
-        },
-    )
+    # v2: setup asks for the first room only, then points to Features
+    first, *rest = ROOMS
+    for step in room_steps(first, windows=False):
+        result = api.step(flow, fid, step)
     if result.get("type") != "create_entry":
         sys.exit(f"Config flow did not finish: {result}")
     entry_id = result["result"]["entry_id"]
-    print(f"Created '{title}' ({entry_id})")
+    print(f"Created '{title}' ({entry_id}) with room {first['name']}")
     created = entry_id
 
+    enable_features(api, entry_id)
+
     sub = "/api/config/config_entries/subentries/flow"
-    for room in ROOMS:
+    for room in rest:
         start = api.call("POST", sub, {"handler": [entry_id, "room"]})
         for step in room_steps(room):
             done = api.step(sub, start["flow_id"], step)
@@ -191,6 +198,80 @@ def create_heating(api: Api, source: str) -> str:
             sys.exit(f"Room {room['name']} did not finish: {done}")
         print(f"  added room {room['name']} ({room['trvs']} TRVs)")
     return created
+
+
+FEATURES_OFF = {
+    "feature_presence": False, "feature_windows": False, "feature_sun_assist": False,
+    "feature_guest_mode": False, "experimental": False,
+}
+
+
+def options(api: Api, entry_id: str, page: str) -> tuple[str, dict]:
+    """Open the options menu and go to one of its pages."""
+    flow = "/api/config/config_entries/options/flow"
+    start = api.call("POST", flow, {"handler": entry_id})
+    return start["flow_id"], api.step(flow, start["flow_id"], {"next_step_id": page})
+
+
+def enable_features(api: Api, entry_id: str) -> None:
+    """Features page: presence and away, windows, sun assist, guest mode; then their pages."""
+    flow = "/api/config/config_entries/options/flow"
+    fid, _ = options(api, entry_id, "features")
+    step = api.step(flow, fid, {
+        **FEATURES_OFF, "feature_presence": True, "feature_windows": True,
+        "feature_sun_assist": True, "feature_guest_mode": True,
+    })
+    step = api.step(flow, fid, {"presence_entity": "input_boolean.sim_somebody_home", "away_mode": "off"})
+    rooms = {o["label"]: o["value"] for f in step["data_schema"] if f["name"] == "sun_rooms"
+             for o in f["selector"]["select"]["options"]}
+    done = api.step(flow, fid, {
+        "sun_forecast": "weather.sim_weather",
+        "sun_conditions": ["sunny", "partlycloudy"],
+        "sun_mild_above": 12,
+        "sun_rooms": [rooms[n] for n in ("Office",) if n in rooms],
+        "sun_hold_temperature": 15,
+        "sun_window_start": "05:00:00",
+        "sun_window_end": "12:00:00",
+        "sun_cold_below": 16,
+        "sun_dark_below": 1000,
+        "sun_check_delay": 60,
+    })
+    if done.get("type") != "create_entry":
+        sys.exit(f"Features did not finish: {done}")
+    print("  features on: presence and away, windows, sun assist (Office), guest mode")
+
+
+# A week per room (Monday first), Sleep at night where the room uses it
+WEEKDAY = [("00:00", "sleep"), ("06:30", "warm"), ("08:30", "eco"), ("17:00", "warm"), ("22:30", "sleep")]
+WEEKEND = [("00:00", "sleep"), ("08:00", "warm"), ("13:00", "eco"), ("16:00", "warm"), ("23:00", "sleep")]
+OFFICE = [("00:00", "eco"), ("08:00", "warm"), ("17:00", "off")]
+
+
+def add_schedules(api: Api) -> None:
+    """A Sleep preset (not used in the office) and a week per room, through the card's actions."""
+    # Every room add reloads the heating system: wait until all rooms are back
+    for _ in range(60):
+        states = {s["entity_id"]: s for s in api.call("GET", "/api/states")}
+        climates = {s["attributes"].get("friendly_name"): eid for eid, s in states.items()
+                    if eid.startswith("climate.") and "schedule_state" in s["attributes"]
+                    and s["state"] != "unavailable"}
+        if len(climates) == len(ROOMS):
+            break
+        time.sleep(1)
+    else:
+        sys.exit(f"Only {len(climates)} of {len(ROOMS)} rooms came up: {sorted(climates)}")
+    temps = {eid: {"sleep": None if name == "Office" else 16.0} for name, eid in climates.items()}
+    api.call("POST", f"/api/services/{DOMAIN}/set_presets", {
+        "presets": [{"id": "eco", "name": "Eco"}, {"id": "warm", "name": "Warm"},
+                    {"id": "sleep", "name": "Sleep", "color": "#9b8bd6"}],
+        "temperatures": temps,
+    })
+    for name, eid in climates.items():
+        days = [OFFICE] * 5 + [[("00:00", "eco")]] * 2 if name == "Office" else [WEEKDAY] * 5 + [WEEKEND] * 2
+        week = [[{"time": t, "preset": p} for t, p in day] for day in days]
+        api.call("POST", f"/api/services/{DOMAIN}/set_schedule", {"entity_id": eid, "week": week})
+        api.call("POST", "/api/services/climate/set_hvac_mode", {"entity_id": eid, "hvac_mode": "heat"})
+    print(f"  Sleep preset and a week schedule for {', '.join(sorted(climates))}; rooms set to heat")
 
 
 # Learning features page: every field, pointed at the sim entities
@@ -227,22 +308,12 @@ def set_speed(api: Api, speed: float) -> None:
 
 
 def enable_learning(api: Api, entry_id: str, source: str, auto_apply: bool, notify: str) -> None:
-    """Options flow: keep the settings, switch the learning features on, fill their page."""
+    """Options: Features, switch the learning features on, fill their page."""
     flow = "/api/config/config_entries/options/flow"
-    start = api.call("POST", flow, {"handler": entry_id})
-    settings = {
-        "off_temperature": 10,
-        "presence_entity": "input_boolean.sim_somebody_home",
-        "away_mode": "off",
-        "skip_unchanged_writes": True,
-        "external_temp_heartbeat": 60,
-        "experimental": True,
-    }
-    if source == "switch":
-        settings.update({"heat_source_entity": "switch.sim_boiler_relay", "hysteresis": 0.3})
-    else:
-        settings.update({"heat_source_entity": "climate.sim_boiler", "ch_switch": "switch.sim_ch_enabled"})
-    step = api.step(flow, start["flow_id"], settings)
+    fid, features = options(api, entry_id, "features")
+    current = {f["name"]: f.get("description", {}).get("suggested_value") for f in features["data_schema"]}
+    step = api.step(flow, fid, {**FEATURES_OFF, **{k: bool(v) for k, v in current.items()}, "experimental": True})
+    start = {"flow_id": fid}
     living = next(o["value"] for f in step["data_schema"] if f["name"] == "exp_room"
                   for o in f["selector"]["select"]["options"] if o["label"] == "Living Room")
     done = api.step(
@@ -293,12 +364,13 @@ def main() -> None:
     if args.onboard:
         onboard(api, args.username, args.password)
     entry_id = create_heating(api, args.source)
+    add_schedules(api)
     if args.learning:
         enable_learning(api, entry_id, args.source, args.auto_apply, args.notify)
     speed = args.speed if args.speed is not None else (1 if args.learning else None)
     if speed is not None:
         set_speed(api, speed)
-    print("Done. Set rooms to heat in the UI.")
+    print("Done. Open the Heating Control Card: Rooms, Today and Week.")
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ lovelace:
 ```
 
 
-**Had the separate Heating Control Card installed?** Remove it in HACS or the Marketplace, and remove its entry under **Settings > Dashboards > ⋮ > Resources** if it is still there. Your dashboards keep working: the card type stays `custom:heating-control-card`. The log warns while both copies are installed.
+**Had the separate Heating Control Card installed?** Remove it in the Marketplace, and remove its entry under **Settings > Dashboards > ⋮ > Resources** if it is still there. Your dashboards keep working: the card type stays `custom:heating-control-card`. The log warns while both copies are installed.
 
 When you remove the last heating system, the integration removes its resource again.
 
@@ -96,6 +96,10 @@ colors:
 | `warning` | pressure icon and warning line | `var(--error-color)` |
 | `room` | Heat buttons, Heating along, Paused, pending targets | `var(--state-climate-heat-color)` |
 | `water` | water flow text and line | `var(--light-blue-color)` |
+| `accent` | primary buttons, selection and focus in the card and its dialogs | `#ff8100` |
+| `override` | changes by hand that expire, on rows and the today strip | `#ffb26b` |
+
+Preset colours (Eco, Warm and your own) are not set here but per preset with the `set_presets` action (the card's presets dialog), so every card and the whole house view show the same colour for a preset. Without one, Eco is teal, Warm orange and Off grey.
 
 ## What you see on the card
 
@@ -106,6 +110,42 @@ It shows every room with its temperature, target, Heat/Off and [role](rooms.md#w
 With several rooms every room shows its role, and the room the boiler heats for is highlighted. On the right the hallway is below target but does not drive the boiler, so heating stays off:
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-roles.png" alt="Three Heating Control Cards showing every room role" width="900"></p>
+
+### Schedules
+
+Each room gets a schedule line and a thin strip for today in its presets' colours, with a now marker. See [Schedules](schedules.md).
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-schedules.png" alt="Rooms view: schedule lines and today strips, a change by hand on the Office hatched until 13:15, the Hallway with scheduling off" width="412"></p>
+
+| The line says | Means |
+|---|---|
+| Eco · Warm at 16:00 | Follows its schedule: Eco now, Warm from 16:00 |
+| Manual 20.5° until 17:00 | A change by hand, hatched on the strip; *stays when away* when kept |
+| Sun assist · Warm waits, checks 08:00 | [Sun assist](sun-assist.md) holds while the sun warms the room |
+| Sleep → Off (not used here) | A preset this room doesn't use means Off |
+| Scheduling off · you control it | The room is yours, as before v2 |
+| Suspended · holds 15° | Schedules are suspended for the house |
+| No schedule · holds 15° | The row is hatched, targets are locked, and it offers **Make schedule** (one preset all day; Eco is preselected) and **Scheduling off** |
+
+**Today.** Every room on one timeline for today, with changes by hand hatched and a now marker, and **Coming up**: the changes still to come today (rooms that switch at the same time to the same preset share a line).
+
+<p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-today.png" alt="Today view: every room on one timeline with a now marker, and the changes coming up" width="412"> <img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/card-week.png" alt="Week view: the Living Room's week in Eco and Warm, with Presets, Copy to room and Turn off schedule" width="412"></p>
+
+**Presets.** **Presets…** in the Week view or the editor opens a grid of rooms by presets. Tap a temperature to change it (or to set *not used* for a preset you added: Off in that room), tap a preset to rename it, pick its colour or remove it (Eco and Warm stay), and **+ Add preset** (up to 10). **Save** sends everything at once.
+
+**Week and editing.** With schedules, the card has three views: **Rooms**, **Today** and **Week** (one room, seven day lanes, its presets with their temperatures). Tap a day, or a room's schedule line, to edit:
+
+- On a wide screen (900 px or more, a tablet or a desktop) the editor shows the whole week. Tap a block to select it and drag its handles (switch points snap to 15 minutes, the time shows while you drag), or step its start and end with − and + in the side panel. Pick a preset there to change the block. To add a block, tap a preset in the palette, then tap a day: it gets an hour of that preset. **Copy day to…** copies the selected day to other days; **Remove block** gives its time to the block before it.
+- On a phone the editor shows one day as a list of switch points, each with a time (15 minute steps) and a preset, plus **Add switch point**, and **Also use for** to save the same day for other days.
+- **Save** sends the whole week. A day has at most 12 switch points; the editor says which day has too many.
+- **Copy to room…** in the Week view gives other rooms this week. It warns first when a room doesn't use one of its presets (there it means Off), and changes by hand in those rooms end.
+- **Turn off schedule** gives the room back to you (scheduling off); **Turn schedule on** returns to the week it had.
+
+**Changing a target.** The − and + buttons change it until the next schedule change. Tap the target itself for **Keep this until**: next schedule change, 1 hour, 3 hours or until I change it, and **Keep when everyone is away**; **Back to schedule** ends a change by hand.
+
+**Header pills.** **Schedule** suspends every room's schedule (the pill then reads **Suspended**; tap to resume). **Guest mode** appears when the [Guest mode](away.md#guest-mode) feature is on: start it until you turn it off or until a set time.
+
+A refused change (a room without a schedule, for example) shows its reason at the bottom of the screen.
 
 The card writes only to the room climates, the single source of truth per room. Everything downstream (TRVs, the overshoot buffer for the winner, the boiler setpoint) is the integration's job, exactly as with any other change to a room. The rooms tell the card which one is the winner, each room's role and why a room is paused, so no extra sensor is needed.
 

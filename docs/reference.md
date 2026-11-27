@@ -8,6 +8,7 @@ Each room is a device with these entities.
 
 | Entity | What it is |
 |---|---|
+| `switch.<system>_someone_is_home_guest_mode` | Guest mode: on, the house counts as occupied whatever presence says. Attribute `until`. See [Away](away.md#guest-mode) |
 | `climate.<room>` | The room's virtual thermostat: Heat/Off, target, presets **Eco** and **Warm** (a target set by hand shows as **Manual**). Mode, preset and target survive a restart |
 | `binary_sensor.<room>_paused` | On while the room is set to heat but held off |
 | `binary_sensor.<room>_window` | Only with window sensors: open or closed after the open and close delays, as the heating sees it |
@@ -24,6 +25,12 @@ Each room is a device with these entities.
 | `is_winner` | `true` while this room drives the heat source |
 | `drives_heat_source` | The room's **Drives the heat source** setting. See [Rooms](rooms.md#drives-the-heat-source) |
 | `external_sensor_ignored` | `true` while a TRV external sensor select is not on its remote option and the room sensor works. See [Rooms](rooms.md#trv-external-sensor-selects) |
+| `schedule_state` | `active` (follows its schedule), `none` (no schedule: holds the Temperature without schedule), `off` (scheduling off), `suspended`, `blocked` (schedule file can't be used). See [Schedules](schedules.md) |
+| `next_change` | Next schedule change: `at` (local time) and `preset`, or none |
+| `override` | The change by hand in force: `target`, `preset`, `until` (local time, none for until I change it) and `keep_when_away`, or none |
+| `override_until` | When a change by hand ends (local time), or none |
+| `presets` | The system's presets in order: `id`, `name`, `color`, and this room's `temperature` (none: not used) |
+| `sun_assist` | While the preset waits for the sun: `status` (`pending`, `holding`), `hold`, `check_at` (local time), or none. See [Sun assist](sun-assist.md) |
 
 The room's `hvac_action` is heating while it is the winner or a passenger and the heat source runs, idle otherwise, and off while it is off or paused.
 
@@ -49,7 +56,7 @@ The heating system is a device with these entities.
 | `delta` | Target minus temperature |
 | `present` | `false` while everybody is away (see [Away](away.md)) |
 
-**Learning features** add five sensors to the heating system when they are switched on: gas per degree-day, night prediction, last warm-up overshoot, PID advice and the learning features report. Their states and attributes are in [Learning features](experimental.md#maturity-at-a-glance). They also add diagnostic sensors with long-term statistics for the numbers worth following over a season (see [Long-term statistics](experimental.md#long-term-statistics)).
+**Learning features** add five sensors to the heating system when they are switched on: gas per degree-day, night prediction, last warm-up overshoot, PID advice and the learning features report. Their states and attributes are in [Learning features](experimental.md#where-each-feature-stands). They also add diagnostic sensors with long-term statistics for the numbers worth following over a season (see [Long-term statistics](experimental.md#long-term-statistics)).
 
 Attributes added since v1.9:
 
@@ -67,6 +74,13 @@ Attributes added since v1.9:
 | `cloudless_multiroom_thermostat.pause_room` | target: room climate entities | Hold a room off until resumed, keeping its mode and target |
 | `cloudless_multiroom_thermostat.resume_room` | target: room climate entities | End a manual pause |
 | `cloudless_multiroom_thermostat.set_all_off` | `config_entry_id` (optional) | Set every room to Off, or only the rooms of that heating system |
+| `cloudless_multiroom_thermostat.set_schedule` | room climate; `week`, `scheduling` | Save a room's week schedule, or turn scheduling on or off. See [Schedules](schedules.md#actions) |
+| `cloudless_multiroom_thermostat.set_override` | room climate; `temperature` or `preset`, `until` or `duration`, `keep_when_away` | A change by hand on a room with a schedule. See [Schedules](schedules.md#changes-by-hand) |
+| `cloudless_multiroom_thermostat.resume_schedule` | room climate | End a change by hand: back to the schedule |
+| `cloudless_multiroom_thermostat.set_presets` | `presets`, `temperatures`, `config_entry_id` (needed with more than one system) | The preset list and each room's temperature per preset. See [Presets](schedules.md#presets) |
+| `cloudless_multiroom_thermostat.set_guest_mode` | `on` (default true), `until` or `duration`, `config_entry_id` (optional) | Someone is home: presence is ignored until switched off or the end. See [Away](away.md#guest-mode) |
+| `cloudless_multiroom_thermostat.suspend_schedules` | `config_entry_id` (optional) | Rooms with a schedule hold the Temperature without schedule |
+| `cloudless_multiroom_thermostat.resume_schedules` | `config_entry_id` (optional) | Rooms follow their schedules again |
 | `cloudless_multiroom_thermostat.experimental_report` | `config_entry_id` (optional) | Post the learning features report now |
 
 The room climates also take the standard climate services: `climate.set_hvac_mode` (`heat`, `off`), `climate.set_temperature` and `climate.set_preset_mode` (`eco`, `warm`).

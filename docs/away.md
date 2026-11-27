@@ -8,7 +8,7 @@ When Home Assistant knows whether someone is home, for example through the Compa
 
 ## How to turn it on
 
-**Settings > Devices & services > Cloudless Multiroom Thermostat > Configure** on the heating system: pick a **Presence** entity and choose **When everybody is away**.
+**Settings > Devices & services > Cloudless Multiroom Thermostat > Configure** on the heating system, **Features**: switch on **Presence and away**. The next page asks for the **Presence** entity and **When everybody is away**; later it is under **Configure > Presence and away**.
 
 ## Settings
 
@@ -41,6 +41,11 @@ The heating system's **Winning room** sensor has a `present` attribute; each roo
 
 **Does away overrule an open window?** No: an open window comes first, then a manual pause, then away.
 
-**I have visitors Home Assistant doesn't track.** With an input boolean as the presence entity you can switch it on by hand. Otherwise pick **Lower rooms to eco** so the house doesn't go cold. A guest mode is planned for v2.0, see the [roadmap](../ROADMAP.md).
+**I have visitors Home Assistant doesn't track.** With an input boolean as the presence entity you can switch it on by hand. Otherwise switch on [Guest mode](#guest-mode), or pick **Lower rooms to eco** so the house doesn't go cold.
 
 **Does it change my presets or targets?** No. Away only changes what is sent to the heat source and the TRVs while nobody is home.
+
+## Guest mode
+
+Switch on **Guest mode** under **Configure > Features**. **Someone is home (guest mode)** is then a switch on the heating system: while it is on, the house counts as occupied whatever presence says, so every room runs its schedule and changes by hand stay. For visitors Home Assistant doesn't track. Turn it on from the switch, or with the `set_guest_mode` action, which also takes an end time (`until`) or a `duration`. When it ends while nobody is home, away starts then: changes by hand end, except those kept when away. The end time is in the switch's `until` attribute.
+

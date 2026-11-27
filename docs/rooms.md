@@ -46,9 +46,13 @@ The gear next to a room edits it, with the same two steps. To put a room in an a
 
 <p align="center"><img src="https://raw.githubusercontent.com/BarBaar44/Cloudless-Multiroom-Thermostat/main/docs/images/room-sensors.png" alt="Edit room, step 2: room temperature sensor, TRVs and their external temperature inputs" width="420"></p>
 
+**Step 3: schedule** (Add room only)
+
+How the new room starts: one preset all day, every day (Eco by default), or **Scheduling off** for a room you control yourself. Shape the week later in the card. See [Schedules](schedules.md).
+
 ### Presets
 
-Every room has two presets, **Eco** and **Warm**, with the temperatures above. Setting a temperature yourself switches the preset to **Manual**. Mode, preset and target survive a restart.
+Every room has **Eco** and **Warm**, with the temperatures above, plus any presets you add for the whole house (Sleep, for example) with a temperature per room. Setting a temperature yourself switches the preset to **Manual**; on a room with a schedule that lasts until the next schedule change. Mode, preset and target survive a restart. See [Presets](schedules.md#presets).
 
 ### Drives the heat source
 
@@ -96,4 +100,4 @@ The same role is the `role` attribute of the room's climate entity. [Reference](
 
 **Does renaming a room lose anything?** No. Rooms are matched by an internal id, also in the learning features.
 
-**How do I schedule a room?** For now with an automation or a scheduler card that sets presets or temperatures on the room climates. Schedules in the integration are planned for v2.0, see the [roadmap](../ROADMAP.md).
+**How do I schedule a room?** The integration runs a week schedule per room: make it in the card's **Week** view or with `set_schedule`. See [Schedules](schedules.md).
