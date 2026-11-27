@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2
+
+- **Editor: room dropdown with every room.** The room chips in the schedule editor became a dropdown that lists every room of the heating system, also the ones a card's `thermostats` list leaves out, and rooms with scheduling off or without a schedule. Before, the chips only showed rooms that already had a schedule, so with one scheduled room there was nothing to switch to. A room without a week opens on the default week (Warm 07:00 to 22:00, Eco the rest of the day); **Save** turns its schedule on.
+
 ## 2.0.1
 
 Easier schedule editing, after the first day on 2.0.0. Nothing changes in how the house heats or in schedules you already made.

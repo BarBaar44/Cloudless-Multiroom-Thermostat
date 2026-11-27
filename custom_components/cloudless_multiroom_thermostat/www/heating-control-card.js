@@ -62,7 +62,7 @@
  * Originally https://github.com/BarBaar44/Heating-Control-Card  (MIT)
  */
 
-const VERSION = "2.0.1";
+const VERSION = "2.0.2";
 
 const INTEGRATION = "cloudless_multiroom_thermostat";
 // Room roles the integration sets (attribute `role`, thermostat v1.1.0+).
@@ -405,6 +405,7 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .dhead { display: flex; align-items: flex-start; gap: 10px; }
   .dhead > div { flex: 1; min-width: 0; }
   .dtitle { font-size: 18px; font-weight: 600; }
+  .edroom { height: 40px; min-width: 220px; max-width: 100%; font: inherit; font-weight: 500; background: var(--hc-soft); color: var(--primary-text-color); border: 0; border-radius: 10px; padding: 0 10px; }
   .dsub { font-size: 12px; color: var(--secondary-text-color); }
   .dclose { width: 40px; height: 40px; border-radius: 50%; background: var(--hc-soft); color: var(--primary-text-color); flex: none; }
   .dset { display: flex; align-items: center; justify-content: center; gap: 18px; }
@@ -1331,16 +1332,19 @@ class HeatingControlCard extends HTMLElement {
   // --------------------------------------------------------------- editor
   // Wide screens: the week as a grid (drag, palette, side panel). Phones and
   // narrow cards: one day as a list of switch points with time fields.
+  // A room without a week (no schedule yet, or scheduling off from the start)
+  // opens on the default week, unsaved; Save turns its schedule on (2.0.2).
   _editor(entityId, day = null) {
     const s = this._state(entityId);
-    if (!s || !Array.isArray(s.attributes.schedule)) return;
+    if (!s || s.attributes.schedule_state === undefined || s.attributes.schedule_state === "blocked") return;
     const a = s.attributes;
     const r = this._rows.get(entityId);
     const label = r ? r.room.label : this._roomLabel(entityId);
-    const days = weekBlocks(a.schedule);
+    const fresh = !Array.isArray(a.schedule);
+    const days = weekBlocks(fresh ? defaultWeek() : a.schedule);
     const wide = (window.innerWidth || 1024) >= 900;
     const first = day === null ? (new Date().getDay() + 6) % 7 : day;
-    this._ed = { entity: entityId, label, days, orig: JSON.stringify(toWeek(days)), P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide, switchTo: null };
+    this._ed = { entity: entityId, label, days, orig: fresh ? "" : JSON.stringify(toWeek(days)), P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide, switchTo: null, fresh, wasOff: a.schedule_state === "off" };
     this._renderEd();
   }
 
@@ -1350,10 +1354,12 @@ class HeatingControlCard extends HTMLElement {
   }
 
   // Rooms the editor can switch to: the ones with a schedule (2.0.1).
+  // Every room of the integration, also with scheduling off or no schedule
+  // yet, and also the ones a `thermostats` list leaves out (2.0.2).
   _edRooms() {
     return this._houseRooms(this._rooms()).filter((r) => {
       const t = this._state(r.entity);
-      return t && Array.isArray(t.attributes.schedule) && ["active", "suspended"].includes(t.attributes.schedule_state);
+      return t && t.attributes.schedule_state !== undefined && t.attributes.schedule_state !== "blocked";
     });
   }
 
@@ -1364,21 +1370,29 @@ class HeatingControlCard extends HTMLElement {
   _roomChipsHtml() {
     const ed = this._ed;
     const rooms = this._edRooms();
-    if (rooms.length < 2) return "";
+    const why = (id) => {
+      const st = this._state(id).attributes.schedule_state;
+      return st === "off" ? " · scheduling off" : st === "none" ? " · no schedule" : "";
+    };
+    const note = ed.fresh
+      ? `<div class="hint" style="margin-top:6px">${esc(ed.label)} has no week yet: this is the default week. Save starts it.</div>`
+      : ed.wasOff ? `<div class="hint" style="margin-top:6px">Scheduling is off for ${esc(ed.label)}: Save turns it on with this week.</div>` : "";
     const ask = ed.switchTo ? `<div class="warnline" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">Unsaved changes in ${esc(ed.label)}.
         <button class="btn swsave" style="flex:none">Save and switch</button><button class="btn swdrop" style="flex:none">Discard</button><button class="btn swstay" style="flex:none">Stay</button></div>` : "";
-    return `<div class="chips edrooms" style="margin-bottom:6px">${rooms.map((r) => `<button class="chip${r.entity === ed.entity ? " on" : ""}" data-room="${esc(r.entity)}">${esc(r.label)}</button>`).join("")}</div>${ask}`;
+    const pick = rooms.length < 2 ? "" : `<select class="edroom" aria-label="Room">${rooms.map((r) => `<option value="${esc(r.entity)}"${r.entity === ed.entity ? " selected" : ""}>${esc(r.label)}${why(r.entity)}</option>`).join("")}</select>`;
+    return `${pick}${ask}${note}`;
   }
 
   _wireRoomChips(d) {
     const ed = this._ed;
     const go = (id) => this._editor(id, ed.wide ? ed.sel[0] : ed.day);
-    d.querySelectorAll("[data-room]").forEach((c) => c.addEventListener("click", () => {
-      const id = c.dataset.room;
+    const pick = d.querySelector(".edroom");
+    if (pick) pick.addEventListener("change", () => {
+      const id = pick.value;
       if (id === ed.entity) return;
       if (this._edDirty()) { ed.switchTo = id; this._renderEd(); }
       else go(id);
-    }));
+    });
     const save = d.querySelector(".swsave");
     if (save) save.addEventListener("click", async () => {
       const to = ed.switchTo;
