@@ -461,26 +461,89 @@ test("today: tap a room to open its schedule (2.0.1)", () => {
   assert.strictEqual(c._ed.sel[0], (new Date().getDay() + 6) % 7);
 });
 
-test("editor: switch rooms, asks first when there are unsaved changes (2.0.1)", async () => {
+const pickRoom = (c, id) => {
+  const sel = c.shadowRoot.querySelector(".dlg .edroom");
+  sel.value = id;
+  sel.dispatchEvent(new w.Event("change"));
+};
+
+test("editor: room dropdown, asks first when there are unsaved changes (2.0.1, 2.0.2)", async () => {
   const h = intHass({
     [LIVING]: room("Living Room", 20, 19, sched()),
     [OFFICE]: room("Office", 19, 19, sched()),
   });
   const c = render(h);
   c._editor(LIVING, 0);
-  c.shadowRoot.querySelector(`.dlg [data-room="${OFFICE}"]`).click();
+  pickRoom(c, OFFICE);
   assert.strictEqual(c._ed.entity, OFFICE, "nothing changed: switches straight away");
   c._ed.sel = [0, 1];
   c._renderWide();
   c.shadowRoot.querySelector('.trow .adj[data-t="0"][data-d="1"]').click();
-  c.shadowRoot.querySelector(`.dlg [data-room="${LIVING}"]`).click();
+  pickRoom(c, LIVING);
   assert.strictEqual(c._ed.entity, OFFICE, "unsaved: stays and asks");
+  assert.strictEqual(c.shadowRoot.querySelector(".dlg .edroom").value, OFFICE);
   c.shadowRoot.querySelector(".swsave").click();
   await new Promise((r) => setTimeout(r, 0));
   const data = lastSchedule(h);
   assert.strictEqual(data.entity_id, OFFICE);
   same(data.week[0][1], { time: "07:15", preset: "warm" });
   assert.strictEqual(c._ed.entity, LIVING);
+});
+
+test("editor: dropdown lists rooms with scheduling off or no schedule, also unlisted ones (2.0.2)", async () => {
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 19, sched()),
+    [OFFICE]: room("Office", 19, 19, sched({ schedule_state: "off", schedule: null })),
+    [HALL]: room("Hallway", 14.8, 15, sched({ schedule_state: "none", schedule: null })),
+  });
+  const c = render(h, { thermostats: [LIVING] });
+  c._editor(LIVING, 0);
+  const opts = [...c.shadowRoot.querySelectorAll(".dlg .edroom option")].map((o) => o.textContent);
+  same(opts, ["Living Room", "Office · scheduling off", "Hallway · no schedule"]);
+  pickRoom(c, OFFICE);
+  assert.strictEqual(c._ed.entity, OFFICE);
+  assert(c.shadowRoot.querySelector(".dlg").textContent.includes("this is the default week"));
+  c.shadowRoot.querySelector(".dlg .save").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const data = lastSchedule(h);
+  assert.strictEqual(data.entity_id, OFFICE);
+  same(data.week[2], [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }]);
+});
+
+test("wide editor: copy day to, tap the day again to undo the copy (2.0.2)", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c._ed.days[6] = [[0, 1440, "eco"]];
+  c._ed.days[0] = [[0, 1440, "warm"]];
+  c._ed.sel = [0, 0];
+  c._renderWide();
+  c.shadowRoot.querySelector(".copyday").click();
+  c.shadowRoot.querySelector('[data-also="6"]').click();
+  same(c._ed.days[6], [[0, 1440, "warm"]]);
+  assert(c.shadowRoot.querySelector('[data-also="6"]').classList.contains("pick"));
+  c.shadowRoot.querySelector('[data-also="6"]').click();
+  same(c._ed.days[6], [[0, 1440, "eco"]], "back to what Sunday had");
+  assert(!c.shadowRoot.querySelector('[data-also="6"]').classList.contains("pick"));
+});
+
+test("a room that doesn't drive the heat source is labelled heats along only (2.0.2)", () => {
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 19, sched({ drives_heat_source: true })),
+    [HALL]: room("Hallway", 17, 18, sched({ drives_heat_source: false })),
+  });
+  const c = render(h);
+  c._editor(HALL, 0);
+  assert(c.shadowRoot.querySelector(".dlg .along").textContent.includes("never starts the boiler"));
+  const opts = [...c.shadowRoot.querySelectorAll(".dlg .edroom option")].map((o) => o.textContent);
+  assert(opts.includes("Hallway · heats along only") && opts.includes("Living Room"));
+  c._editor(LIVING, 0);
+  assert(!c.shadowRoot.querySelector(".dlg .along"));
+  c._closeDialog();
+  c._weekRoom = HALL;
+  c._view = "week";
+  c._update();
+  assert(c._el.weekv.querySelector(".along"));
 });
 
 test("editor: split a whole day block, tool off after one block, drag to midnight (2.0.1)", () => {
