@@ -67,9 +67,9 @@ Everything v2 needs to know, measured now, without changing how the house heats.
 
 ## v2: the house runs itself
 
-A major version: presets become a list, schedules get their own storage, the card writes more than room climates, and the evening report gives way to live data. Upgrades from v1.9 keep rooms, presets and learning history.
+A major version: presets become a list, schedules get their own storage, the card writes more than room climates, and (in v2.1) the evening report gives way to live data. Upgrades from v1.9 keep rooms, presets and learning history.
 
-### v2.0: schedules, presets, live learning data
+### v2.0: schedules, presets, sun assist
 
 Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/3).
 
@@ -79,14 +79,14 @@ Milestone [v2.0.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/m
 - **Your own presets** ([#113](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/113)): Eco and Warm plus your own (Sleep, for example), a temperature per room or "not used".
 - **Manual changes that expire** ([#116](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/116)): until the next switch point, 1 hour, 3 hours, or until you go back to the schedule. Dropped when everyone leaves, unless you tick "keep when away".
 - **Guest mode** ([#117](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/117)): "someone is home" for visitors Home Assistant doesn't track, so the whole house keeps its schedule.
-- **Sun assist in the integration** ([#118](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/118)): rooms that get sun hold a lower temperature on a sunny morning (a window you set, 05:00 to 12:00 by default) and warm up only if a light sensor still reads dark at the check time.
-- **Live learning data** ([#119](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/119)): sensors per feature that update when their value changes, an `event` entity for automatic changes and other events, and history on request for the card. The 21:00 report goes.
-- **Heating Control Card** ([#121](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/121)): schedule line and today strip per room, a whole house timeline, a week view, editors for schedules, presets and overrides, and a learning view.
+- **Sun assist in the integration** ([#118](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/118)): rooms that get sun hold a lower temperature on a sunny, mild morning (a window you set, 05:00 to 12:00 by default) and warm up only if the room is still cold at the check (or an optional light sensor reads dark).
+- **Heating Control Card** ([#121](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/121)): schedule line and today strip per room, a whole house timeline, a week view, and editors for schedules, presets and overrides.
 
-### v2.1: warm when you need it
+### v2.1: warm when you need it, live learning data
 
 The step from "switch on at" to "be warm at". Built on the per room cooling and warm-up data from v1.9. Milestone [v2.1.0](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/5).
 
+- **Live learning data** ([#119](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/119)): sensors per feature that update when their value changes, an `event` entity for automatic changes and other events, and history on request for the card. The 21:00 report goes, and the card gets a learning view.
 - **Comfort times** ([#155](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/155)): a switch point to a warmer preset means "be at this temperature by then". The room starts as late as its learned warm-up time allows, given the outdoor temperature and how far it cooled. Off by default per room until the room has enough warm-ups; the plain switch time stays the fallback.
 - **Early stop:** before a switch point to a cooler preset, stop heating when the room will coast to the end within a set margin.
 - **Show it:** the card and the room attributes show the planned start and why ("starts 06:20, needs 40 min at 3 °C outside").

@@ -15,6 +15,7 @@
 | [Thermostat requirements](thermostat.md) | What the thermostat must offer, and how to add it to your own ESPHome config |
 | [Boiler notes](boiler-notes.md) | Known problems with specific boilers |
 | [Upgrading](upgrading.md) | Updates, release notes, what to do after one |
+| [Upgrading to v2.0](upgrade-v2.md) | Schedules for the rooms you already had, and everything else that changes |
 | [Troubleshooting](troubleshooting.md) | Common problems and how to find the cause |
 | [Reference](reference.md) | Every entity, attribute and service |
 
