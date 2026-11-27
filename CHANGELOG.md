@@ -8,6 +8,7 @@ Schedule editor on a tablet or desktop: more drag and drop, fewer buttons.
 - **Drag a block to move it:** press in a block and drag: it keeps its length and moves whole, its old place goes to the block before it.
 - **Paint by dragging:** tap a preset in the palette, then drag over a day to paint that range; drag down over more days to paint the same range on each. A tap still adds an hour. One stroke per tap on the preset.
 - **Drag a day onto other days:** drag a day's name (⠿ Mon) up or down: every day you pass gets a copy, shown dashed while you drag. Copy day to… stays for days that are not next to it.
+- **Undo and redo** in the schedule editor (also Ctrl+Z and Ctrl+Y): every change is a step, a whole drag one step. Until you save, nothing reaches the integration.
 - **Tap twice to split:** the first tap selects a block, a second tap on it splits it right there (the second part in another preset).
 
 ## 2.0.2
