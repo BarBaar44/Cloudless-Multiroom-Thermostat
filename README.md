@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/releases"><img src="https://img.shields.io/github/v/release/BarBaar44/Cloudless-Multiroom-Thermostat?style=for-the-badge&label=release" alt="Release"></a>
-  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-orange?style=for-the-badge" alt="HACS custom"></a>
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-default-orange?style=for-the-badge" alt="HACS default"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-2026.10%2B-41BDF5?style=for-the-badge" alt="Home Assistant 2026.10+">
   <a href="https://community.home-assistant.io/t/cloudless-multiroom-thermostat/1032363"><img src="https://img.shields.io/badge/community-forum-41BDF5?style=for-the-badge&logo=homeassistant&logoColor=white" alt="Community forum thread"></a>
 </p>
@@ -32,7 +32,7 @@ The **Heating Control Card** shows every room with its temperature, target, Heat
 
 You need Home Assistant 2026.10 or newer, a temperature sensor in every room and a heat source Home Assistant can control. TRVs are optional. [What you need](docs/getting-started.md#what-you-need) explains the choices.
 
-1. **Install.** Search for **Cloudless Multiroom Thermostat** in the Marketplace (Home Assistant 2026.11 and newer) or HACS, install it and restart Home Assistant. Not found? The catalog listing is still in review: use the button below, or [add the repository by hand](docs/getting-started.md#install).
+1. **Install.** Search for **Cloudless Multiroom Thermostat** in the Marketplace (Home Assistant 2026.11 and newer) or HACS, install it and restart Home Assistant. Search doesn't find it? Use the button below, or [add the repository by hand](docs/getting-started.md#install).
 
    [![Open your Home Assistant instance and open this repository.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=BarBaar44&repository=Cloudless-Multiroom-Thermostat&category=integration)
 
