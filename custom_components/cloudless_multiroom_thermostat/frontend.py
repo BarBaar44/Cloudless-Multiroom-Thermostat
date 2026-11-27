@@ -93,7 +93,7 @@ async def _async_setup_frontend(hass: HomeAssistant) -> None:
         else:
             _LOGGER.warning(
                 "A separately installed Heating Control Card is also loaded (%s). The card now ships with "
-                "Cloudless Multiroom Thermostat: remove the old card in HACS or the Marketplace and its "
+                "Cloudless Multiroom Thermostat: remove the old card in the Marketplace and its "
                 "dashboard resource, so only one copy loads",
                 item_url,
             )

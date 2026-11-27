@@ -6,7 +6,7 @@ Common problems, roughly in the order people run into them. Not listed? See [Fin
 
 **"Custom element doesn't exist: heating-control-card".** Reload the browser once after installing or updating. On a dashboard in YAML mode, add the resource yourself: [Heating Control Card](card.md#how-it-gets-on-your-dashboard).
 
-**The log warns about two copies of the card.** The separately installed Heating Control Card is still there. Remove it in HACS or the Marketplace and its entry under **Settings > Dashboards > ⋮ > Resources**.
+**The log warns about two copies of the card.** The separately installed Heating Control Card is still there. Remove it in the Marketplace and its entry under **Settings > Dashboards > ⋮ > Resources**.
 
 **"Thermostat offline" in the header.** The boiler or flame entity of the card is unavailable. Check the thermostat in ESPHome, or point the card's boiler options at your own entities: [card settings](card.md#settings).
 
