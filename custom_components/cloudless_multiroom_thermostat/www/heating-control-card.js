@@ -142,6 +142,9 @@ function presetMap(a) {
   return out;
 }
 
+// A room with Drives the heat source off: its schedule only sets what it heats along to (2.0.2)
+const ALONG_TEXT = "Heats along only: never starts the boiler. The schedule sets what it heats to while another room heats.";
+
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_POINTS = 12; // switch points per day, as the integration allows
 const SNAP = 15;
@@ -1138,7 +1141,7 @@ class HeatingControlCard extends HTMLElement {
     const days = weekBlocks(a.schedule);
     const today = (new Date().getDay() + 6) % 7;
     const used = new Set(days.flat().map((b) => b[2]));
-    const key = JSON.stringify([this._weekRoom, a.schedule, a.presets, today, withWeek.map((r) => r.entity), a.schedule_state]);
+    const key = JSON.stringify([this._weekRoom, a.schedule, a.presets, today, withWeek.map((r) => r.entity), a.schedule_state, a.drives_heat_source]);
     if (key === this._weekKey) return;
     this._weekKey = key;
     box.innerHTML = `
@@ -1146,6 +1149,7 @@ class HeatingControlCard extends HTMLElement {
       <div class="legend">${[...used].map((p) => `<span><i style="background:${esc(this._presetColor(P, p))}"></i>${esc(P[p] ? P[p].name : p)}${P[p] && P[p].temperature !== null && p !== "off" ? ` ${fmt(P[p].temperature)}°` : ""}</span>`).join("")}</div>
       <div class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
       <div class="lanes">${days.map((b, d) => `<div class="lane${d === today ? " today" : ""}" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" role="button" aria-label="Edit ${DAY_NAMES[d]}">${this._bars(b, P)}</div></div>`).join("")}</div>
+      ${a.drives_heat_source === false ? `<div class="hint along"><ha-icon icon="mdi:radiator" style="--mdc-icon-size:14px;vertical-align:-2px"></ha-icon> ${esc(ALONG_TEXT)}</div>` : ""}
       <div class="hint">Tap a day to edit it. Away and open windows still win over the schedule.</div>
       <div class="dbtns"><button class="btn presets">Presets…</button><button class="btn copy">Copy to room…</button>${a.schedule_state === "off"
         ? `<button class="btn on">Turn schedule on</button>` : `<button class="btn off">Turn off schedule</button>`}</div>`;
@@ -1371,12 +1375,17 @@ class HeatingControlCard extends HTMLElement {
     const ed = this._ed;
     const rooms = this._edRooms();
     const why = (id) => {
-      const st = this._state(id).attributes.schedule_state;
-      return st === "off" ? " · scheduling off" : st === "none" ? " · no schedule" : "";
+      const at = this._state(id).attributes;
+      const st = at.schedule_state;
+      const along = at.drives_heat_source === false ? " · heats along only" : "";
+      return (st === "off" ? " · scheduling off" : st === "none" ? " · no schedule" : "") + along;
     };
-    const note = ed.fresh
+    const cur = this._state(ed.entity);
+    const along = cur && cur.attributes.drives_heat_source === false
+      ? `<div class="hint along" style="margin-top:6px"><ha-icon icon="mdi:radiator" style="--mdc-icon-size:14px;vertical-align:-2px"></ha-icon> ${esc(ALONG_TEXT)}</div>` : "";
+    const note = along + (ed.fresh
       ? `<div class="hint" style="margin-top:6px">${esc(ed.label)} has no week yet: this is the default week. Save starts it.</div>`
-      : ed.wasOff ? `<div class="hint" style="margin-top:6px">Scheduling is off for ${esc(ed.label)}: Save turns it on with this week.</div>` : "";
+      : ed.wasOff ? `<div class="hint" style="margin-top:6px">Scheduling is off for ${esc(ed.label)}: Save turns it on with this week.</div>` : "");
     const ask = ed.switchTo ? `<div class="warnline" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">Unsaved changes in ${esc(ed.label)}.
         <button class="btn swsave" style="flex:none">Save and switch</button><button class="btn swdrop" style="flex:none">Discard</button><button class="btn swstay" style="flex:none">Stay</button></div>` : "";
     const pick = rooms.length < 2 ? "" : `<select class="edroom" aria-label="Room">${rooms.map((r) => `<option value="${esc(r.entity)}"${r.entity === ed.entity ? " selected" : ""}>${esc(r.label)}${why(r.entity)}</option>`).join("")}</select>`;

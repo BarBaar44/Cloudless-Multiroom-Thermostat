@@ -527,6 +527,25 @@ test("wide editor: copy day to, tap the day again to undo the copy (2.0.2)", () 
   assert(!c.shadowRoot.querySelector('[data-also="6"]').classList.contains("pick"));
 });
 
+test("a room that doesn't drive the heat source is labelled heats along only (2.0.2)", () => {
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 19, sched({ drives_heat_source: true })),
+    [HALL]: room("Hallway", 17, 18, sched({ drives_heat_source: false })),
+  });
+  const c = render(h);
+  c._editor(HALL, 0);
+  assert(c.shadowRoot.querySelector(".dlg .along").textContent.includes("never starts the boiler"));
+  const opts = [...c.shadowRoot.querySelectorAll(".dlg .edroom option")].map((o) => o.textContent);
+  assert(opts.includes("Hallway · heats along only") && opts.includes("Living Room"));
+  c._editor(LIVING, 0);
+  assert(!c.shadowRoot.querySelector(".dlg .along"));
+  c._closeDialog();
+  c._weekRoom = HALL;
+  c._view = "week";
+  c._update();
+  assert(c._el.weekv.querySelector(".along"));
+});
+
 test("editor: split a whole day block, tool off after one block, drag to midnight (2.0.1)", () => {
   const allDay = Array.from({ length: 7 }, () => [{ time: "00:00", preset: "warm" }]);
   const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched({ schedule: allDay })) });

@@ -60,7 +60,8 @@ Turn it off for a room that may be heated but must never make the heat source ru
 
 - never becomes the winner, never starts an on/off heat source and doesn't turn on the central heating enable switch;
 - still gets its target on its TRVs, so it heats along whenever another room drives the heat source;
-- shows as **waiting** while it is below target and nothing else needs heat.
+- shows as **waiting** while it is below target and nothing else needs heat;
+- still has a schedule: it sets what the room heats to while another room heats. The card labels it **Heats along only** in the Week view and the schedule editor.
 
 ### TRV external temperature inputs
 
