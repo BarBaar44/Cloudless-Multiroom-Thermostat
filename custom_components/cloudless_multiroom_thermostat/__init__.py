@@ -21,6 +21,7 @@ from .const import (
     CONF_ECO_TEMP,
     CONF_EXPERIMENTAL,
     CONF_INITIAL_SCHEDULE,
+    DEFAULT_WEEK_CHOICE,
     CONF_WARM_TEMP,
     DEFAULT_ECO_TEMP,
     DEFAULT_WARM_TEMP,
@@ -35,7 +36,7 @@ from .const import (
 )
 from .controller import HeatingController
 from .frontend import async_remove_frontend, async_setup_frontend
-from .schedule import SCHEDULING_OFF, SCHEDULING_ON, one_block_week
+from .schedule import SCHEDULING_OFF, SCHEDULING_ON, default_week, one_block_week
 from .schedule_store import ScheduleStore
 from .scheduler import issue_ids
 
@@ -248,6 +249,8 @@ async def _async_load_schedules(hass: HomeAssistant, entry: CMTConfigEntry, cont
         if choice and room_id not in store.data["rooms"]:
             if choice == SCHEDULING_OFF_CHOICE:
                 store.data["rooms"][room_id] = {"scheduling": SCHEDULING_OFF, "week": None}
+            elif choice == DEFAULT_WEEK_CHOICE:
+                store.data["rooms"][room_id] = {"scheduling": SCHEDULING_ON, "week": default_week()}
             elif choice in store.data["temperatures"].get(room_id, {}):
                 store.data["rooms"][room_id] = {"scheduling": SCHEDULING_ON, "week": one_block_week(choice)}
             schedules_added = True

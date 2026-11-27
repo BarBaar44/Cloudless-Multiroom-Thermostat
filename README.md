@@ -40,7 +40,7 @@ You need Home Assistant 2026.11 or newer, a temperature sensor in every room and
 
    [![Open your Home Assistant instance and start setting up Cloudless Multiroom Thermostat.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=cloudless_multiroom_thermostat)
 
-3. **Add your rooms.** On the integration page, **Add room** for every room: a name and temperatures, its temperature sensor and TRVs, then how it starts (one preset all day, or scheduling off).
+3. **Add your rooms.** On the integration page, **Add room** for every room: a name and temperatures, its temperature sensor and TRVs, then how it starts (Warm 07:00 to 22:00 and Eco the rest of the day, or scheduling off).
 4. **Add the card.** Reload the browser once, then add a card of type `custom:heating-control-card` to a dashboard. It finds the rooms by itself. Tap a room's schedule line to shape its week.
 
 Set a room to Heat and give it a target above its temperature: it becomes the winner and the heat source gets its target. [Getting started](docs/getting-started.md) walks through every step and what to check.

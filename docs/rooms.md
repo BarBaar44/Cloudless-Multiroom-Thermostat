@@ -48,7 +48,7 @@ The gear next to a room edits it, with the same two steps. To put a room in an a
 
 **Step 3: schedule** (Add room only)
 
-How the new room starts: one preset all day, every day (Eco by default), or **Scheduling off** for a room you control yourself. Shape the week later in the card. See [Schedules](schedules.md).
+How the new room starts: Warm from 07:00 to 22:00 and Eco the rest of the day, every day, or **Scheduling off** for a room you control yourself. Shape the week later in the card. See [Schedules](schedules.md).
 
 ### Presets
 

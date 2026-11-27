@@ -57,7 +57,7 @@
       },
       "room_schedule": {
         "title": "Schedule",
-        "description": "Last step for {room}. A room always starts with a schedule: one preset all day, which you change later. Or turn scheduling off: then the room is yours. After this, turn on what else you want under Configure > Features.",
+        "description": "Last step for {room}. A room always starts with a schedule: Warm from 07:00 to 22:00 and Eco the rest of the day, every day, which you change on the card later. Or turn scheduling off: then the room is yours. After this, turn on what else you want under Configure > Features.",
         "data": {
           "initial_schedule": "Start with"
         }
@@ -274,7 +274,7 @@
         },
         "schedule": {
           "title": "Schedule",
-          "description": "Step 3 of 3 for {room}. A room always starts with a schedule: one preset all day, which you change on the card later. Or turn scheduling off: then the room is yours, with presets, targets and your own automations as before.",
+          "description": "Step 3 of 3 for {room}. A room always starts with a schedule: Warm from 07:00 to 22:00 and Eco the rest of the day, every day, which you change on the card later. Or turn scheduling off: then the room is yours, with presets, targets and your own automations as before.",
           "data": {
             "initial_schedule": "Start with"
           }
@@ -315,8 +315,7 @@
     },
     "initial_schedule": {
       "options": {
-        "eco": "Eco all day",
-        "warm": "Warm all day",
+        "default_week": "Warm 07:00 to 22:00, Eco the rest of the day",
         "scheduling_off": "Scheduling off: I control this room myself"
       }
     },
@@ -600,7 +599,7 @@
   "issues": {
     "rooms_without_schedule": {
       "title": "Rooms without a schedule in {system}",
-      "description": "These rooms have no schedule and hold {temperature} °C: {rooms}.\n\nMake a schedule for each (one preset all day is enough to start), or turn scheduling off for a room you control yourself."
+      "description": "These rooms have no schedule and hold {temperature} °C: {rooms}.\n\nMake a schedule for each (the default week is enough to start), or turn scheduling off for a room you control yourself."
     },
     "schedules_blocked": {
       "title": "Schedules of {system} can't be used",

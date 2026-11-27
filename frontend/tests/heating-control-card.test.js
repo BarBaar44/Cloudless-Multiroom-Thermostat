@@ -400,7 +400,7 @@ test("v1 rooms (no schedule attributes) show no schedule line or pills", () => {
   assert.strictEqual(c._el.pills.style.display, "none");
 });
 
-test("room without a schedule: hatched, locked, two ways out, header count", () => {
+test("room without a schedule: hatched, locked, two ways out, header count", async () => {
   const h = intHass({
     [HALL]: room("Hallway", 14.8, 15, sched({ schedule_state: "none", schedule: null, preset_mode: "none", next_change: null })),
     [LIVING]: room("Living Room", 20, 19, sched()),
@@ -416,14 +416,90 @@ test("room without a schedule: hatched, locked, two ways out, header count", () 
   same(h.calls.pop(), [INT, "set_schedule", { entity_id: HALL, scheduling: "off" }]);
   r.el.querySelector(".make").click();
   const d = c.shadowRoot.querySelector(".dlg");
-  assert(d.querySelector('input[value="eco"]').checked, "Eco is the default");
-  d.querySelector('input[value="warm"]').checked = true;
+  assert(!d.querySelector('input[name="preset"]'), "no picker: the default week (2.0.1)");
   d.querySelector(".save").click();
-  const [dom, svc, data] = h.calls.pop();
+  await new Promise((r) => setTimeout(r, 0));
+  const [, svc, data] = h.calls.pop();
   assert.strictEqual(svc, "set_schedule");
   assert.strictEqual(data.week.length, 7);
-  same(data.week[3], [{ time: "00:00", preset: "warm" }]);
+  same(data.week[3], [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }]);
   assert(!c.shadowRoot.querySelector(".dlg"), "dialog closes");
+});
+
+test("banner lists rooms without a schedule that the card doesn't show (2.0.1)", async () => {
+  const h = intHass({
+    [HALL]: room("Hallway", 14.8, 15, sched({ schedule_state: "none", schedule: null, preset_mode: "none", next_change: null })),
+    [OFFICE]: room("Office", 14.8, 15, sched({ schedule_state: "none", schedule: null, preset_mode: "none", next_change: null })),
+    [LIVING]: room("Living Room", 20, 19, sched()),
+  });
+  const c = render(h, { thermostats: [LIVING] });
+  assert.strictEqual(c._el.noschedText.textContent, "2 rooms without a schedule · holds 15°");
+  c._el.nosched.click();
+  const d = c.shadowRoot.querySelector(".dlg");
+  assert.strictEqual(d.querySelectorAll(".make").length, 2);
+  d.querySelector(`.mine[data-e="${HALL}"]`).click();
+  same(h.calls.pop(), [INT, "set_schedule", { entity_id: HALL, scheduling: "off" }]);
+  c.shadowRoot.querySelector(`.dlg .make[data-e="${OFFICE}"]`).click();
+  assert(c.shadowRoot.querySelector(".dlg .dtitle").textContent.includes("Office"));
+  c.shadowRoot.querySelector(".dlg .save").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const [, svc, data] = h.calls.pop();
+  assert.strictEqual(svc, "set_schedule");
+  assert.strictEqual(data.entity_id, OFFICE);
+});
+
+test("today: tap a room to open its schedule (2.0.1)", () => {
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 19, sched()),
+    [OFFICE]: room("Office", 19, 19, sched()),
+  });
+  const c = render(h);
+  c._view = "today";
+  c._update();
+  c.shadowRoot.querySelector(`.tlane[data-e="${OFFICE}"]`).click();
+  assert.strictEqual(c._ed.entity, OFFICE);
+  assert.strictEqual(c._ed.sel[0], (new Date().getDay() + 6) % 7);
+});
+
+test("editor: switch rooms, asks first when there are unsaved changes (2.0.1)", async () => {
+  const h = intHass({
+    [LIVING]: room("Living Room", 20, 19, sched()),
+    [OFFICE]: room("Office", 19, 19, sched()),
+  });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c.shadowRoot.querySelector(`.dlg [data-room="${OFFICE}"]`).click();
+  assert.strictEqual(c._ed.entity, OFFICE, "nothing changed: switches straight away");
+  c._ed.sel = [0, 1];
+  c._renderWide();
+  c.shadowRoot.querySelector('.trow .adj[data-t="0"][data-d="1"]').click();
+  c.shadowRoot.querySelector(`.dlg [data-room="${LIVING}"]`).click();
+  assert.strictEqual(c._ed.entity, OFFICE, "unsaved: stays and asks");
+  c.shadowRoot.querySelector(".swsave").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const data = lastSchedule(h);
+  assert.strictEqual(data.entity_id, OFFICE);
+  same(data.week[0][1], { time: "07:15", preset: "warm" });
+  assert.strictEqual(c._ed.entity, LIVING);
+});
+
+test("editor: split a whole day block, tool off after one block, drag to midnight (2.0.1)", () => {
+  const allDay = Array.from({ length: 7 }, () => [{ time: "00:00", preset: "warm" }]);
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched({ schedule: allDay })) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  assert(!c.shadowRoot.querySelector(".trow"), "no steppers that can't move");
+  c.shadowRoot.querySelector(".split").click();
+  same(c._ed.days[0], [[0, 720, "warm"], [720, 1440, "eco"]]);
+  assert(c.shadowRoot.querySelectorAll(".dlg .bar .h").length === 1, "a handle to drag");
+  c.shadowRoot.querySelector('[data-tool="off"]').click();
+  c.shadowRoot.querySelectorAll(".dlg .bar")[1].dispatchEvent(new w.MouseEvent("click", { bubbles: true, clientX: 0 }));
+  assert.strictEqual(c._ed.tool, null);
+  // The Warm block's end dragged all the way: the Eco block goes, Warm runs to 24:00
+  c._ed.sel = [0, 0];
+  c._shift(1, 0, 1440);
+  c._renderWide();
+  same(c._ed.days[0], [[0, 1440, "warm"]]);
 });
 
 test("tap the target: Keep this until sends set_override", () => {

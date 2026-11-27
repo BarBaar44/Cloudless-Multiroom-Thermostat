@@ -71,7 +71,7 @@ The Climate and OTGW types only send a *target*. For real multi-room control the
 | Central heating enable switch | none | Optional. On while a room that drives the heat source is heating; off while none is (rooms off or paused, or only rooms that heat along) |
 | Hysteresis | 0.3 °C | On/off switch only: start when a room is this far below its target, stop when it reaches it |
 
-**3. Your first room,** in three short steps: name and temperatures, the temperature sensor and TRVs, and how it starts (one preset all day, Eco by default, or scheduling off; see [Schedules](schedules.md)). [Rooms](rooms.md) explains every field; for a first room only the name and the temperature sensor matter.
+**3. Your first room,** in three short steps: name and temperatures, the temperature sensor and TRVs, and how it starts (Warm from 07:00 to 22:00 and Eco the rest of the day, every day, or scheduling off; see [Schedules](schedules.md)). [Rooms](rooms.md) explains every field; for a first room only the name and the temperature sensor matter.
 
 More rooms: **Add room** on the integration page; the gear next to a room edits it.
 

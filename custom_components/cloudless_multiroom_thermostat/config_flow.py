@@ -52,6 +52,7 @@ from .const import (
     CONF_INITIAL_SCHEDULE,
     CONF_NO_SCHEDULE_TEMP,
     DEFAULT_INITIAL_SCHEDULE,
+    DEFAULT_WEEK_CHOICE,
     DEFAULT_NO_SCHEDULE_TEMP,
     SCHEDULING_OFF_CHOICE,
     PRESET_ECO,
@@ -303,19 +304,14 @@ class CloudlessMultiroomThermostatFlow(ConfigFlow, domain=DOMAIN):
             )
         return self.async_show_form(
             step_id="room_schedule",
-            data_schema=initial_schedule_schema(None),
+            data_schema=initial_schedule_schema(),
             description_placeholders={"room": self._room[CONF_ROOM_NAME]},
         )
 
 
-def initial_schedule_schema(data: dict[str, Any] | None) -> vol.Schema:
-    """One preset all day, or scheduling off (#115)."""
-    presets = data["presets"] if data is not None else [
-        {"id": PRESET_ECO, "name": "Eco"}, {"id": PRESET_WARM, "name": "Warm"}
-    ]
-    options = [
-        selector.SelectOptionDict(value=p["id"], label=f"{p['name']} all day") for p in presets
-    ] + [selector.SelectOptionDict(value=SCHEDULING_OFF_CHOICE, label=SCHEDULING_OFF_CHOICE)]
+def initial_schedule_schema() -> vol.Schema:
+    """The default week, or scheduling off (#115, 2.0.1)."""
+    options = [DEFAULT_WEEK_CHOICE, SCHEDULING_OFF_CHOICE]
     return vol.Schema(
         {
             vol.Required(CONF_INITIAL_SCHEDULE, default=DEFAULT_INITIAL_SCHEDULE): selector.SelectSelector(
@@ -660,15 +656,13 @@ class RoomSubentryFlow(ConfigSubentryFlow):
 
     # Step 3 (Add room only) ---------------------------------------------------
     async def async_step_schedule(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """A new room never starts without a schedule: one block all day, or scheduling off (#115)."""
+        """A new room never starts without a schedule: the default week, or scheduling off (#115)."""
         if user_input is not None:
             data = {**self._data, CONF_INITIAL_SCHEDULE: user_input[CONF_INITIAL_SCHEDULE]}
             return self.async_create_entry(title=data[CONF_ROOM_NAME], data=data)
-        controller = getattr(self._get_entry(), "runtime_data", None)
-        scheduler = getattr(controller, "scheduler", None)
         return self.async_show_form(
             step_id="schedule",
-            data_schema=initial_schedule_schema(scheduler.data if scheduler is not None else None),
+            data_schema=initial_schedule_schema(),
             description_placeholders={"room": self._data[CONF_ROOM_NAME]},
         )
 

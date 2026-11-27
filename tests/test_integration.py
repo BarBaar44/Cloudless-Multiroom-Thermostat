@@ -316,7 +316,7 @@ async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
         result["flow_id"], {"temperature_sensor": "sensor.living_temp"}
     )
     assert result["step_id"] == "room_schedule"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"initial_schedule": "eco"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"initial_schedule": "default_week"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "House"
     assert result["data"]["heat_source_type"] == "switch"
@@ -446,7 +446,7 @@ async def test_add_room_three_steps(hass: HomeAssistant, setup) -> None:
 
     result = await flows.async_configure(result["flow_id"], {**SENSOR_STEP, "trvs": []})
     assert result["step_id"] == "schedule"
-    result = await flows.async_configure(result["flow_id"], {"initial_schedule": "eco"})
+    result = await flows.async_configure(result["flow_id"], {"initial_schedule": "default_week"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     sub = next(s for s in entry.subentries.values() if s.title == "Attic")
@@ -454,10 +454,10 @@ async def test_add_room_three_steps(hass: HomeAssistant, setup) -> None:
     # Eco and Warm live in the schedule file only (#112)
     assert "warm_temperature" not in sub.data
     assert entry.runtime_data.schedules.data["temperatures"][sub.subentry_id] == {"eco": 15.0, "warm": 18.0}
-    # The schedule chosen in step 3: Eco all day, moved into the file too (#115)
+    # The schedule chosen in step 3: the default week, moved into the file too (#115, 2.0.1)
     assert "initial_schedule" not in sub.data
     week = entry.runtime_data.schedules.data["rooms"][sub.subentry_id]["week"]
-    assert week[0] == [{"time": "00:00", "preset": "eco", "mode": "at"}]
+    assert [(p["time"], p["preset"]) for p in week[0]] == [("00:00", "eco"), ("07:00", "warm"), ("22:00", "eco")]
     assert hass.states.get("climate.attic") is not None
 
 

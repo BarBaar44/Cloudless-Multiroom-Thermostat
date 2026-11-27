@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.1
+
+Easier schedule editing, after the first day on 2.0.0. Nothing changes in how the house heats or in schedules you already made.
+
+- **A new schedule starts with Warm from 07:00 to 22:00 and Eco the rest of the day,** every day, instead of one preset all day. **Make schedule** in the card saves it straight away (no preset to pick), and the last step of **Add room** offers it next to Scheduling off. With two switch points the editor has handles to drag right away.
+- **Rooms the card doesn't list:** tapping **N rooms without a schedule** in the header opens a list of every room without one, also the rooms a `thermostats` list leaves out, each with **Make schedule** and **Scheduling off**. Before, a card showing only one room had no way to give the others a schedule.
+- **Editor: switch rooms.** Room chips at the top of the schedule editor open another room's schedule; with unsaved changes it asks first (Save and switch, Discard, Stay).
+- **Today: tap a room** to open its schedule on today, or Make schedule for a room without one.
+- **Editor: Split block.** A day that is one block had no handles and its − and + did nothing. **Split block** cuts the selected block in two, and a whole day block now says so instead of showing steppers that can't move.
+- **Editor: a block can run to 24:00.** Dragging or stepping a switch point onto the next one removes the block in between; before, an end stopped at 23:45.
+- **Editor: one block per tap on a preset.** After a block is added the palette switches off, so the next tap selects a block again instead of adding another one.
+
 ## 2.0.0
 
 **Behaviour change: every room needs a schedule.** After the upgrade your rooms have no schedule and hold 15 °C (the new setting **Temperature without schedule**) until you give each one a schedule or turn scheduling off for it. **Settings > Repairs** lists the rooms. Automations that set a target or preset on a room without a schedule now get a clear error. Read [Upgrading to v2.0](docs/upgrade-v2.md) before you install: make a backup, then give each room a schedule in the card (Make schedule) or turn scheduling off. See also [Schedules](docs/schedules.md).

@@ -62,7 +62,7 @@
  * Originally https://github.com/BarBaar44/Heating-Control-Card  (MIT)
  */
 
-const VERSION = "2.0.0";
+const VERSION = "2.0.1";
 
 const INTEGRATION = "cloudless_multiroom_thermostat";
 // Room roles the integration sets (attribute `role`, thermostat v1.1.0+).
@@ -190,6 +190,11 @@ function paint(blocks, from, to, preset) {
   out.sort((x, y) => x[0] - y[0]);
   return merge(out);
 }
+
+// The easy start (2.0.1): Eco, Warm 07:00 to 22:00, Eco, every day. Two
+// switch points, so the editor has handles to drag right away.
+const DEFAULT_DAY = [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }];
+const defaultWeek = () => Array.from({ length: 7 }, () => DEFAULT_DAY.map((p) => ({ ...p })));
 
 // Blocks -> the integration's week: every day starts with an explicit
 // 00:00 point, so a day never depends on the one before it.
@@ -362,6 +367,7 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   @media (max-width: 899px) { .edgrid { grid-template-columns: 1fr; } }
 
   /* Today: every room on one timeline, and what comes next */
+  .tlane[data-e] { cursor: pointer; }
   .tlane { display: grid; grid-template-columns: minmax(80px, 140px) 1fr; align-items: center; gap: 10px; }
   .tlane > span { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tbar { position: relative; height: 22px; border-radius: 6px; overflow: hidden; background: var(--hc-soft); }
@@ -584,10 +590,7 @@ class HeatingControlCard extends HTMLElement {
     }));
     $("spill").addEventListener("click", () => this._suspendTap());
     $("gpill").addEventListener("click", () => this._guestDialog());
-    $("nosched").addEventListener("click", () => {
-      const first = this.shadowRoot.querySelector(".row.nosched");
-      if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    $("nosched").addEventListener("click", () => this._noSchedDialog());
     $("icon").addEventListener("click", () => this._moreInfo(this._iconTarget));
     $("htext").addEventListener("click", () => this._moreInfo(this._flowHead ? this._config.water_flow : this._winnerEntity));
     $("fault").addEventListener("click", () => this._moreInfo(this._config.fault));
@@ -1172,7 +1175,7 @@ class HeatingControlCard extends HTMLElement {
       const name = (p) => (P[p] ? P[p].name : p);
       const label = (p) => `${name(p)}${P[p] && P[p].temperature !== null && p !== "off" ? ` ${fmt(P[p].temperature)}°` : ""}`;
       if (a.schedule_state === "none" || a.schedule_state === "blocked") {
-        return `<div class="tlane"><span>${esc(r.label)}</span><div class="tbar"><div class="nosch">No schedule · holds ${fmt(a.temperature)}°</div></div></div>`;
+        return `<div class="tlane" role="button" data-e="${esc(r.entity)}" data-act="make"><span>${esc(r.label)}</span><div class="tbar"><div class="nosch">No schedule · holds ${fmt(a.temperature)}°</div></div></div>`;
       }
       if (a.schedule_state === "off" || !Array.isArray(a.schedule)) {
         return `<div class="tlane"><span>${esc(r.label)}</span><div class="tbar"><div class="nosch" style="color:var(--secondary-text-color);background:none">Scheduling off</div></div></div>`;
@@ -1189,7 +1192,7 @@ class HeatingControlCard extends HTMLElement {
         if (until && end < 1440) coming.push({ at: end, room: r.label, text: "Change by hand ends", color: "var(--hc-override)" });
       }
       const bars = blocks.map(([a1, e1, p]) => `<b style="left:${pct(a1)};width:${pct(e1 - a1)};background:${esc(this._presetColor(P, p))}"></b>`).join("");
-      return `<div class="tlane"><span>${esc(r.label)}</span><div class="tbar">${bars}${over}<div class="now" style="left:${pct(nowMin)}"></div></div></div>`;
+      return `<div class="tlane" role="button" aria-label="Edit ${esc(r.label)}" data-e="${esc(r.entity)}" data-act="edit"><span>${esc(r.label)}</span><div class="tbar">${bars}${over}<div class="now" style="left:${pct(nowMin)}"></div></div></div>`;
     });
     coming.sort((x, y) => x.at - y.at);
     // Rooms that change at the same time to the same preset share one line
@@ -1207,6 +1210,11 @@ class HeatingControlCard extends HTMLElement {
       <div class="coming"><h4>Coming up</h4>${grouped.length
         ? grouped.slice(0, 6).map((c) => `<div class="citem"><b>${hm(c.at)}</b><i style="background:${esc(c.color)}"></i><span>${esc(c.room)}<small>${esc(c.text)}</small></span></div>`).join("")
         : `<div class="hint">Nothing more changes today.</div>`}</div>`;
+    // Tap a room: its schedule opens on today (2.0.1)
+    box.querySelectorAll(".tlane[data-e]").forEach((l) => l.addEventListener("click", () => {
+      if (l.dataset.act === "make") this._makeDialog(l.dataset.e);
+      else this._editor(l.dataset.e, (new Date().getDay() + 6) % 7);
+    }));
   }
 
   // -------------------------------------------------------- presets dialog
@@ -1328,13 +1336,71 @@ class HeatingControlCard extends HTMLElement {
     if (!s || !Array.isArray(s.attributes.schedule)) return;
     const a = s.attributes;
     const r = this._rows.get(entityId);
-    const label = r ? r.room.label : a.friendly_name || entityId;
+    const label = r ? r.room.label : this._roomLabel(entityId);
     const days = weekBlocks(a.schedule);
     const wide = (window.innerWidth || 1024) >= 900;
     const first = day === null ? (new Date().getDay() + 6) % 7 : day;
-    this._ed = { entity: entityId, label, days, P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide };
-    if (wide) this._renderWide();
+    this._ed = { entity: entityId, label, days, orig: JSON.stringify(toWeek(days)), P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide, switchTo: null };
+    this._renderEd();
+  }
+
+  _renderEd() {
+    if (this._ed.wide) this._renderWide();
     else this._renderList();
+  }
+
+  // Rooms the editor can switch to: the ones with a schedule (2.0.1).
+  _edRooms() {
+    return this._houseRooms(this._rooms()).filter((r) => {
+      const t = this._state(r.entity);
+      return t && Array.isArray(t.attributes.schedule) && ["active", "suspended"].includes(t.attributes.schedule_state);
+    });
+  }
+
+  _edDirty() {
+    return JSON.stringify(toWeek(this._ed.days)) !== this._ed.orig;
+  }
+
+  _roomChipsHtml() {
+    const ed = this._ed;
+    const rooms = this._edRooms();
+    if (rooms.length < 2) return "";
+    const ask = ed.switchTo ? `<div class="warnline" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">Unsaved changes in ${esc(ed.label)}.
+        <button class="btn swsave" style="flex:none">Save and switch</button><button class="btn swdrop" style="flex:none">Discard</button><button class="btn swstay" style="flex:none">Stay</button></div>` : "";
+    return `<div class="chips edrooms" style="margin-bottom:6px">${rooms.map((r) => `<button class="chip${r.entity === ed.entity ? " on" : ""}" data-room="${esc(r.entity)}">${esc(r.label)}</button>`).join("")}</div>${ask}`;
+  }
+
+  _wireRoomChips(d) {
+    const ed = this._ed;
+    const go = (id) => this._editor(id, ed.wide ? ed.sel[0] : ed.day);
+    d.querySelectorAll("[data-room]").forEach((c) => c.addEventListener("click", () => {
+      const id = c.dataset.room;
+      if (id === ed.entity) return;
+      if (this._edDirty()) { ed.switchTo = id; this._renderEd(); }
+      else go(id);
+    }));
+    const save = d.querySelector(".swsave");
+    if (save) save.addEventListener("click", async () => {
+      const to = ed.switchTo;
+      if (this._tooMany()) return;
+      const ok = await this._call(INTEGRATION, "set_schedule", { entity_id: ed.entity, week: toWeek(ed.days) });
+      if (ok) go(to);
+    });
+    const drop = d.querySelector(".swdrop");
+    if (drop) drop.addEventListener("click", () => go(ed.switchTo));
+    const stay = d.querySelector(".swstay");
+    if (stay) stay.addEventListener("click", () => { ed.switchTo = null; this._renderEd(); });
+  }
+
+  // Merge the selected day and keep the selection on the same block, after a
+  // drag or step that may have shrunk a neighbour to nothing (2.0.1).
+  _normalizeSel() {
+    const ed = this._ed;
+    const [sd, si] = ed.sel;
+    const b = ed.days[sd][si];
+    const mid = b ? (b[0] + b[1]) / 2 : 0;
+    ed.days[sd] = merge(ed.days[sd]);
+    ed.sel = [sd, Math.max(0, ed.days[sd].findIndex(([a, e]) => a <= mid && mid < e))];
   }
 
   _choicesHtml(current) {
@@ -1354,28 +1420,33 @@ class HeatingControlCard extends HTMLElement {
 
   _renderWide() {
     const ed = this._ed;
+    this._normalizeSel();
     const [sd, si] = ed.sel;
     const b = ed.days[sd][si] || ed.days[sd][0];
     const P = ed.P;
     const palette = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
     const tooMany = this._tooMany();
+    const whole = ed.days[sd].length === 1;
     const html = `${this._head("Edit schedule", ed.label)}
-      <div class="dbtns" style="justify-content:flex-end;margin-top:-6px"><button class="btn openpresets" style="flex:none">Presets…</button></div>
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div><button class="btn openpresets" style="flex:none">Presets…</button></div>
       <div class="edgrid">
         <div>
           <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">Add a block: tap a preset, then tap a day</span>
             ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
           <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
           <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" data-d="${d}">${this._bars(blocks, P)}</div></div>`).join("")}</div>
-          <div class="hint" style="margin-top:8px">Tap a block to select it, then drag one of its handles: switch points snap to 15 minutes. Exact times are on the right.</div>
+          <div class="hint" style="margin-top:8px">${whole
+            ? "This day is one block: Split block on the right, or tap a preset above and then the day, to add a switch point."
+            : "Tap a block to select it, then drag one of its handles: switch points snap to 15 minutes. Exact times are on the right."}</div>
         </div>
         <div class="panel">
           <div class="dsub">Selected block</div>
           <div class="dtitle" style="font-size:16px">${DAY_NAMES[sd]} · ${hm(b[0])} to ${hm(b[1])}</div>
-          <div class="trow"><span class="hint">From</span><button class="adj" data-t="0" data-d="-1" aria-label="Start 15 minutes earlier"${si === 0 ? " disabled" : ""}>−</button><b>${hm(b[0])}</b><button class="adj" data-t="0" data-d="1" aria-label="Start 15 minutes later"${si === 0 ? " disabled" : ""}>+</button></div>
-          <div class="trow"><span class="hint">To</span><button class="adj" data-t="1" data-d="-1" aria-label="End 15 minutes earlier"${si === ed.days[sd].length - 1 ? " disabled" : ""}>−</button><b>${hm(b[1])}</b><button class="adj" data-t="1" data-d="1" aria-label="End 15 minutes later"${si === ed.days[sd].length - 1 ? " disabled" : ""}>+</button></div>
+          ${whole ? `<div class="hint">One block for the whole day: split it to get a switch point you can move.</div>` : `<div class="trow"><span class="hint">From</span><button class="adj" data-t="0" data-d="-1" aria-label="Start 15 minutes earlier"${si === 0 ? " disabled" : ""}>−</button><b>${hm(b[0])}</b><button class="adj" data-t="0" data-d="1" aria-label="Start 15 minutes later"${si === 0 ? " disabled" : ""}>+</button></div>
+          <div class="trow"><span class="hint">To</span><button class="adj" data-t="1" data-d="-1" aria-label="End 15 minutes earlier"${si === ed.days[sd].length - 1 ? " disabled" : ""}>−</button><b>${hm(b[1])}</b><button class="adj" data-t="1" data-d="1" aria-label="End 15 minutes later"${si === ed.days[sd].length - 1 ? " disabled" : ""}>+</button></div>`}
           <div class="choices">${this._choicesHtml(b[2])}</div>
-          <div class="dbtns"><button class="btn copyday">Copy day to…</button><button class="btn rmblock"${ed.days[sd].length < 2 ? " disabled" : ""}>Remove block</button></div>
+          <div class="dbtns"><button class="btn split"${b[1] - b[0] < 2 * SNAP ? " disabled" : ""}>Split block</button><button class="btn rmblock"${ed.days[sd].length < 2 ? " disabled" : ""}>Remove block</button></div>
+          <div class="dbtns"><button class="btn copyday">Copy day to…</button></div>
           <div class="chips copyto" style="display:none">${DAY_NAMES.map((n, d) => d === sd ? "" : `<button class="chip${ed.also.has(d) ? " pick" : ""}" data-also="${d}">${n}</button>`).join("")}</div>
           ${tooMany ? `<div class="warnline">${esc(tooMany)}</div>` : ""}
           <div class="dbtns" style="margin-top:auto"><button class="btn cancel">Cancel</button><button class="btn primary save"${tooMany ? " disabled" : ""}>Save</button></div>
@@ -1396,6 +1467,7 @@ class HeatingControlCard extends HTMLElement {
             const from = Math.min(snap(m), 1440 - 60);
             ed.days[day] = paint(ed.days[day], from, from + 60, ed.tool);
             ed.sel = [day, ed.days[day].findIndex(([a, e]) => a <= from && from < e)];
+            ed.tool = null; // one block per tap on a preset, so the next tap selects again
           } else {
             ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, e]) => a <= m && m < e))];
           }
@@ -1429,6 +1501,16 @@ class HeatingControlCard extends HTMLElement {
         ed.sel = [sd, Math.min(si, ed.days[sd].length - 1)];
         this._renderWide();
       }));
+      this._wireRoomChips(d);
+      d.querySelector(".split").addEventListener("click", () => {
+        const bl = ed.days[sd];
+        const [a, e, p] = bl[si];
+        const at = Math.min(e - SNAP, Math.max(a + SNAP, snap((a + e) / 2)));
+        const other = palette.find((k) => k !== p && k !== "off") || "off";
+        ed.days[sd] = paint(bl, at, e, other);
+        ed.sel = [sd, ed.days[sd].findIndex(([x, y]) => x <= at && at < y)];
+        this._renderWide();
+      });
       d.querySelector(".rmblock").addEventListener("click", () => {
         const bl = ed.days[sd];
         bl[si][2] = si > 0 ? bl[si - 1][2] : bl[si + 1][2];
@@ -1459,19 +1541,20 @@ class HeatingControlCard extends HTMLElement {
     return Math.max(0, Math.min(1439, ((x - rect.left) / w) * 1440));
   }
 
-  // Move the selected block's start (edge 0) or end (edge 1), snapped and
-  // kept at least 15 minutes from its neighbours.
+  // Move the selected block's start (edge 0) or end (edge 1), snapped. The
+  // block keeps at least 15 minutes; a neighbour can shrink to nothing and is
+  // then dropped, so a block can be dragged to 00:00 or 24:00 (2.0.1).
   _shift(edge, delta, to = null) {
     const ed = this._ed;
     const [sd, si] = ed.sel;
     const bl = ed.days[sd];
     const b = bl[si];
     if (edge === 0 && si > 0) {
-      const v = Math.min(Math.max(to === null ? b[0] + delta : to, bl[si - 1][0] + SNAP), b[1] - SNAP);
+      const v = Math.min(Math.max(to === null ? b[0] + delta : to, bl[si - 1][0]), b[1] - SNAP);
       b[0] = v; bl[si - 1][1] = v;
     }
     if (edge === 1 && si < bl.length - 1) {
-      const v = Math.min(Math.max(to === null ? b[1] + delta : to, b[0] + SNAP), bl[si + 1][1] - SNAP);
+      const v = Math.min(Math.max(to === null ? b[1] + delta : to, b[0] + SNAP), bl[si + 1][1]);
       b[1] = v; bl[si + 1][0] = v;
     }
   }
@@ -1518,6 +1601,7 @@ class HeatingControlCard extends HTMLElement {
     const options = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
     const tooMany = this._tooMany();
     const html = `${this._head(ed.label, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day])}
+      ${this._roomChipsHtml()}
       <div class="chips">${DAY_NAMES.map((n, d) => `<button class="chip${d === day ? " on" : ""}" data-day="${d}">${n}</button>`).join("")}</div>
       <div><div class="bar" style="height:22px;cursor:default">${this._bars(blocks, P, false)}</div>
         <div class="ticks" style="margin-left:0"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
@@ -1532,6 +1616,7 @@ class HeatingControlCard extends HTMLElement {
       <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary save"${tooMany ? " disabled" : ""}>Save${ed.also.size ? ` ${[day, ...ed.also].sort().map((d) => DAY_NAMES[d]).join(" + ")}` : ""}</button></div>`;
     this._openDialog(html, (d) => {
       const copyAlso = () => ed.also.forEach((o) => { ed.days[o] = ed.days[day].map((x) => x.slice()); });
+      this._wireRoomChips(d);
       d.querySelectorAll("[data-day]").forEach((c) => c.addEventListener("click", () => {
         copyAlso();
         ed.day = Number(c.dataset.day);
@@ -1719,25 +1804,52 @@ class HeatingControlCard extends HTMLElement {
     });
   }
 
-  // Make schedule: one preset all day, every day; save is enough (#115).
-  _makeDialog(entityId) {
+  // Every room without a schedule, also the ones this card doesn't list
+  // (a card with `thermostats`), each with Make schedule and Scheduling off (2.0.1).
+  _noSchedDialog() {
+    const rooms = this._houseRooms(this._rooms()).filter((r) => {
+      const t = this._state(r.entity);
+      return t && t.attributes.schedule_state === "none";
+    });
+    if (!rooms.length) return this._closeDialog();
+    const html = `${this._head("Rooms without a schedule", "Each holds the Temperature without schedule until you choose")}
+      <div class="lanes">${rooms.map((r) => `<div class="dbtns" style="align-items:center"><span style="flex:1;font-weight:500">${esc(r.label)}</span>
+        <button class="btn primary make" data-e="${esc(r.entity)}" style="flex:none">Make schedule</button><button class="btn mine" data-e="${esc(r.entity)}" style="flex:none">Scheduling off</button></div>`).join("")}</div>
+      <div class="hint">Make schedule starts with Eco, Warm 07:00 to 22:00, Eco, every day. Scheduling off: the room is yours, as in v1.</div>`;
+    this._openDialog(html, (d) => {
+      d.querySelectorAll(".make").forEach((b) => b.addEventListener("click", () => this._makeDialog(b.dataset.e, () => this._noSchedDialog())));
+      d.querySelectorAll(".mine").forEach((b) => b.addEventListener("click", async () => {
+        await this._call(INTEGRATION, "set_schedule", { entity_id: b.dataset.e, scheduling: "off" });
+        setTimeout(() => this._noSchedDialog(), 300);
+      }));
+    });
+  }
+
+  _roomLabel(entityId) {
+    const r = this._houseRooms(this._rooms()).find((x) => x.entity === entityId);
     const s = this._state(entityId);
-    const r = this._rows.get(entityId);
-    if (!s || !r) return;
-    const a = s.attributes;
-    const presets = (a.presets || []).filter((p) => p.temperature !== null);
-    const html = `${this._head(r.room.label, "Start with one preset all day; change the schedule on the card later.")}
-      <fieldset><legend>All day, every day</legend>
-        ${presets.map((p, i) => this._opt("preset", p.id, p.name, `${fmt(p.temperature)}°`, p.id === "eco" || (i === 0 && !presets.some((x) => x.id === "eco")))).join("")}
-      </fieldset>
+    return r ? r.label : (s && s.attributes.friendly_name) || entityId;
+  }
+
+  // Make schedule: the default week, every day; save is enough (#115, 2.0.1).
+  _makeDialog(entityId, after = null) {
+    const s = this._state(entityId);
+    if (!s) return;
+    const r = { room: { label: this._roomLabel(entityId) } };
+    const P = presetMap(s.attributes);
+    const blocks = weekBlocks(defaultWeek())[0];
+    const t = (p) => (P[p] && P[p].temperature !== null ? ` ${fmt(P[p].temperature)}°` : "");
+    const html = `${this._head(r.room.label, "Start with this day, every day; change it in the Week view later.")}
+      <div><div class="bar" style="height:22px;cursor:default">${this._bars(blocks, P)}</div>
+        <div class="ticks" style="margin-left:0"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
+      <div class="hint">${esc(P.eco ? P.eco.name : "Eco")}${t("eco")} until 07:00, ${esc(P.warm ? P.warm.name : "Warm")}${t("warm")} until 22:00, then ${esc(P.eco ? P.eco.name : "Eco")} again.</div>
       <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary save">Save schedule</button></div>`;
     this._openDialog(html, (d) => {
       d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
-      d.querySelector(".save").addEventListener("click", () => {
-        const preset = d.querySelector('input[name="preset"]:checked').value;
-        const week = Array.from({ length: 7 }, () => [{ time: "00:00", preset }]);
-        this._call(INTEGRATION, "set_schedule", { entity_id: entityId, week });
-        this._closeDialog();
+      d.querySelector(".save").addEventListener("click", async () => {
+        const ok = await this._call(INTEGRATION, "set_schedule", { entity_id: entityId, week: defaultWeek() });
+        if (after && ok) setTimeout(after, 300);
+        else this._closeDialog();
       });
     });
   }
