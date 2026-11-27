@@ -379,6 +379,12 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .bar b { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 2px solid var(--card-background-color, #1c1c1c); font-size: 11px; font-weight: 600; display: flex; align-items: center; padding-left: 8px; overflow: hidden; white-space: nowrap; }
   .bar b.sel { outline: 3px solid var(--primary-text-color); outline-offset: -3px; z-index: 1; border-radius: 6px; }
   .bar.ed { height: 38px; }
+  .edgrid .lane { grid-template-columns: 50px 1fr; }
+  .edgrid .ticks { margin-left: 58px; }
+  .lane .dl { cursor: grab; touch-action: none; user-select: none; padding: 8px 0; border-radius: 6px; }
+  .lane .dl::before { content: "⠿"; margin-right: 3px; opacity: .5; }
+  .lane.copysrc .dl { color: var(--hc-accent); }
+  .lane.copydst .bar { outline: 2px dashed var(--hc-accent); outline-offset: 2px; }
   .bar .g { position: absolute; top: 3px; bottom: 3px; width: 8px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); z-index: 2; cursor: ew-resize; pointer-events: none; }
   .bar.ed b { cursor: grab; }
   .bar.dragging, .bar.dragging b { cursor: grabbing; }
@@ -1493,8 +1499,8 @@ class HeatingControlCard extends HTMLElement {
           <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">${ed.tool ? `Painting ${esc(P[ed.tool].name)}: drag over a day, or down over more days` : "Paint: tap a preset, then drag over the days"}</span>
             ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
           <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
-          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar ed" data-d="${d}">${this._edBar(blocks, d)}</div></div>`).join("")}</div>
-          <div class="hint" style="margin-top:8px">Drag a white switch point to change its time, or drag a block to move it. Tap a block to select it; tap it again to split it there. Everything snaps to 15 minutes.</div>
+          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span class="dl" data-d="${d}" title="Drag onto other days to copy">${DAY_NAMES[d]}</span><div class="bar ed" data-d="${d}">${this._edBar(blocks, d)}</div></div>`).join("")}</div>
+          <div class="hint" style="margin-top:8px">Drag a white switch point to change its time, or drag a block to move it. Tap a block to select it; tap it again to split it there. Drag a day's name onto other days to copy it. Everything snaps to 15 minutes.</div>
         </div>
         <div class="panel">
           <div class="dsub">Selected block</div>
@@ -1513,6 +1519,9 @@ class HeatingControlCard extends HTMLElement {
     this._openDialog(html, (d) => {
       d.querySelector(".dbox").classList.add("wide");
       if (keepCopy) d.querySelector(".copyto").style.display = "";
+      d.querySelectorAll(".lane .dl").forEach((lab) => {
+        lab.addEventListener("pointerdown", (ev) => this._dayDown(ev, lab, Number(lab.dataset.d)));
+      });
       d.querySelectorAll(".bar.ed").forEach((bar) => {
         bar.addEventListener("pointerdown", (ev) => this._barDown(ev, bar, Number(bar.dataset.d)));
       });
@@ -1694,6 +1703,53 @@ class HeatingControlCard extends HTMLElement {
     bar.addEventListener("pointermove", move);
     bar.addEventListener("pointerup", up);
     bar.addEventListener("pointercancel", up);
+  }
+
+  // Drag a day's name onto other days: every day passed gets a copy (2.0.3).
+  _dayDown(ev, lab, day) {
+    if (ev.button !== undefined && ev.button > 0) return;
+    const ed = this._ed;
+    const all = ed.days.map((bl) => bl.map((b) => b.slice()));
+    const lanes = [...this._dlg.querySelectorAll(".lane")];
+    const y0 = ev.clientY || 0;
+    let moved = false;
+    if (ev.preventDefault) ev.preventDefault();
+    if (lab.setPointerCapture && ev.pointerId !== undefined) { try { lab.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable */ } }
+    const laneAt = (y) => {
+      let best = day;
+      let dist = Infinity;
+      lanes.forEach((l, i) => {
+        const r = l.getBoundingClientRect();
+        const dd = y < r.top ? r.top - y : y > r.top + r.height ? y - r.top - r.height : 0;
+        if (dd < dist) { dist = dd; best = i; }
+      });
+      return best;
+    };
+    const move = (e) => {
+      if (!moved && Math.abs((e.clientY || 0) - y0) < 6) return;
+      moved = true;
+      const d1 = laneAt(e.clientY || 0);
+      const [da, db] = [Math.min(day, d1), Math.max(day, d1)];
+      lanes.forEach((l, d) => {
+        const on = d !== day && d >= da && d <= db;
+        ed.days[d] = on ? all[day].map((b) => b.slice()) : all[d].map((b) => b.slice());
+        l.classList.toggle("copysrc", d === day);
+        l.classList.toggle("copydst", on);
+        const bar = l.querySelector(".bar");
+        if (bar) bar.innerHTML = this._edBar(ed.days[d], d);
+      });
+    };
+    const up = (e) => {
+      lab.removeEventListener("pointermove", move);
+      lab.removeEventListener("pointerup", up);
+      lab.removeEventListener("pointercancel", up);
+      if (!moved && e.type === "pointerup") ed.sel = [day, 0];
+      if (e.type === "pointercancel") ed.days = all;
+      this._renderWide();
+    };
+    lab.addEventListener("pointermove", move);
+    lab.addEventListener("pointerup", up);
+    lab.addEventListener("pointercancel", up);
   }
 
   _barTap(day, m, i) {
