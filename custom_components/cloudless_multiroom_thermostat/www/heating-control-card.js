@@ -1435,6 +1435,8 @@ class HeatingControlCard extends HTMLElement {
   _renderWide() {
     const ed = this._ed;
     this._normalizeSel();
+    // Copies belong to the day they came from: another day selected starts a new pick
+    if (ed.alsoFrom !== undefined && ed.alsoFrom !== ed.sel[0]) { ed.also = new Set(); ed.before = {}; ed.alsoFrom = undefined; }
     const [sd, si] = ed.sel;
     const b = ed.days[sd][si] || ed.days[sd][0];
     const P = ed.P;
@@ -1536,11 +1538,20 @@ class HeatingControlCard extends HTMLElement {
         const box = d.querySelector(".copyto");
         box.style.display = box.style.display === "none" ? "" : "none";
       });
+      // Copy day to: tap a day to copy, tap it again to undo that copy (2.0.2)
       d.querySelectorAll("[data-also]").forEach((c) => c.addEventListener("click", () => {
         const day = Number(c.dataset.also);
-        ed.days[day] = ed.days[sd].map((x) => x.slice());
-        c.classList.add("pick");
-        ed.also.add(day);
+        ed.before = ed.before || {};
+        if (ed.also.has(day)) {
+          if (ed.before[day]) ed.days[day] = ed.before[day];
+          delete ed.before[day];
+          ed.also.delete(day);
+        } else {
+          ed.before[day] = ed.days[day].map((x) => x.slice());
+          ed.days[day] = ed.days[sd].map((x) => x.slice());
+          ed.also.add(day);
+        }
+        ed.alsoFrom = sd;
         this._renderWide();
       }));
       d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());

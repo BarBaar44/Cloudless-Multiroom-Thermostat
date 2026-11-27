@@ -510,6 +510,23 @@ test("editor: dropdown lists rooms with scheduling off or no schedule, also unli
   same(data.week[2], [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }]);
 });
 
+test("wide editor: copy day to, tap the day again to undo the copy (2.0.2)", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c._ed.days[6] = [[0, 1440, "eco"]];
+  c._ed.days[0] = [[0, 1440, "warm"]];
+  c._ed.sel = [0, 0];
+  c._renderWide();
+  c.shadowRoot.querySelector(".copyday").click();
+  c.shadowRoot.querySelector('[data-also="6"]').click();
+  same(c._ed.days[6], [[0, 1440, "warm"]]);
+  assert(c.shadowRoot.querySelector('[data-also="6"]').classList.contains("pick"));
+  c.shadowRoot.querySelector('[data-also="6"]').click();
+  same(c._ed.days[6], [[0, 1440, "eco"]], "back to what Sunday had");
+  assert(!c.shadowRoot.querySelector('[data-also="6"]').classList.contains("pick"));
+});
+
 test("editor: split a whole day block, tool off after one block, drag to midnight (2.0.1)", () => {
   const allDay = Array.from({ length: 7 }, () => [{ time: "00:00", preset: "warm" }]);
   const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched({ schedule: allDay })) });
