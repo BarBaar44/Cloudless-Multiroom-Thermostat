@@ -467,7 +467,12 @@ const edBar = (c, day) => {
   bar.getBoundingClientRect = () => ({ left: 0, width: 1440, top: 0, height: 38 });
   return bar;
 };
-const ptr = (el, type, x) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, clientX: x, button: 0 }));
+const ptr = (el, type, x, y = 0) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
+// Every lane 1440 px wide and 40 px high, Monday at the top
+const allBars = (c) => [...c.shadowRoot.querySelectorAll(".dlg .bar.ed")].map((b, d) => {
+  b.getBoundingClientRect = () => ({ left: 0, width: 1440, top: d * 40, height: 38 });
+  return b;
+});
 const tapBar = (c, day, x) => { const b = edBar(c, day); ptr(b, "pointerdown", x); ptr(b, "pointerup", x); };
 const dragBar = (c, day, from, to) => { const b = edBar(c, day); ptr(b, "pointerdown", from); ptr(b, "pointermove", (from + to) / 2); ptr(b, "pointermove", to); ptr(b, "pointerup", to); };
 
@@ -577,6 +582,27 @@ test("week grid: drag a switch point, drag a block, tap twice to split (2.0.3)",
   same(c._ed.sel, [1, 1]);
   tapBar(c, 1, 900);
   same(c._ed.days[1], [[0, 420, "eco"], [420, 900, "warm"], [900, 1440, "eco"]]); // the Eco half joins the Eco after it
+});
+
+test("week grid: paint by dragging, down over more days (2.0.3)", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c.shadowRoot.querySelector('[data-tool="off"]').click();
+  assert(c.shadowRoot.querySelector(".dlg").textContent.includes("Painting Off"));
+  // Monday 12:00 to 14:00, dragged down to Wednesday
+  const bars = allBars(c);
+  ptr(bars[0], "pointerdown", 720, 19);
+  ptr(bars[0], "pointermove", 800, 60);
+  ptr(bars[0], "pointermove", 840, 99);
+  ptr(bars[0], "pointerup", 840, 99);
+  for (const d of [0, 1, 2]) same(c._ed.days[d], [[0, 420, "eco"], [420, 720, "warm"], [720, 840, "off"], [840, 1320, "warm"], [1320, 1440, "eco"]]);
+  same(c._ed.days[3], [[0, 420, "eco"], [420, 1320, "warm"], [1320, 1440, "eco"]]);
+  assert.strictEqual(c._ed.tool, null, "one stroke per tap on a preset");
+  // Dragging right to left paints too
+  c.shadowRoot.querySelector('[data-tool="warm"]').click();
+  dragBar(c, 6, 1440, 1320);
+  same(c._ed.days[6], [[0, 420, "eco"], [420, 1440, "warm"]]);
 });
 
 test("week grid: moving the first block hands its time to the next one", () => {
