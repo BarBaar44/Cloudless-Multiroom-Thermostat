@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 2.0.4
+
+Schedule editor: drag a preset onto the week, and a room without a schedule shows none. PID advice only where it fits.
 
 - **Drag a preset onto the week:** drag Eco, Warm, Off (or any preset) from the palette or the side panel onto a day: an hour of it lands where you let go, shown live with its time while you drag. Dropped outside the days, nothing changes. A tap still works as before.
 - **Side panel presets in one row:** the preset tiles share a row instead of wrapping Off onto a row of its own.
