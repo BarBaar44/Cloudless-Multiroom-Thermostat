@@ -605,6 +605,49 @@ test("week grid: paint by dragging, down over more days (2.0.3)", () => {
   same(c._ed.days[6], [[0, 420, "eco"], [420, 1440, "warm"]]);
 });
 
+test("week grid: drag a preset onto a day drops an hour of it", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  allBars(c);
+  // From the palette onto Wednesday, centred on 12:10: 11:45 to 12:45
+  const chip = c.shadowRoot.querySelector('.dlg [data-tool="off"]');
+  ptr(chip, "pointerdown", 5, -40);
+  ptr(chip, "pointermove", 400, 40);
+  ptr(chip, "pointermove", 730, 99);
+  assert(c.shadowRoot.querySelector(".dlg .pghost"), "ghost while dragging");
+  ptr(chip, "pointerup", 730, 99);
+  chip.click(); // the click after a drag is not a tap
+  assert.strictEqual(c._ed.tool, null);
+  assert(!c.shadowRoot.querySelector(".dlg .pghost"));
+  same(c._ed.days[2], [[0, 420, "eco"], [420, 705, "warm"], [705, 765, "off"], [765, 1320, "warm"], [1320, 1440, "eco"]]);
+  same(c._ed.days[1], [[0, 420, "eco"], [420, 1320, "warm"], [1320, 1440, "eco"]]);
+  same(c._ed.sel, [2, 2]);
+  // From the side panel, near midnight: clamped to 23:00 to 24:00
+  allBars(c);
+  const tile = c.shadowRoot.querySelector('.dlg .choice[data-p="warm"]');
+  ptr(tile, "pointerdown", 2000, -40);
+  ptr(tile, "pointermove", 1440, 259);
+  ptr(tile, "pointerup", 1440, 259);
+  same(c._ed.days[6], [[0, 420, "eco"], [420, 1320, "warm"], [1320, 1380, "eco"], [1380, 1440, "warm"]]);
+  // Dropped outside the days: nothing changes
+  allBars(c);
+  const before = JSON.stringify(c._ed.days);
+  const eco = c.shadowRoot.querySelector('.dlg [data-tool="eco"]');
+  ptr(eco, "pointerdown", 5, -40);
+  ptr(eco, "pointermove", 700, 60);
+  ptr(eco, "pointermove", 700, 600);
+  ptr(eco, "pointerup", 700, 600);
+  assert.strictEqual(JSON.stringify(c._ed.days), before);
+  // A plain tap on a palette preset still picks it
+  const warm = c.shadowRoot.querySelector('.dlg [data-tool="warm"]');
+  c._dragEnd = 0;
+  ptr(warm, "pointerdown", 5, -40);
+  ptr(warm, "pointerup", 5, -40);
+  warm.click();
+  assert.strictEqual(c._ed.tool, "warm");
+});
+
 test("week grid: drag a day's name onto other days to copy it (2.0.3)", () => {
   const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
   const c = render(h);

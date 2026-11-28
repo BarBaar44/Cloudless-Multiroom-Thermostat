@@ -399,7 +399,9 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .trow { display: grid; grid-template-columns: 44px 44px 1fr 44px; align-items: center; gap: 6px; }
   .trow .adj { width: 44px; height: 44px; border-radius: 10px; }
   .trow b { text-align: center; font-size: 18px; font-variant-numeric: tabular-nums; }
-  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+  .edgrid .chip[data-tool], .edgrid .choice { touch-action: none; }
+  .pghost { position: fixed; z-index: 11; pointer-events: none; transform: translate(-50%, -140%); padding: 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
   .choice { min-height: 48px; padding: 6px 12px; border-radius: 12px; font-size: 14px; font-weight: 700; flex-direction: column; align-items: flex-start; background: var(--card-background-color, #1c1c1c); color: var(--primary-text-color); }
   .choice small { font-size: 11px; font-weight: 500; opacity: .8; }
   .pts { display: flex; flex-direction: column; gap: 6px; }
@@ -1191,7 +1193,7 @@ class HeatingControlCard extends HTMLElement {
       <div class="lanes">${days.map((b, d) => `<div class="lane${d === today ? " today" : ""}" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" role="button" aria-label="Edit ${DAY_NAMES[d]}">${this._bars(b, P)}</div></div>`).join("")}</div>
       ${a.drives_heat_source === false ? `<div class="hint along"><ha-icon icon="mdi:radiator" style="--mdc-icon-size:14px;vertical-align:-2px"></ha-icon> ${esc(ALONG_TEXT)}</div>` : ""}
       <div class="hint">Tap a day to edit it. Away and open windows still win over the schedule.</div>
-      <div class="dbtns"><button class="btn presets">Presets…</button><button class="btn copy">Copy to room…</button>${a.schedule_state === "off"
+      <div class="dbtns"><button class="btn presets">Presets</button><button class="btn copy">Copy to room…</button>${a.schedule_state === "off"
         ? `<button class="btn on">Turn schedule on</button>` : `<button class="btn off">Turn off schedule</button>`}</div>`;
     box.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { this._weekRoom = c.dataset.e; this._weekKey = null; this._update(); }));
     box.querySelectorAll(".lane").forEach((l) => l.addEventListener("click", () => this._editor(this._weekRoom, Number(l.dataset.d))));
@@ -1534,10 +1536,10 @@ class HeatingControlCard extends HTMLElement {
     const tooMany = this._tooMany();
     const whole = ed.days[sd].length === 1;
     const html = `${this._head("Edit schedule", ed.label)}
-      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div>${this._undoHtml()}<button class="btn openpresets" style="flex:none">Presets…</button></div>
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div>${this._undoHtml()}<button class="btn openpresets" style="flex:none">Presets</button></div>
       <div class="edgrid">
         <div>
-          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">${ed.tool ? `Painting ${esc(P[ed.tool].name)}: drag over a day, or down over more days` : "Paint: tap a preset, then drag over the days"}</span>
+          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">${ed.tool ? `Painting ${esc(P[ed.tool].name)}: drag over a day, or down over more days` : "Drag a preset onto a day, or tap it and drag over the days"}</span>
             ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
           <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
           <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span class="dl" data-d="${d}" title="Drag onto other days to copy">${DAY_NAMES[d]}</span><div class="bar ed" data-d="${d}">${this._edBar(blocks, d)}</div></div>`).join("")}</div>
@@ -1560,6 +1562,9 @@ class HeatingControlCard extends HTMLElement {
     this._openDialog(html, (d) => {
       d.querySelector(".dbox").classList.add("wide");
       if (keepCopy) d.querySelector(".copyto").style.display = "";
+      d.querySelectorAll("[data-tool], .choice").forEach((c) => {
+        c.addEventListener("pointerdown", (ev) => this._presetDown(ev, c, c.dataset.tool || c.dataset.p));
+      });
       d.querySelectorAll(".lane .dl").forEach((lab) => {
         lab.addEventListener("pointerdown", (ev) => this._dayDown(ev, lab, Number(lab.dataset.d)));
       });
@@ -1567,6 +1572,7 @@ class HeatingControlCard extends HTMLElement {
         bar.addEventListener("pointerdown", (ev) => this._barDown(ev, bar, Number(bar.dataset.d)));
       });
       d.querySelectorAll("[data-tool]").forEach((c) => c.addEventListener("click", () => {
+        if (this._dragged()) return;
         ed.tool = ed.tool === c.dataset.tool ? null : c.dataset.tool;
         this._renderWide();
       }));
@@ -1575,6 +1581,7 @@ class HeatingControlCard extends HTMLElement {
         this._renderWide();
       }));
       d.querySelectorAll(".choice").forEach((c) => c.addEventListener("click", () => {
+        if (this._dragged()) return;
         ed.days[sd][si][2] = c.dataset.p;
         ed.days[sd] = merge(ed.days[sd]);
         ed.sel = [sd, Math.min(si, ed.days[sd].length - 1)];
@@ -1745,6 +1752,77 @@ class HeatingControlCard extends HTMLElement {
     bar.addEventListener("pointermove", move);
     bar.addEventListener("pointerup", up);
     bar.addEventListener("pointercancel", up);
+  }
+
+  // A click that ends a preset drag is not a tap.
+  _dragged() {
+    return Date.now() - (this._dragEnd || 0) < 400;
+  }
+
+  // Drag a preset from the palette or the side panel onto a day: an hour of
+  // it lands centred on the pointer, shown live while you drag. Dropped
+  // outside the days, nothing changes.
+  _presetDown(ev, el, preset) {
+    if (ev.button !== undefined && ev.button > 0) return;
+    const ed = this._ed;
+    if (!ed.P[preset]) return;
+    const all = ed.days.map((bl) => bl.map((b) => b.slice()));
+    const bars = [...this._dlg.querySelectorAll(".bar.ed")];
+    const x0 = ev.clientX;
+    const y0 = ev.clientY || 0;
+    let moved = false;
+    let ghost = null;
+    let drop = null;
+    if (el.setPointerCapture && ev.pointerId !== undefined) { try { el.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable */ } }
+    const barAt = (x, y) => bars.findIndex((b) => {
+      const r = b.getBoundingClientRect();
+      return x >= r.left - 8 && x <= r.left + r.width + 8 && y >= r.top - 3 && y <= r.top + r.height + 3;
+    });
+    const move = (e) => {
+      const x = e.clientX;
+      const y = e.clientY || 0;
+      if (!moved && Math.abs(x - x0) < 6 && Math.abs(y - y0) < 6) return;
+      if (!moved) {
+        moved = true;
+        ghost = document.createElement("div");
+        ghost.className = "pghost";
+        ghost.style.background = this._presetColor(ed.P, preset);
+        ghost.style.color = preset === "off" ? "#c8c8c8" : "#1c1c1c";
+        ghost.textContent = ed.P[preset].name;
+        this._dlg.appendChild(ghost);
+      }
+      ghost.style.left = `${x}px`;
+      ghost.style.top = `${y}px`;
+      const d = barAt(x, y);
+      const from = d < 0 ? 0 : Math.min(Math.max(snap(this._minuteAt(bars[d], x) - 30), 0), 1440 - 60);
+      drop = d < 0 ? null : [d, from];
+      bars.forEach((b, i) => {
+        ed.days[i] = i === d ? paint(all[i], from, from + 60, preset) : all[i].map((q) => q.slice());
+        b.innerHTML = this._edBar(ed.days[i], i);
+      });
+      if (d >= 0) {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.style.left = `${(from / 1440) * 100}%`;
+        bubble.textContent = `${hm(from)} to ${hm(from + 60)}`;
+        bars[d].appendChild(bubble);
+      }
+    };
+    const up = (e) => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      if (ghost) ghost.remove();
+      if (!moved) return; // a tap: the click handler picks or sets the preset
+      this._dragEnd = Date.now();
+      if (e.type === "pointercancel" || !drop) ed.days = all;
+      else ed.sel = [drop[0], Math.max(0, ed.days[drop[0]].findIndex(([a, x]) => a <= drop[1] && drop[1] < x))];
+      ed.tool = null;
+      this._renderWide();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
   }
 
   // Drag a day's name onto other days: every day passed gets a copy (2.0.3).
