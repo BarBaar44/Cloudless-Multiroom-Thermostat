@@ -247,8 +247,20 @@ class HeatingController:
             return PAUSE_AWAY
         return None
 
+    def preset_off(self, room: Room) -> bool:
+        """The room is on heat, but its preset means Off: it holds the off temperature and asks for no heat.
+
+        A switch point to Off, Off chosen by hand, or a preset this room marks not used. Like a room
+        switched off, so the CH switch can go off and a night can start. Below the off temperature
+        it heats again, to the off temperature: frost protection.
+        """
+        if room.preset is None or not self.scheduler.preset_is_off(room, room.preset):
+            return False
+        # Rounded like select_winner, so a room 0.01 below doesn't call for heat nobody gives
+        return room.current is None or round(self.off_temp - room.current, 1) <= 0
+
     def is_heating(self, room: Room) -> bool:
-        return room.hvac_on and self.pause_reason(room) is None
+        return room.hvac_on and self.pause_reason(room) is None and not self.preset_off(room)
 
     def effective_target(self, room: Room) -> float:
         if not self.is_heating(room):
@@ -276,7 +288,7 @@ class HeatingController:
 
     def role(self, room: Room) -> str:
         """Role in the two-tier model, for the card and hvac_action."""
-        if not room.hvac_on:
+        if not room.hvac_on or self.preset_off(room):
             return "off"
         if self.pause_reason(room):
             return "paused"

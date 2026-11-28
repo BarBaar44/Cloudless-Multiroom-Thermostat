@@ -171,6 +171,64 @@ async def test_switch_point_to_off(hass: HomeAssistant, house) -> None:
     assert "off" in office["preset_modes"]
 
 
+def _ctl_room(entry, name: str):
+    ctl = entry.runtime_data
+    return ctl, next(r for r in ctl.rooms.values() if r.name == name)
+
+
+async def test_switch_point_to_off_asks_for_no_heat(hass: HomeAssistant, house, freezer) -> None:
+    """A switch point to Off works like switching the room off: no heat request, so the CH
+    switch can go off and a night can start; the room itself stays on heat."""
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("20:00", "off")))
+    await _call(hass, "set_hvac_mode", "climate.living", hvac_mode="heat")
+    ctl, room = _ctl_room(house, "Living")
+    assert ctl.is_heating(room)
+    await _at(hass, freezer, datetime(2026, 11, 23, 19, 0, tzinfo=UTC))  # 20:00 local
+    living = _room(hass, "living")
+    assert living["state"] == "heat" and living["preset_mode"] == "off" and living["temperature"] == 10.0
+    assert living["role"] == "off" and living["hvac_action"] == "off"
+    assert not ctl.is_heating(room)
+    # A target by hand during the Off block heats again, until the next switch point
+    await _call(hass, "set_temperature", "climate.living", temperature=19)
+    assert ctl.is_heating(room)
+    assert _room(hass, "living")["role"] != "off"
+    # Off chosen by hand is off too
+    await _call(hass, "set_preset_mode", "climate.living", preset_mode="off")
+    assert not ctl.is_heating(room)
+    await _at(hass, freezer, datetime(2026, 11, 24, 6, 0, tzinfo=UTC))  # 07:00 local: warm
+    assert _room(hass, "living")["preset_mode"] == "warm"
+    assert ctl.is_heating(room)
+
+
+async def test_switch_point_to_off_still_protects_against_frost(hass: HomeAssistant, house, freezer) -> None:
+    """Below the off temperature a room at Off heats again, to the off temperature, and stops there."""
+    await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("20:00", "off")))
+    await _call(hass, "set_hvac_mode", "climate.living", hvac_mode="heat")
+    ctl, room = _ctl_room(house, "Living")
+    await _at(hass, freezer, datetime(2026, 11, 23, 19, 0, tzinfo=UTC))  # 20:00 local: off
+    assert not ctl.is_heating(room)
+    hass.states.async_set("sensor.living_temp", "9.0", {"device_class": "temperature"})
+    await hass.async_block_till_done()
+    assert ctl.is_heating(room) and ctl.effective_target(room) == 10.0
+    assert _room(hass, "living")["role"] != "off"
+    hass.states.async_set("sensor.living_temp", "10.0", {"device_class": "temperature"})
+    await hass.async_block_till_done()
+    assert not ctl.is_heating(room)
+    assert _room(hass, "living")["role"] == "off"
+
+
+async def test_preset_not_used_by_the_room_asks_for_no_heat(hass: HomeAssistant, house) -> None:
+    await _schedule(hass, "climate.living", one_block_week("warm"))
+    await _call(hass, "set_hvac_mode", "climate.living", hvac_mode="heat")
+    ctl, room = _ctl_room(house, "Living")
+    assert ctl.is_heating(room)
+    house.runtime_data.schedules.data["temperatures"][room.room_id]["warm"] = None  # not used here
+    house.runtime_data.scheduler.apply()
+    await hass.async_block_till_done()
+    assert not ctl.is_heating(room)
+    assert _room(hass, "living")["role"] == "off"
+
+
 async def test_manual_change_lasts_until_the_next_change(hass: HomeAssistant, house, freezer) -> None:
     await _schedule(hass, "climate.living", _every_day(_pt("07:00", "warm"), _pt("22:00", "eco")))
     await _call(hass, "set_temperature", "climate.living", temperature=21)

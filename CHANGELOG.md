@@ -2,7 +2,7 @@
 
 ## 2.0.3
 
-Schedule editor on a tablet or desktop: more drag and drop, fewer buttons.
+Schedule editor on a tablet or desktop: more drag and drop, fewer buttons. And a switch point to Off now asks for no heat.
 
 - **Switch points you can grab:** every switch point on every day has a white grip; drag it to change its time, no need to select a block first. The time shows while you drag. Dragged onto the next switch point, the block in between goes.
 - **Drag a block to move it:** press in a block and drag: it keeps its length and moves whole, its old place goes to the block before it.
@@ -10,6 +10,7 @@ Schedule editor on a tablet or desktop: more drag and drop, fewer buttons.
 - **Drag a day onto other days:** drag a day's name (⠿ Mon) up or down: every day you pass gets a copy, shown dashed while you drag. Copy day to… stays for days that are not next to it.
 - **Undo and redo** in the schedule editor (also Ctrl+Z and Ctrl+Y): every change is a step, a whole drag one step. Until you save, nothing reaches the integration.
 - **Tap twice to split:** the first tap selects a block, a second tap on it splits it right there (the second part in another preset).
+- **A switch point to Off asks for no heat.** A room on heat whose schedule is at Off (or Off chosen by hand, or a preset the room marks *not used*) now counts as not heating, as if it were switched off: the central heating switch goes off when no other room that drives the heat source heats, a night for the night cooldown model can start, and the room's role and hvac action are `off`. Before, the room held the off temperature but still counted as heating, so the CH switch stayed on all night and no night was recorded, unless an automation switched the room off at night and back on in the morning. Such an automation is no longer needed, and a target set by hand during an Off block now heats straight away (an automation that switched the room off kept it off). The room's hvac mode stays heat. Below the off temperature the room still heats, up to the off temperature (frost protection).
 
 ## 2.0.2
 
