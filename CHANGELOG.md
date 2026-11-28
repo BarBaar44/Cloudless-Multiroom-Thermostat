@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **PID advice only where it fits** ([#201](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/201)): the PID advice and **Apply PID advice automatically** now only work with a firmware PID on the ESPHome scale of `thermostat.yaml`. With the On/off switch or the OpenTherm Gateway as heat source, or Kp, Ki and Kd numbers from another integration than ESPHome, there is no advice and nothing is written; the PID advice sensor says why. Before, an advice on the wrong scale could be written to another firmware's PID. Input number helpers still work.
+
 ## 2.0.3
 
 Schedule editor on a tablet or desktop: more drag and drop, fewer buttons. And a switch point to Off now asks for no heat.
