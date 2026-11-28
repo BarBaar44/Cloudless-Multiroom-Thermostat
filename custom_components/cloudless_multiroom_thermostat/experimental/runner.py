@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components import persistent_notification
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, STATE_ON
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -45,6 +46,8 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from ..const import (
+    CONF_HEAT_SOURCE_TYPE,
+    HEAT_SOURCE_CLIMATE,
     CONF_EXP_AUTO_APPLY,
     CONF_EXP_CH_ACTIVE,
     CONF_EXP_COMFORT_WEEKDAY,
@@ -241,9 +244,29 @@ class ExperimentalRunner:
         return len(self._pid_entities()) == 3
 
     @property
+    def _pid_unsupported(self) -> str | None:
+        """Why the PID advice doesn't fit this heat source, or None.
+
+        The advice limits are on the ESPHome PID scale of thermostat.yaml. A
+        heat source without a firmware PID (On/off switch, OpenTherm Gateway),
+        or Kp/Ki/Kd numbers of another integration (another firmware, another
+        scale), get no advice and nothing is ever written to them.
+        Input number helpers and numbers not in the entity registry are
+        trusted: the docs allow helpers that mirror what was flashed.
+        """
+        if self._s.get(CONF_HEAT_SOURCE_TYPE) != HEAT_SOURCE_CLIMATE:
+            return "no PID advice for this heat source: it needs a firmware PID (Climate entity)"
+        registry = er.async_get(self.hass)
+        for entity_id in self._pid_entities():
+            entry = registry.async_get(entity_id)
+            if entity_id.startswith("number.") and entry is not None and entry.platform != "esphome":
+                return "no PID advice: the PID numbers are not from ESPHome, the advice only knows its scale"
+        return None
+
+    @property
     def _auto_on(self) -> bool:
-        """The option Apply PID advice automatically, with the PID numbers configured."""
-        return bool(self._s.get(CONF_EXP_AUTO_APPLY)) and self._pid_configured
+        """The option Apply PID advice automatically, with the PID numbers configured on a known scale."""
+        return bool(self._s.get(CONF_EXP_AUTO_APPLY)) and self._pid_configured and self._pid_unsupported is None
 
     @property
     def _auto(self) -> bool:
@@ -658,6 +681,8 @@ class ExperimentalRunner:
     ) -> str:
         if not self._pid_configured:
             return "no PID numbers configured"
+        if (reason := self._pid_unsupported) is not None:
+            return reason
         if not all(v is not None for v in self._params().values()):
             return "PID numbers unavailable"
         if rec is None:

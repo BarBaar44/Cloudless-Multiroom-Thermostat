@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import timedelta
 import json
 import os
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -1473,6 +1474,40 @@ async def test_pid_numbers_unavailable_at_start_then_advice_shown(hass: HomeAssi
     hass.states.async_set("number.kd", "0")
     await hass.async_block_till_done()
     assert hass.states.get("sensor.heating_pid_advice").state == "ki 0.003 -> 0.0027 (overshoot)"
+
+
+async def test_no_pid_advice_without_a_firmware_pid(hass: HomeAssistant) -> None:
+    """On/off switch or OpenTherm Gateway: no advice and nothing written, even with auto apply on."""
+    entry = await _setup(hass, {**EXP, "exp_auto_apply": True})
+    runner = entry.runtime_data.experimental
+    for source in ("switch", "otgw"):
+        settings = {**runner.ctl.settings, "heat_source_type": source}
+        with patch.object(type(runner.ctl), "settings", new_callable=PropertyMock, return_value=settings):
+            assert runner._pid_unsupported.startswith("no PID advice for this heat source")
+            assert not runner._auto_on
+            assert runner._rec_text(REC) == runner._pid_unsupported
+
+
+async def test_no_pid_advice_for_numbers_of_another_firmware(hass: HomeAssistant) -> None:
+    """Kp, Ki and Kd from another integration are on another scale: no advice, no writes."""
+    registry = er.async_get(hass)
+    for name in ("kp", "ki", "kd"):
+        registry.async_get_or_create("number", "mqtt", f"other_{name}", suggested_object_id=name)
+    entry = await _setup(hass, {**EXP, "exp_auto_apply": True})
+    runner = entry.runtime_data.experimental
+    assert "not from ESPHome" in runner._pid_unsupported
+    assert not runner._auto_on
+    assert "not from ESPHome" in hass.states.get("sensor.heating_pid_advice").state
+
+
+async def test_pid_advice_for_esphome_numbers(hass: HomeAssistant) -> None:
+    registry = er.async_get(hass)
+    for name in ("kp", "ki", "kd"):
+        registry.async_get_or_create("number", "esphome", f"thermostat_{name}", suggested_object_id=name)
+    entry = await _setup(hass, {**EXP, "exp_auto_apply": True})
+    runner = entry.runtime_data.experimental
+    assert runner._pid_unsupported is None
+    assert runner._auto_on
 
 
 async def test_pid_numbers_not_configured(hass: HomeAssistant) -> None:
