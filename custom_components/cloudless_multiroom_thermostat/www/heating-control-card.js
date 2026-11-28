@@ -1490,7 +1490,7 @@ class HeatingControlCard extends HTMLElement {
       <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div><button class="btn openpresets" style="flex:none">Presets…</button></div>
       <div class="edgrid">
         <div>
-          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">Add a block: tap a preset, then tap a day</span>
+          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">${ed.tool ? `Painting ${esc(P[ed.tool].name)}: drag over a day, or down over more days` : "Paint: tap a preset, then drag over the days"}</span>
             ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
           <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
           <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar ed" data-d="${d}">${this._edBar(blocks, d)}</div></div>`).join("")}</div>
@@ -1628,6 +1628,19 @@ class HeatingControlCard extends HTMLElement {
     const i0 = Math.max(0, start.findIndex(([a, e]) => a <= m0 && m0 < e));
     const mode = ed.tool ? "tool" : k > 0 ? "point" : "block";
     const x0 = ev.clientX;
+    const y0 = ev.clientY || 0;
+    const all = ed.days.map((bl) => bl.map((b) => b.slice()));
+    const lanes = this._dlg ? [...this._dlg.querySelectorAll(".bar.ed")] : [bar];
+    const laneAt = (y) => {
+      let best = day;
+      let dist = Infinity;
+      lanes.forEach((l, i) => {
+        const r = l.getBoundingClientRect();
+        const dd = y < r.top ? r.top - y : y > r.top + r.height ? y - r.top - r.height : 0;
+        if (dd < dist) { dist = dd; best = i; }
+      });
+      return best;
+    };
     let moved = false;
     let bubble = null;
     if (ev.preventDefault) ev.preventDefault();
@@ -1641,11 +1654,23 @@ class HeatingControlCard extends HTMLElement {
       bar.appendChild(bubble);
     };
     const move = (e) => {
-      if (!moved && Math.abs(e.clientX - x0) < 6) return;
+      if (!moved && Math.abs(e.clientX - x0) < 6 && Math.abs((e.clientY || 0) - y0) < 6) return;
       moved = true;
       bar.classList.add("dragging");
       const m = this._minuteAt(bar, e.clientX);
-      if (mode === "point") {
+      if (mode === "tool") {
+        // Paint the range under the pointer, on every day from the first to this one
+        const lo = snap(Math.min(m0, m));
+        const hi = Math.max(lo + SNAP, snap(Math.max(m0, m)));
+        const d1 = laneAt(e.clientY || 0);
+        const [da, db] = [Math.min(day, d1), Math.max(day, d1)];
+        all.forEach((bl, d) => {
+          ed.days[d] = d >= da && d <= db ? paint(bl, lo, Math.min(hi, 1440), ed.tool) : bl.map((b) => b.slice());
+          if (lanes[d] && d !== day) lanes[d].innerHTML = this._edBar(ed.days[d], d);
+        });
+        ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, x]) => a <= lo && lo < x))];
+        show(ed.days[day], Math.abs(m - m0) < 1 ? lo : m < m0 ? lo : hi);
+      } else if (mode === "point") {
         const v = snap(m);
         ed.days[day] = moveBoundary(start, k, v);
         show(ed.days[day], Math.min(Math.max(v, start[k - 1][0]), start[k][1]));
@@ -1663,6 +1688,7 @@ class HeatingControlCard extends HTMLElement {
       bar.removeEventListener("pointercancel", up);
       bar.classList.remove("dragging");
       if (!moved && e.type === "pointerup") this._barTap(day, m0, i0);
+      else if (moved && mode === "tool") ed.tool = null; // one stroke per tap on a preset
       this._renderWide();
     };
     bar.addEventListener("pointermove", move);

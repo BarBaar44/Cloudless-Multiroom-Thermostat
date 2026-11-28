@@ -6,6 +6,7 @@ Schedule editor on a tablet or desktop: more drag and drop, fewer buttons.
 
 - **Switch points you can grab:** every switch point on every day has a white grip; drag it to change its time, no need to select a block first. The time shows while you drag. Dragged onto the next switch point, the block in between goes.
 - **Drag a block to move it:** press in a block and drag: it keeps its length and moves whole, its old place goes to the block before it.
+- **Paint by dragging:** tap a preset in the palette, then drag over a day to paint that range; drag down over more days to paint the same range on each. A tap still adds an hour. One stroke per tap on the preset.
 - **Tap twice to split:** the first tap selects a block, a second tap on it splits it right there (the second part in another preset).
 
 ## 2.0.2
