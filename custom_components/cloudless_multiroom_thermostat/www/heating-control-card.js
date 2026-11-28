@@ -194,6 +194,37 @@ function paint(blocks, from, to, preset) {
   return merge(out);
 }
 
+// Move switch point k (the start of block k) to minute `to`. It can go as far
+// as the far edge of either neighbour; a block that shrinks to nothing goes.
+function moveBoundary(blocks, k, to) {
+  const out = blocks.map((b) => b.slice());
+  if (k <= 0 || k >= out.length) return out;
+  const v = Math.min(Math.max(to, out[k - 1][0]), out[k][1]);
+  out[k - 1][1] = v;
+  out[k][0] = v;
+  return merge(out);
+}
+
+// Move block i whole to start at `start`, keeping its length. The time it
+// leaves goes to the block before it (the one after, for the first block),
+// like Remove block; then it is painted at its new place.
+function moveBlock(blocks, i, start) {
+  const [a, e, p] = blocks[i];
+  const len = e - a;
+  const from = Math.min(Math.max(start, 0), 1440 - len);
+  const base = blocks.map((b) => b.slice());
+  if (base.length > 1) base[i][2] = i > 0 ? base[i - 1][2] : base[i + 1][2];
+  return paint(merge(base), from, from + len, p);
+}
+
+// Split block i at minute m: from m on it gets `other`. Both parts keep at least 15 minutes.
+function splitAt(blocks, i, m, other) {
+  const [a, e] = blocks[i];
+  if (e - a < 2 * SNAP) return blocks.map((b) => b.slice());
+  const at = Math.min(e - SNAP, Math.max(a + SNAP, snap(m)));
+  return paint(blocks, at, e, other);
+}
+
 // The easy start (2.0.1): Eco, Warm 07:00 to 22:00, Eco, every day. Two
 // switch points, so the editor has handles to drag right away.
 const DEFAULT_DAY = [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }];
@@ -347,7 +378,16 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .bar { position: relative; height: 30px; border-radius: 8px; overflow: hidden; background: var(--hc-soft); cursor: pointer; touch-action: none; }
   .bar b { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 2px solid var(--card-background-color, #1c1c1c); font-size: 11px; font-weight: 600; display: flex; align-items: center; padding-left: 8px; overflow: hidden; white-space: nowrap; }
   .bar b.sel { outline: 3px solid var(--primary-text-color); outline-offset: -3px; z-index: 1; border-radius: 6px; }
-  .bar .h { position: absolute; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 2; touch-action: none; }
+  .bar.ed { height: 38px; }
+  .edgrid .lane { grid-template-columns: 50px 1fr; }
+  .edgrid .ticks { margin-left: 58px; }
+  .lane .dl { cursor: grab; touch-action: none; user-select: none; padding: 8px 0; border-radius: 6px; }
+  .lane .dl::before { content: "⠿"; margin-right: 3px; opacity: .5; }
+  .lane.copysrc .dl { color: var(--hc-accent); }
+  .lane.copydst .bar { outline: 2px dashed var(--hc-accent); outline-offset: 2px; }
+  .bar .g { position: absolute; top: 3px; bottom: 3px; width: 8px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); z-index: 2; cursor: ew-resize; pointer-events: none; }
+  .bar.ed b { cursor: grab; }
+  .bar.dragging, .bar.dragging b { cursor: grabbing; }
   .bar .bubble { position: absolute; top: 0; transform: translate(-50%, 0); background: var(--primary-text-color); color: var(--card-background-color, #1c1c1c); font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 6px; z-index: 3; pointer-events: none; }
   .ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--secondary-text-color); margin-left: 46px; font-variant-numeric: tabular-nums; }
   .hint { font-size: 11px; color: var(--secondary-text-color); line-height: 1.4; }
@@ -1357,6 +1397,46 @@ class HeatingControlCard extends HTMLElement {
     else this._renderList();
   }
 
+  // Undo and redo (2.0.3): every render that changed the week is one step,
+  // so a whole drag is one step. Only the week, not the selection.
+  _record() {
+    const ed = this._ed;
+    const now = JSON.stringify(ed.days);
+    if (!ed.hist) { ed.hist = [now]; ed.hpos = 0; return; }
+    if (ed.hist[ed.hpos] === now) return;
+    ed.hist = ed.hist.slice(0, ed.hpos + 1);
+    ed.hist.push(now);
+    if (ed.hist.length > 100) ed.hist.shift();
+    ed.hpos = ed.hist.length - 1;
+  }
+
+  _undo(step) {
+    const ed = this._ed;
+    const to = ed.hpos + step;
+    if (!ed.hist || to < 0 || to >= ed.hist.length) return;
+    ed.hpos = to;
+    ed.days = JSON.parse(ed.hist[to]);
+    ed.also = new Set();
+    ed.before = {};
+    this._renderEd();
+  }
+
+  _undoHtml() {
+    const ed = this._ed;
+    return `<button class="btn undo" style="flex:none" aria-label="Undo (Ctrl+Z)"${ed.hpos > 0 ? "" : " disabled"}><ha-icon icon="mdi:undo"></ha-icon> Undo</button><button class="btn redo" style="flex:none" aria-label="Redo (Ctrl+Y)"${ed.hist && ed.hpos < ed.hist.length - 1 ? "" : " disabled"}><ha-icon icon="mdi:redo"></ha-icon> Redo</button>`;
+  }
+
+  _wireUndo(d) {
+    d.querySelector(".undo").addEventListener("click", () => this._undo(-1));
+    d.querySelector(".redo").addEventListener("click", () => this._undo(1));
+    d.addEventListener("keydown", (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.target.tagName === "INPUT") return;
+      const k = ev.key.toLowerCase();
+      if (k === "z" && !ev.shiftKey) { ev.preventDefault(); this._undo(-1); }
+      else if (k === "y" || (k === "z" && ev.shiftKey)) { ev.preventDefault(); this._undo(1); }
+    });
+  }
+
   // Rooms the editor can switch to: the ones with a schedule (2.0.1).
   // Every room of the integration, also with scheduling off or no schedule
   // yet, and also the ones a `thermostats` list leaves out (2.0.2).
@@ -1444,6 +1524,7 @@ class HeatingControlCard extends HTMLElement {
   _renderWide() {
     const ed = this._ed;
     this._normalizeSel();
+    this._record();
     // Copies belong to the day they came from: another day selected starts a new pick
     if (ed.alsoFrom !== undefined && ed.alsoFrom !== ed.sel[0]) { ed.also = new Set(); ed.before = {}; ed.alsoFrom = undefined; }
     const [sd, si] = ed.sel;
@@ -1453,16 +1534,14 @@ class HeatingControlCard extends HTMLElement {
     const tooMany = this._tooMany();
     const whole = ed.days[sd].length === 1;
     const html = `${this._head("Edit schedule", ed.label)}
-      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div><button class="btn openpresets" style="flex:none">Presets…</button></div>
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div>${this._undoHtml()}<button class="btn openpresets" style="flex:none">Presets…</button></div>
       <div class="edgrid">
         <div>
-          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">Add a block: tap a preset, then tap a day</span>
+          <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">${ed.tool ? `Painting ${esc(P[ed.tool].name)}: drag over a day, or down over more days` : "Paint: tap a preset, then drag over the days"}</span>
             ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
           <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
-          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" data-d="${d}">${this._bars(blocks, P)}</div></div>`).join("")}</div>
-          <div class="hint" style="margin-top:8px">${whole
-            ? "This day is one block: Split block on the right, or tap a preset above and then the day, to add a switch point."
-            : "Tap a block to select it, then drag one of its handles: switch points snap to 15 minutes. Exact times are on the right."}</div>
+          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span class="dl" data-d="${d}" title="Drag onto other days to copy">${DAY_NAMES[d]}</span><div class="bar ed" data-d="${d}">${this._edBar(blocks, d)}</div></div>`).join("")}</div>
+          <div class="hint" style="margin-top:8px">Drag a white switch point to change its time, or drag a block to move it. Tap a block to select it; tap it again to split it there. Drag a day's name onto other days to copy it. Everything snaps to 15 minutes.</div>
         </div>
         <div class="panel">
           <div class="dsub">Selected block</div>
@@ -1481,36 +1560,11 @@ class HeatingControlCard extends HTMLElement {
     this._openDialog(html, (d) => {
       d.querySelector(".dbox").classList.add("wide");
       if (keepCopy) d.querySelector(".copyto").style.display = "";
-      const bars = [...d.querySelectorAll(".bar")];
-      bars.forEach((bar) => {
-        const day = Number(bar.dataset.d);
-        bar.querySelectorAll("b").forEach((el) => el.classList.toggle("sel", day === sd && Number(el.dataset.i) === si));
-        bar.addEventListener("click", (ev) => {
-          if (this._dragging) return;
-          const m = this._minuteAt(bar, ev.clientX);
-          if (ed.tool) {
-            const from = Math.min(snap(m), 1440 - 60);
-            ed.days[day] = paint(ed.days[day], from, from + 60, ed.tool);
-            ed.sel = [day, ed.days[day].findIndex(([a, e]) => a <= from && from < e)];
-            ed.tool = null; // one block per tap on a preset, so the next tap selects again
-          } else {
-            ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, e]) => a <= m && m < e))];
-          }
-          this._renderWide();
-        });
+      d.querySelectorAll(".lane .dl").forEach((lab) => {
+        lab.addEventListener("pointerdown", (ev) => this._dayDown(ev, lab, Number(lab.dataset.d)));
       });
-      // Handles on the selected block
-      const bar = bars[sd];
-      const blocks = ed.days[sd];
-      [[0, si > 0], [1, si < blocks.length - 1]].forEach(([edge, ok]) => {
-        if (!ok) return;
-        const h = document.createElement("button");
-        h.className = "h";
-        h.setAttribute("aria-label", `Drag ${edge ? "end" : "start"}, now ${hm(blocks[si][edge])}`);
-        h.style.left = `${(blocks[si][edge] / 1440) * 100}%`;
-        h.addEventListener("pointerdown", (ev) => this._dragStart(ev, bar, h, edge));
-        h.addEventListener("click", (ev) => ev.stopPropagation());
-        bar.appendChild(h);
+      d.querySelectorAll(".bar.ed").forEach((bar) => {
+        bar.addEventListener("pointerdown", (ev) => this._barDown(ev, bar, Number(bar.dataset.d)));
       });
       d.querySelectorAll("[data-tool]").forEach((c) => c.addEventListener("click", () => {
         ed.tool = ed.tool === c.dataset.tool ? null : c.dataset.tool;
@@ -1532,7 +1586,7 @@ class HeatingControlCard extends HTMLElement {
         const [a, e, p] = bl[si];
         const at = Math.min(e - SNAP, Math.max(a + SNAP, snap((a + e) / 2)));
         const other = palette.find((k) => k !== p && k !== "off") || "off";
-        ed.days[sd] = paint(bl, at, e, other);
+        ed.days[sd] = splitAt(bl, si, (a + e) / 2, other);
         ed.sel = [sd, ed.days[sd].findIndex(([x, y]) => x <= at && at < y)];
         this._renderWide();
       });
@@ -1566,6 +1620,7 @@ class HeatingControlCard extends HTMLElement {
       d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
       d.querySelector(".save").addEventListener("click", () => this._saveWeek());
       d.querySelector(".openpresets").addEventListener("click", () => this._presetsDialog());
+      this._wireUndo(d);
     });
   }
 
@@ -1593,49 +1648,183 @@ class HeatingControlCard extends HTMLElement {
     }
   }
 
-  _dragStart(ev, bar, handle, edge) {
-    ev.preventDefault();
-    ev.stopPropagation();
-    this._dragging = true;
-    if (handle.setPointerCapture && ev.pointerId !== undefined) handle.setPointerCapture(ev.pointerId);
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bar.appendChild(bubble);
-    const move = (e) => {
-      const m = snap(this._minuteAt(bar, e.clientX));
-      this._shift(edge, 0, m);
-      const v = this._ed.days[this._ed.sel[0]][this._ed.sel[1]][edge];
-      handle.style.left = bubble.style.left = `${(v / 1440) * 100}%`;
-      bubble.textContent = hm(v);
-      const blocks = this._ed.days[this._ed.sel[0]];
-      bar.querySelectorAll("b").forEach((el, i) => {
-        if (!blocks[i]) return;
-        el.style.left = `${(blocks[i][0] / 1440) * 100}%`;
-        el.style.width = `${((blocks[i][1] - blocks[i][0]) / 1440) * 100}%`;
+  // A day's blocks with a white grip on every switch point; the selected
+  // block outlined (2.0.3).
+  _edBar(blocks, day) {
+    const ed = this._ed;
+    const sel = ed.sel[0] === day ? ed.sel[1] : -1;
+    const bars = this._bars(blocks, ed.P).replace(/<b data-i="(\d+)"/g, (all, i) => (Number(i) === sel ? `<b class="sel" data-i="${i}"` : all));
+    const grips = blocks.slice(1).map(([a], k) => `<i class="g" data-k="${k + 1}" style="left:${(a / 1440) * 100}%"></i>`).join("");
+    return bars + grips;
+  }
+
+  // One pointer model for the week grid: press near a switch point drags it,
+  // press on a block and move drags the block, press and release taps
+  // (select, or split a block that is already selected). A palette preset
+  // tapped first makes a tap add an hour of it (2.0.3).
+  _barDown(ev, bar, day) {
+    if (ev.button !== undefined && ev.button > 0) return;
+    const ed = this._ed;
+    const rect = bar.getBoundingClientRect();
+    const width = rect.width || 1;
+    const perPx = 1440 / width;
+    const m0 = this._minuteAt(bar, ev.clientX);
+    const start = ed.days[day].map((b) => b.slice());
+    // Nearest switch point within reach (16 px either side)
+    let k = -1;
+    let best = 16 * perPx;
+    start.forEach(([a], i) => {
+      if (i > 0 && Math.abs(a - m0) <= best) { best = Math.abs(a - m0); k = i; }
+    });
+    const i0 = Math.max(0, start.findIndex(([a, e]) => a <= m0 && m0 < e));
+    const mode = ed.tool ? "tool" : k > 0 ? "point" : "block";
+    const x0 = ev.clientX;
+    const y0 = ev.clientY || 0;
+    const all = ed.days.map((bl) => bl.map((b) => b.slice()));
+    const lanes = this._dlg ? [...this._dlg.querySelectorAll(".bar.ed")] : [bar];
+    const laneAt = (y) => {
+      let best = day;
+      let dist = Infinity;
+      lanes.forEach((l, i) => {
+        const r = l.getBoundingClientRect();
+        const dd = y < r.top ? r.top - y : y > r.top + r.height ? y - r.top - r.height : 0;
+        if (dd < dist) { dist = dd; best = i; }
       });
+      return best;
     };
-    const up = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
-      handle.removeEventListener("pointercancel", up);
-      setTimeout(() => { this._dragging = false; }, 0);
+    let moved = false;
+    let bubble = null;
+    if (ev.preventDefault) ev.preventDefault();
+    if (bar.setPointerCapture && ev.pointerId !== undefined) { try { bar.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable */ } }
+    const show = (blocks, at) => {
+      bar.innerHTML = this._edBar(blocks, day);
+      bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.style.left = `${(at / 1440) * 100}%`;
+      bubble.textContent = hm(at);
+      bar.appendChild(bubble);
+    };
+    const move = (e) => {
+      if (!moved && Math.abs(e.clientX - x0) < 6 && Math.abs((e.clientY || 0) - y0) < 6) return;
+      moved = true;
+      bar.classList.add("dragging");
+      const m = this._minuteAt(bar, e.clientX);
+      if (mode === "tool") {
+        // Paint the range under the pointer, on every day from the first to this one
+        const lo = snap(Math.min(m0, m));
+        const hi = Math.max(lo + SNAP, snap(Math.max(m0, m)));
+        const d1 = laneAt(e.clientY || 0);
+        const [da, db] = [Math.min(day, d1), Math.max(day, d1)];
+        all.forEach((bl, d) => {
+          ed.days[d] = d >= da && d <= db ? paint(bl, lo, Math.min(hi, 1440), ed.tool) : bl.map((b) => b.slice());
+          if (lanes[d] && d !== day) lanes[d].innerHTML = this._edBar(ed.days[d], d);
+        });
+        ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, x]) => a <= lo && lo < x))];
+        show(ed.days[day], Math.abs(m - m0) < 1 ? lo : m < m0 ? lo : hi);
+      } else if (mode === "point") {
+        const v = snap(m);
+        ed.days[day] = moveBoundary(start, k, v);
+        show(ed.days[day], Math.min(Math.max(v, start[k - 1][0]), start[k][1]));
+      } else if (mode === "block") {
+        const [a, , p] = start[i0];
+        const to = Math.min(Math.max(snap(a + (m - m0)), 0), 1440 - (start[i0][1] - a));
+        ed.days[day] = moveBlock(start, i0, to);
+        ed.sel = [day, Math.max(0, ed.days[day].findIndex(([x, y, q]) => x <= to && to < y && q === p))];
+        show(ed.days[day], to);
+      }
+    };
+    const up = (e) => {
+      bar.removeEventListener("pointermove", move);
+      bar.removeEventListener("pointerup", up);
+      bar.removeEventListener("pointercancel", up);
+      bar.classList.remove("dragging");
+      if (!moved && e.type === "pointerup") this._barTap(day, m0, i0);
+      else if (moved && mode === "tool") ed.tool = null; // one stroke per tap on a preset
       this._renderWide();
     };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", up);
+    bar.addEventListener("pointermove", move);
+    bar.addEventListener("pointerup", up);
+    bar.addEventListener("pointercancel", up);
+  }
+
+  // Drag a day's name onto other days: every day passed gets a copy (2.0.3).
+  _dayDown(ev, lab, day) {
+    if (ev.button !== undefined && ev.button > 0) return;
+    const ed = this._ed;
+    const all = ed.days.map((bl) => bl.map((b) => b.slice()));
+    const lanes = [...this._dlg.querySelectorAll(".lane")];
+    const y0 = ev.clientY || 0;
+    let moved = false;
+    if (ev.preventDefault) ev.preventDefault();
+    if (lab.setPointerCapture && ev.pointerId !== undefined) { try { lab.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable */ } }
+    const laneAt = (y) => {
+      let best = day;
+      let dist = Infinity;
+      lanes.forEach((l, i) => {
+        const r = l.getBoundingClientRect();
+        const dd = y < r.top ? r.top - y : y > r.top + r.height ? y - r.top - r.height : 0;
+        if (dd < dist) { dist = dd; best = i; }
+      });
+      return best;
+    };
+    const move = (e) => {
+      if (!moved && Math.abs((e.clientY || 0) - y0) < 6) return;
+      moved = true;
+      const d1 = laneAt(e.clientY || 0);
+      const [da, db] = [Math.min(day, d1), Math.max(day, d1)];
+      lanes.forEach((l, d) => {
+        const on = d !== day && d >= da && d <= db;
+        ed.days[d] = on ? all[day].map((b) => b.slice()) : all[d].map((b) => b.slice());
+        l.classList.toggle("copysrc", d === day);
+        l.classList.toggle("copydst", on);
+        const bar = l.querySelector(".bar");
+        if (bar) bar.innerHTML = this._edBar(ed.days[d], d);
+      });
+    };
+    const up = (e) => {
+      lab.removeEventListener("pointermove", move);
+      lab.removeEventListener("pointerup", up);
+      lab.removeEventListener("pointercancel", up);
+      if (!moved && e.type === "pointerup") ed.sel = [day, 0];
+      if (e.type === "pointercancel") ed.days = all;
+      this._renderWide();
+    };
+    lab.addEventListener("pointermove", move);
+    lab.addEventListener("pointerup", up);
+    lab.addEventListener("pointercancel", up);
+  }
+
+  _barTap(day, m, i) {
+    const ed = this._ed;
+    const blocks = ed.days[day];
+    if (ed.tool) {
+      const from = Math.min(snap(m), 1440 - 60);
+      ed.days[day] = paint(blocks, from, from + 60, ed.tool);
+      ed.sel = [day, ed.days[day].findIndex(([a, e]) => a <= from && from < e)];
+      ed.tool = null; // one block per tap on a preset, so the next tap selects again
+    } else if (ed.sel[0] === day && ed.sel[1] === i) {
+      // A second tap on the selected block splits it there
+      const p = blocks[i][2];
+      const other = Object.keys(ed.P).filter((x) => x !== "off").find((x) => x !== p) || "off";
+      ed.days[day] = splitAt(blocks, i, m, other);
+      const at = Math.min(blocks[i][1] - SNAP, Math.max(blocks[i][0] + SNAP, snap(m)));
+      ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, e]) => a <= at && at < e))];
+    } else {
+      ed.sel = [day, i];
+    }
   }
 
   // Phone: one day as a list of switch points.
   _renderList() {
     const ed = this._ed;
+    this._record();
     const day = ed.day;
     const P = ed.P;
     const blocks = ed.days[day];
     const options = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
     const tooMany = this._tooMany();
     const html = `${this._head(ed.label, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day])}
-      ${this._roomChipsHtml()}
+      <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1">${this._roomChipsHtml()}</div>${this._undoHtml()}</div>
       <div class="chips">${DAY_NAMES.map((n, d) => `<button class="chip${d === day ? " on" : ""}" data-day="${d}">${n}</button>`).join("")}</div>
       <div><div class="bar" style="height:22px;cursor:default">${this._bars(blocks, P, false)}</div>
         <div class="ticks" style="margin-left:0"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
@@ -1650,6 +1839,7 @@ class HeatingControlCard extends HTMLElement {
       <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary save"${tooMany ? " disabled" : ""}>Save${ed.also.size ? ` ${[day, ...ed.also].sort().map((d) => DAY_NAMES[d]).join(" + ")}` : ""}</button></div>`;
     this._openDialog(html, (d) => {
       const copyAlso = () => ed.also.forEach((o) => { ed.days[o] = ed.days[day].map((x) => x.slice()); });
+      this._wireUndo(d);
       this._wireRoomChips(d);
       d.querySelectorAll("[data-day]").forEach((c) => c.addEventListener("click", () => {
         copyAlso();
