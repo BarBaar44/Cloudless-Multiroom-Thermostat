@@ -258,6 +258,32 @@ Without it the heartbeat keeps feeding the PID the last room temperature, so it 
 
 **Check:** after flashing, the device's logs list every entity at boot, and each entity you point a field at shows up in Home Assistant.
 
+## PID values by thermostat
+
+Which PID decides the flow temperature, and what it starts with, depends on the thermostat. Today the integration runs no PID of its own: it sends the winner's target and, for a firmware PID, the **Winning room temperature**.
+
+| Thermostat | What sets the flow temperature | Starting values | PID advice |
+|---|---|---|---|
+| ESPHome with `thermostat.yaml` | Firmware PID on the Winning room temperature | Kp 1.75, Ki 0.0075, Kd 0, for a flow limit of 40 °C | Yes, and **Apply PID advice automatically** |
+| ESPHome with your own config | Your PID | Your values | Only on the same scale: `climate: platform: pid`, output a fraction of the flow limit, Kp, Ki and Kd as number entities ([section 4](#4-flow-limit-and-pid-values-from-home-assistant)) |
+| DIYLess with its stock firmware | Its own PI loop | Kp 30, Ki 0.01 (DIYLess defaults, another scale) | No |
+| OpenTherm Gateway with its room thermostat | The room thermostat's own algorithm | Not visible to Home Assistant | No |
+| On/off relay | The integration switches the boiler on and off | None | No |
+
+**The starting values are a start, not a tuning.** They come from the reference house (an Atag combi boiler, radiators, a 40 °C limit). The PID output is a fraction of the flow limit, so with another limit the same values heat harder or more gently. To keep the response, scale Kp, Ki and Kd by 40 / your limit ([Hardware](hardware.md#esphome-opentherm-thermostat-thermostatyaml)). From there the [PID advice](experimental.md#warm-up-episodes-and-pid-advice) refines Kp and Ki from your own warm-ups. Kd is never written.
+
+**The PID advice knows one scale.** Its limits (Kp 0.3 to 1.5, Ki 0.0005 to 0.01 on a 0 to 100 °C range) fit an ESPHome PID. Another firmware's values can be 100 times off, and an automatic change on the wrong scale goes straight to your boiler. With anything other than the first two rows, leave **PID Kp / Ki / Kd** empty.
+
+### Where this is going
+
+In v2.2 the PID moves into the integration ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82)): every room calculates the flow temperature it needs, and the heat source gets the highest request. The thermostat then only passes a flow setpoint to the boiler, so the PID values, their scale and the learning are the same whatever thermostat you have. Planned to work out of the box with:
+
+- **ESPHome with `thermostat.yaml`:** a flow setpoint mode, with the same 5 minute fail safe as today.
+- **DIYLess with its stock firmware:** its manual mode, which takes a target boiler temperature over MQTT.
+- **OpenTherm Gateway:** the control setpoint override.
+
+Each one needs a fail safe for when Home Assistant stops sending: that is checked before it ships. Existing installs keep the firmware PID until you switch.
+
 ## Other thermostats
 
 | Thermostat | Heat source covered | Learning features | In practice |
