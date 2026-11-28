@@ -626,6 +626,28 @@ test("week grid: drag a day's name onto other days to copy it (2.0.3)", () => {
   same(c._ed.sel, [5, 0]);
 });
 
+test("editor: undo and redo, a whole drag is one step (2.0.3)", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  const start = JSON.stringify(c._ed.days);
+  assert(c.shadowRoot.querySelector(".dlg .undo").disabled);
+  dragBar(c, 0, 425, 482);
+  const afterDrag = JSON.stringify(c._ed.days);
+  c.shadowRoot.querySelector(".dlg .split").click();
+  c.shadowRoot.querySelector(".dlg .undo").click();
+  assert.strictEqual(JSON.stringify(c._ed.days), afterDrag);
+  c.shadowRoot.querySelector(".dlg .undo").click();
+  assert.strictEqual(JSON.stringify(c._ed.days), start, "the drag went back in one step");
+  assert(c.shadowRoot.querySelector(".dlg .undo").disabled);
+  // Ctrl+Y redoes
+  c.shadowRoot.querySelector(".dlg").dispatchEvent(new w.KeyboardEvent("keydown", { key: "y", ctrlKey: true, bubbles: true }));
+  assert.strictEqual(JSON.stringify(c._ed.days), afterDrag);
+  // A new change drops what could be redone
+  dragBar(c, 0, 900, 960);
+  assert(c.shadowRoot.querySelector(".dlg .redo").disabled);
+});
+
 test("week grid: moving the first block hands its time to the next one", () => {
   const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
   const c = render(h);

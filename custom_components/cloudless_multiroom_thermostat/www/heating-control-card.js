@@ -1397,6 +1397,46 @@ class HeatingControlCard extends HTMLElement {
     else this._renderList();
   }
 
+  // Undo and redo (2.0.3): every render that changed the week is one step,
+  // so a whole drag is one step. Only the week, not the selection.
+  _record() {
+    const ed = this._ed;
+    const now = JSON.stringify(ed.days);
+    if (!ed.hist) { ed.hist = [now]; ed.hpos = 0; return; }
+    if (ed.hist[ed.hpos] === now) return;
+    ed.hist = ed.hist.slice(0, ed.hpos + 1);
+    ed.hist.push(now);
+    if (ed.hist.length > 100) ed.hist.shift();
+    ed.hpos = ed.hist.length - 1;
+  }
+
+  _undo(step) {
+    const ed = this._ed;
+    const to = ed.hpos + step;
+    if (!ed.hist || to < 0 || to >= ed.hist.length) return;
+    ed.hpos = to;
+    ed.days = JSON.parse(ed.hist[to]);
+    ed.also = new Set();
+    ed.before = {};
+    this._renderEd();
+  }
+
+  _undoHtml() {
+    const ed = this._ed;
+    return `<button class="btn undo" style="flex:none" aria-label="Undo (Ctrl+Z)"${ed.hpos > 0 ? "" : " disabled"}><ha-icon icon="mdi:undo"></ha-icon> Undo</button><button class="btn redo" style="flex:none" aria-label="Redo (Ctrl+Y)"${ed.hist && ed.hpos < ed.hist.length - 1 ? "" : " disabled"}><ha-icon icon="mdi:redo"></ha-icon> Redo</button>`;
+  }
+
+  _wireUndo(d) {
+    d.querySelector(".undo").addEventListener("click", () => this._undo(-1));
+    d.querySelector(".redo").addEventListener("click", () => this._undo(1));
+    d.addEventListener("keydown", (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.target.tagName === "INPUT") return;
+      const k = ev.key.toLowerCase();
+      if (k === "z" && !ev.shiftKey) { ev.preventDefault(); this._undo(-1); }
+      else if (k === "y" || (k === "z" && ev.shiftKey)) { ev.preventDefault(); this._undo(1); }
+    });
+  }
+
   // Rooms the editor can switch to: the ones with a schedule (2.0.1).
   // Every room of the integration, also with scheduling off or no schedule
   // yet, and also the ones a `thermostats` list leaves out (2.0.2).
@@ -1484,6 +1524,7 @@ class HeatingControlCard extends HTMLElement {
   _renderWide() {
     const ed = this._ed;
     this._normalizeSel();
+    this._record();
     // Copies belong to the day they came from: another day selected starts a new pick
     if (ed.alsoFrom !== undefined && ed.alsoFrom !== ed.sel[0]) { ed.also = new Set(); ed.before = {}; ed.alsoFrom = undefined; }
     const [sd, si] = ed.sel;
@@ -1493,7 +1534,7 @@ class HeatingControlCard extends HTMLElement {
     const tooMany = this._tooMany();
     const whole = ed.days[sd].length === 1;
     const html = `${this._head("Edit schedule", ed.label)}
-      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div><button class="btn openpresets" style="flex:none">Presets…</button></div>
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:-6px"><div style="flex:1">${this._roomChipsHtml()}</div>${this._undoHtml()}<button class="btn openpresets" style="flex:none">Presets…</button></div>
       <div class="edgrid">
         <div>
           <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">${ed.tool ? `Painting ${esc(P[ed.tool].name)}: drag over a day, or down over more days` : "Paint: tap a preset, then drag over the days"}</span>
@@ -1579,6 +1620,7 @@ class HeatingControlCard extends HTMLElement {
       d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
       d.querySelector(".save").addEventListener("click", () => this._saveWeek());
       d.querySelector(".openpresets").addEventListener("click", () => this._presetsDialog());
+      this._wireUndo(d);
     });
   }
 
@@ -1775,13 +1817,14 @@ class HeatingControlCard extends HTMLElement {
   // Phone: one day as a list of switch points.
   _renderList() {
     const ed = this._ed;
+    this._record();
     const day = ed.day;
     const P = ed.P;
     const blocks = ed.days[day];
     const options = Object.keys(P).filter((k) => k !== "off").concat(["off"]);
     const tooMany = this._tooMany();
     const html = `${this._head(ed.label, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day])}
-      ${this._roomChipsHtml()}
+      <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1">${this._roomChipsHtml()}</div>${this._undoHtml()}</div>
       <div class="chips">${DAY_NAMES.map((n, d) => `<button class="chip${d === day ? " on" : ""}" data-day="${d}">${n}</button>`).join("")}</div>
       <div><div class="bar" style="height:22px;cursor:default">${this._bars(blocks, P, false)}</div>
         <div class="ticks" style="margin-left:0"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
@@ -1796,6 +1839,7 @@ class HeatingControlCard extends HTMLElement {
       <div class="dbtns"><button class="btn cancel">Cancel</button><button class="btn primary save"${tooMany ? " disabled" : ""}>Save${ed.also.size ? ` ${[day, ...ed.also].sort().map((d) => DAY_NAMES[d]).join(" + ")}` : ""}</button></div>`;
     this._openDialog(html, (d) => {
       const copyAlso = () => ed.also.forEach((o) => { ed.days[o] = ed.days[day].map((x) => x.slice()); });
+      this._wireUndo(d);
       this._wireRoomChips(d);
       d.querySelectorAll("[data-day]").forEach((c) => c.addEventListener("click", () => {
         copyAlso();
