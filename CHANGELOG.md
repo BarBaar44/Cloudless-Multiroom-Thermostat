@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Drag a preset onto the week:** drag Eco, Warm, Off (or any preset) from the palette or the side panel onto a day: an hour of it lands where you let go, shown live with its time while you drag. Dropped outside the days, nothing changes. A tap still works as before.
+- **Side panel presets in one row:** the preset tiles share a row instead of wrapping Off onto a row of its own.
+- **Presets** button without the ellipsis.
+- **A room without a schedule shows none.** Picking a room with scheduling off or no schedule in the editor no longer shows the default week as if it were the room's schedule. It says the room has no schedule, with **Make schedule** (the default week) or, with scheduling off, **Use its last week**. Save turns scheduling on, as before.
 - **PID advice only where it fits** ([#201](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/201)): the PID advice and **Apply PID advice automatically** now only work with a firmware PID on the ESPHome scale of `thermostat.yaml`. With the On/off switch or the OpenTherm Gateway as heat source, or Kp, Ki and Kd numbers from another integration than ESPHome, there is no advice and nothing is written; the PID advice sensor says why. Before, an advice on the wrong scale could be written to another firmware's PID. Input number helpers still work.
 
 ## 2.0.3
