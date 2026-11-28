@@ -288,6 +288,8 @@ Existing installs keep the firmware PID until you switch.
 
 ## Other thermostats
 
+The same table is in the [README](../README.md#which-thermostat): keep both up to date.
+
 | Thermostat | Heat source covered | Learning features | In practice |
 |---|---|---|---|
 | ESPHome with `thermostat.yaml` (DIYLess or any ESP32 OpenTherm adapter) | Full | All | The tested path |
