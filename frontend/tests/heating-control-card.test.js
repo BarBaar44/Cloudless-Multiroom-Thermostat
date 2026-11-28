@@ -605,6 +605,27 @@ test("week grid: paint by dragging, down over more days (2.0.3)", () => {
   same(c._ed.days[6], [[0, 420, "eco"], [420, 1440, "warm"]]);
 });
 
+test("week grid: drag a day's name onto other days to copy it (2.0.3)", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  c._ed.days[0] = [[0, 1440, "warm"]];
+  c._renderWide();
+  [...c.shadowRoot.querySelectorAll(".dlg .lane")].forEach((l, d) => { l.getBoundingClientRect = () => ({ left: 0, width: 1500, top: d * 40, height: 38 }); });
+  const lab = c.shadowRoot.querySelector('.dlg .dl[data-d="0"]');
+  ptr(lab, "pointerdown", 10, 19);
+  ptr(lab, "pointermove", 10, 100);
+  ptr(lab, "pointermove", 10, 179);
+  ptr(lab, "pointerup", 10, 179);
+  for (const d of [1, 2, 3, 4]) same(c._ed.days[d], [[0, 1440, "warm"]]);
+  same(c._ed.days[5], [[0, 420, "eco"], [420, 1320, "warm"], [1320, 1440, "eco"]]);
+  // A tap on a day's name selects that day
+  const sat = c.shadowRoot.querySelector('.dlg .dl[data-d="5"]');
+  ptr(sat, "pointerdown", 10, 219);
+  ptr(sat, "pointerup", 10, 219);
+  same(c._ed.sel, [5, 0]);
+});
+
 test("week grid: moving the first block hands its time to the next one", () => {
   const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
   const c = render(h);
