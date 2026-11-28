@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Presets: type a temperature.** In the Presets dialog the temperature of the selected room and preset is a field: tap it and type (a comma works too). It is kept within the room's range and rounded to its step.
+- **Presets: hold − or + to keep going.** Holding the button keeps lowering or raising the temperature, faster the longer you hold, until you let go. A tap still steps once.
+
 ## 2.0.4
 
 Schedule editor: drag a preset onto the week, and a room without a schedule shows none. PID advice only where it fits.

@@ -439,6 +439,10 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .cedit > div { flex: 1; }
   .cedit .adj { width: 40px; height: 40px; border-radius: 10px; }
   .cedit b { font-size: 18px; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .cedit .cval { display: flex; align-items: center; justify-content: center; min-width: 64px; font-size: 18px; font-weight: 700; }
+  .cedit .cval input { width: 3.2em; font: inherit; color: inherit; text-align: right; font-variant-numeric: tabular-nums; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 4px 2px; }
+  .cedit .cval input:hover, .cedit .cval input:focus { border-color: var(--hc-accent); outline: none; background: var(--hc-soft); }
+  .cedit .adj { touch-action: none; user-select: none; -webkit-user-select: none; }
   .pform { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .pform input[type="text"] { flex: 1; min-width: 120px; height: 40px; font: inherit; background: var(--hc-soft); color: inherit; border: 0; border-radius: 10px; padding: 0 10px; }
   .pform input[type="color"] { width: 44px; height: 40px; border: 0; background: none; padding: 0; }
@@ -1295,7 +1299,7 @@ class HeatingControlCard extends HTMLElement {
         const label = rooms.find((r) => r.entity === e).label;
         editor = `<div class="cedit"><div><b style="font-size:13px;min-width:0;text-align:left">${esc(label)} · ${esc(p.name)}</b></div>
           ${builtin(pid) ? "" : `<button class="btn nu" style="flex:none">${v === null ? "Use here" : "Not used"}</button>`}
-          <button class="adj cdown" aria-label="Lower"${v === null ? " disabled" : ""}>−</button><b>${v === null ? "--" : `${fmt(v)}°`}</b><button class="adj cup" aria-label="Raise"${v === null ? " disabled" : ""}>+</button></div>`;
+          <button class="adj cdown" aria-label="Lower"${v === null ? " disabled" : ""}>−</button>${v === null ? "<b>--</b>" : `<label class="cval"><input type="text" inputmode="decimal" enterkeyhint="done" value="${fmt(v)}" aria-label="Temperature"><span>°</span></label>`}<button class="adj cup" aria-label="Raise"${v === null ? " disabled" : ""}>+</button></div>`;
       }
       if (st.head !== null) {
         const p = st.presets[st.head];
@@ -1317,17 +1321,67 @@ class HeatingControlCard extends HTMLElement {
       this._openDialog(html, (d) => {
         d.querySelectorAll(".cell").forEach((c) => c.addEventListener("click", () => { st.cell = [c.dataset.e, c.dataset.p]; st.head = null; render(); }));
         d.querySelectorAll(".ph").forEach((c) => c.addEventListener("click", () => { st.head = Number(c.dataset.h); st.cell = null; render(); }));
+        // Clamp to the room's range and snap to its step
+        const clamp = (e, v) => {
+          const s = this._state(e).attributes;
+          const inc = s.target_temp_step || 0.5;
+          const snapped = Math.round(v / inc) * inc;
+          return Math.round(Math.min(s.max_temp ?? 30, Math.max(s.min_temp ?? 5, snapped)) * 100) / 100;
+        };
+        // Update the value in place, so a held button keeps its pointer
+        const paint = () => {
+          const [e, pid] = st.cell;
+          const v = st.temps[e][pid];
+          const inp = d.querySelector(".cval input");
+          if (inp) inp.value = fmt(v);
+          d.querySelectorAll(".cell.sel").forEach((c) => { c.textContent = `${fmt(v)}°`; });
+        };
         const step = (dir) => {
           const [e, pid] = st.cell;
           const s = this._state(e).attributes;
-          const v = st.temps[e][pid];
-          st.temps[e][pid] = Math.round(Math.min(s.max_temp ?? 30, Math.max(s.min_temp ?? 5, v + dir * (s.target_temp_step || 0.5))) * 100) / 100;
-          render();
+          st.temps[e][pid] = clamp(e, st.temps[e][pid] + dir * (s.target_temp_step || 0.5));
+          paint();
         };
-        const down = d.querySelector(".cdown");
-        if (down) down.addEventListener("click", () => step(-1));
-        const up = d.querySelector(".cup");
-        if (up) up.addEventListener("click", () => step(1));
+        // Tap steps once; hold repeats, speeding up the longer it is held
+        const hold = (btn, dir) => {
+          if (!btn) return;
+          let timer = null;
+          let n = 0;
+          const stop = () => {
+            if (timer === null) return;
+            clearTimeout(timer);
+            timer = null;
+            window.removeEventListener("pointerup", stop);
+            window.removeEventListener("pointercancel", stop);
+          };
+          const tick = () => { step(dir); n++; timer = setTimeout(tick, n < 8 ? 150 : n < 24 ? 80 : 40); };
+          btn.addEventListener("pointerdown", (ev) => {
+            if (ev.button !== undefined && ev.button !== 0) return;
+            ev.preventDefault();
+            stop();
+            n = 0;
+            step(dir);
+            timer = setTimeout(tick, 450);
+            window.addEventListener("pointerup", stop);
+            window.addEventListener("pointercancel", stop);
+          });
+          btn.addEventListener("contextmenu", (ev) => ev.preventDefault());
+          // Keyboard (Enter, Space) and scripted clicks have no pointer
+          btn.addEventListener("click", (ev) => { if (ev.detail === 0) step(dir); });
+        };
+        hold(d.querySelector(".cdown"), -1);
+        hold(d.querySelector(".cup"), 1);
+        const typed = d.querySelector(".cval input");
+        if (typed) {
+          typed.addEventListener("focus", () => typed.select());
+          typed.addEventListener("keydown", (ev) => { if (ev.key === "Enter") typed.blur(); });
+          typed.addEventListener("change", () => {
+            const [e, pid] = st.cell;
+            const v = num(typed.value.replace(",", ".").replace(/[°\s]/g, ""));
+            if (v !== null) st.temps[e][pid] = clamp(e, v);
+            paint();
+          });
+        }
         const nu = d.querySelector(".cedit .nu");
         if (nu) nu.addEventListener("click", () => {
           const [e, pid] = st.cell;
