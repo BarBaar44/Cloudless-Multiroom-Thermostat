@@ -141,6 +141,15 @@ class Scheduler:
             temp = preset_temperature(data, room.room_id, preset)
         return self.controller.off_temp if temp is None else temp
 
+    def preset_is_off(self, room: Room, preset: str) -> bool:
+        """Off itself, or a preset of the list that this room marks not used (it means Off there)."""
+        if preset == PRESET_OFF:
+            return True
+        data = self.data
+        if data is None or preset not in self.preset_ids():
+            return False
+        return preset_temperature(data, room.room_id, preset) is None
+
     def override(self, room: Room, now: datetime | None = None) -> dict[str, Any] | None:
         data = self.data
         if data is None or self.state(room) != SCHEDULE_ACTIVE:

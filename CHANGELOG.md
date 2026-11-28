@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **A switch point to Off asks for no heat.** A room on heat whose schedule is at Off (or Off chosen by hand, or a preset the room marks *not used*) now counts as not heating, as if it were switched off: the central heating switch goes off when no other room that drives the heat source heats, a night for the night cooldown model can start, and the room's role and hvac action are `off`. Before, the room held the off temperature but still counted as heating, so the CH switch stayed on all night and no night was recorded, unless an automation switched the room off at night and back on in the morning. Such an automation is no longer needed, and a target set by hand during an Off block now heats straight away (an automation that switched the room off kept it off). The room's hvac mode stays heat.
+
 ## 2.0.2
 
 - **Editor: room dropdown with every room.** The room chips in the schedule editor became a dropdown that lists every room of the heating system, also the ones a card's `thermostats` list leaves out, and rooms with scheduling off or without a schedule. Before, the chips only showed rooms that already had a schedule, so with one scheduled room there was nothing to switch to. A room without a week opens on the default week (Warm 07:00 to 22:00, Eco the rest of the day); **Save** turns its schedule on.
