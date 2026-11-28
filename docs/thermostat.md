@@ -278,13 +278,17 @@ Which PID decides the flow temperature, and what it starts with, depends on the 
 
 In v2.2 the PID moves into the integration ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82)): every room calculates the flow temperature it needs, and the heat source gets the highest request. The thermostat then only passes a flow setpoint to the boiler, so the PID values, their scale and the learning are the same whatever thermostat you have. Planned to work out of the box with:
 
-- **ESPHome with `thermostat.yaml`:** a flow setpoint mode, with the same 5 minute fail safe as today.
-- **DIYLess with its stock firmware:** its manual mode, which takes a target boiler temperature over MQTT.
-- **OpenTherm Gateway:** the control setpoint override.
+- **ESPHome with `thermostat.yaml`:** a flow setpoint mode ([#202](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/202)), with the same 5 minute fail safe as today.
+- **DIYLess with its stock firmware:** its manual mode, which takes a target boiler temperature over MQTT ([#203](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/203)).
+- **OpenTherm Gateway:** the control setpoint override ([#204](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/204)).
 
-Each one needs a fail safe for when Home Assistant stops sending: that is checked before it ships. Existing installs keep the firmware PID until you switch.
+Existing installs keep the firmware PID until you switch.
+
+**When Home Assistant stops: a known limit.** With a flow setpoint, Home Assistant is the controller. `thermostat.yaml` turns the flow off after 5 minutes without Home Assistant. For DIYLess with its stock firmware and for the OpenTherm Gateway, what happens when the setpoints stop coming is up to their firmware, and it isn't documented: they may keep heating at the last flow temperature until Home Assistant is back. That is outside what the integration can control, and accepted. If you want the fail safe, flash ESPHome with `thermostat.yaml`: the board is the same for DIYLess.
 
 ## Other thermostats
+
+<!-- Same table as README "Which thermostat": keep both up to date. -->
 
 | Thermostat | Heat source covered | Learning features | In practice |
 |---|---|---|---|

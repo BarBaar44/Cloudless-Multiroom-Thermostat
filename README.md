@@ -28,6 +28,20 @@ Other integrations put a smart controller on the boiler. This one puts a [virtua
 
 The **Heating Control Card** shows every room with its temperature, target, Heat/Off, role and schedule, highlights the room the boiler heats for, and shows the boiler state: heating, pumping or hot water, modulation, faults and pressure warnings. Its Today and Week views and the schedule editor (drag on a tablet, a list on a phone) are where you make the schedules. It comes with the integration, no separate install: [docs/card.md](docs/card.md).
 
+## Which thermostat
+
+What you get depends on the thermostat that drives your boiler. [Thermostat requirements](docs/thermostat.md) has the details per capability, and what to add to your own ESPHome config.
+
+| Thermostat | Multi-room control | Learning features | PID advice | In practice |
+|---|---|---|---|---|
+| ESPHome with [`thermostat.yaml`](thermostat.yaml) (DIYLess or any ESP32 OpenTherm adapter) | Full | All | Yes, optionally applied automatically | The tested path. Turns the boiler off 5 minutes after losing Home Assistant |
+| DIYLess with its stock firmware | Full, with a Home Assistant automation | Gas, night model | No (another PID scale) | Works for heating |
+| On/off relay | Full (the integration switches) | Gas, night model | No (no PID) | No gentle low flow heating |
+| Smart room thermostat with its own sensor | Target only | Gas, night model | No | A cold bedroom can't start the boiler while the room with the thermostat is warm |
+| OpenTherm Gateway with its room thermostat | Target only | Gas, night model, boiler telemetry | No | Same: the room thermostat decides |
+
+Coming in v2.2 ([#82](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/issues/82)): the PID moves into the integration, so stock DIYLess and the OpenTherm Gateway get full multi-room control and PID learning out of the box. [PID values by thermostat](docs/thermostat.md#pid-values-by-thermostat) explains the starting values and the known limits.
+
 ## Running in 10 minutes
 
 You need Home Assistant 2026.11 or newer, a temperature sensor in every room and a heat source Home Assistant can control. TRVs are optional. [What you need](docs/getting-started.md#what-you-need) explains the choices.
@@ -83,3 +97,4 @@ Where it is going next: [ROADMAP.md](ROADMAP.md).
 - [`dev/`](dev/README.md): a simulated house (rooms that warm up and cool down, TRVs, a thermostat with a PID like `thermostat.yaml`, a boiler that short cycles like a real one, gas meter and weather) to try everything without hardware, as a Docker container or a VM for Virtual Machine Manager, with a script that sets it all up through the real forms.
 - `tests/`: tests on a real Home Assistant core (`pip install -r requirements_test.txt`, then `pytest`). CI also runs ruff, shellcheck, hassfest and the Marketplace validation.
 - Every pull request that changes what users see or do also changes its page in [`docs/`](docs/).
+- A change in what a thermostat supports updates both the [Which thermostat](#which-thermostat) table here and [Thermostat requirements](docs/thermostat.md).
