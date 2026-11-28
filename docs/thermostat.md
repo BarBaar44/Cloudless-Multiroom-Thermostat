@@ -288,7 +288,7 @@ Existing installs keep the firmware PID until you switch.
 
 ## Other thermostats
 
-The same table is in the [README](../README.md#which-thermostat): keep both up to date.
+<!-- Same table as README "Which thermostat": keep both up to date. -->
 
 | Thermostat | Heat source covered | Learning features | In practice |
 |---|---|---|---|
