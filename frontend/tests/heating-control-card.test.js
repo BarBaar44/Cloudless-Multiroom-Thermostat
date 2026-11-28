@@ -517,12 +517,37 @@ test("editor: dropdown lists rooms with scheduling off or no schedule, also unli
   same(opts, ["Living Room", "Office · scheduling off", "Hallway · no schedule"]);
   pickRoom(c, OFFICE);
   assert.strictEqual(c._ed.entity, OFFICE);
+  // No schedule shows none: no grid, no default week until asked for
+  assert(c.shadowRoot.querySelector(".dlg").textContent.includes("Office has no schedule"));
+  assert(!c.shadowRoot.querySelector(".dlg .bar.ed") && !c.shadowRoot.querySelector(".dlg .save"));
+  c.shadowRoot.querySelector(".dlg .mkdef").click();
   assert(c.shadowRoot.querySelector(".dlg").textContent.includes("this is the default week"));
   c.shadowRoot.querySelector(".dlg .save").click();
   await new Promise((r) => setTimeout(r, 0));
   const data = lastSchedule(h);
   assert.strictEqual(data.entity_id, OFFICE);
   same(data.week[2], [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }]);
+});
+
+test("editor: scheduling off shows no schedule; its last week or the default week on request", async () => {
+  const kept = Array.from({ length: 7 }, () => [{ time: "00:00", preset: "eco" }, { time: "08:00", preset: "warm" }]);
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched({ schedule_state: "off", schedule: kept })) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  assert(c.shadowRoot.querySelector(".dlg").textContent.includes("Living Room has no schedule"));
+  assert(!c.shadowRoot.querySelector(".dlg .bar.ed"));
+  c.shadowRoot.querySelector(".dlg .mklast").click();
+  same(c._ed.days[0], [[0, 480, "eco"], [480, 1440, "warm"]]);
+  assert(c.shadowRoot.querySelector(".dlg").textContent.includes("Save turns it on"));
+  c.shadowRoot.querySelector(".dlg .save").click();
+  await new Promise((r) => setTimeout(r, 0));
+  same(lastSchedule(h).week[0], kept[0]);
+  // Start over from the default week instead
+  c._editor(LIVING, 0);
+  c.shadowRoot.querySelector(".dlg .mkdef").click();
+  same(c._ed.days[0], [[0, 420, "eco"], [420, 1320, "warm"], [1320, 1440, "eco"]]);
+  assert(c._edDirty());
+  c._closeDialog();
 });
 
 test("wide editor: copy day to, tap the day again to undo the copy (2.0.2)", () => {

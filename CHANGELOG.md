@@ -5,6 +5,7 @@
 - **Drag a preset onto the week:** drag Eco, Warm, Off (or any preset) from the palette or the side panel onto a day: an hour of it lands where you let go, shown live with its time while you drag. Dropped outside the days, nothing changes. A tap still works as before.
 - **Side panel presets in one row:** the preset tiles share a row instead of wrapping Off onto a row of its own.
 - **Presets** button without the ellipsis.
+- **A room without a schedule shows none.** Picking a room with scheduling off or no schedule in the editor no longer shows the default week as if it were the room's schedule. It says the room has no schedule, with **Make schedule** (the default week) or, with scheduling off, **Use its last week**. Save turns scheduling on, as before.
 
 ## 2.0.3
 

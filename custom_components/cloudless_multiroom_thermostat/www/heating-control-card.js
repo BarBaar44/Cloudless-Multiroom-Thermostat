@@ -1390,12 +1390,13 @@ class HeatingControlCard extends HTMLElement {
     const days = weekBlocks(fresh ? defaultWeek() : a.schedule);
     const wide = (window.innerWidth || 1024) >= 900;
     const first = day === null ? (new Date().getDay() + 6) % 7 : day;
-    this._ed = { entity: entityId, label, days, orig: fresh ? "" : JSON.stringify(toWeek(days)), P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide, switchTo: null, fresh, wasOff: a.schedule_state === "off" };
+    this._ed = { entity: entityId, label, days, orig: fresh ? "" : JSON.stringify(toWeek(days)), P: presetMap(a), sel: [first, 0], tool: null, day: first, also: new Set(), wide, switchTo: null, fresh, wasOff: a.schedule_state === "off", empty: fresh || a.schedule_state === "off" || a.schedule_state === "none" };
     this._renderEd();
   }
 
   _renderEd() {
-    if (this._ed.wide) this._renderWide();
+    if (this._ed.empty) this._renderEmpty();
+    else if (this._ed.wide) this._renderWide();
     else this._renderList();
   }
 
@@ -1439,6 +1440,35 @@ class HeatingControlCard extends HTMLElement {
     });
   }
 
+  // A room without a schedule (none yet, or scheduling off) shows none: no
+  // grid until you choose to make one, so a default week is never mistaken
+  // for the room's schedule.
+  _renderEmpty() {
+    const ed = this._ed;
+    const kept = !ed.fresh;
+    const html = `${this._head("Edit schedule", ed.label)}
+      <div>${this._roomChipsHtml()}</div>
+      <div class="panel" style="align-items:flex-start">
+        <div class="dtitle" style="font-size:16px">${esc(ed.label)} has no schedule</div>
+        <div class="hint">${kept ? "Scheduling is off: the room keeps the temperature you set. Its last week is kept; turn scheduling on with it, or start over from the default week." : "The room keeps the temperature you set. Make a schedule to start from the default week (Warm 07:00 to 22:00, Eco the rest of the day)."} Nothing changes until you save.</div>
+        <div class="dbtns" style="flex-wrap:wrap">${kept ? `<button class="btn primary mklast">Use its last week</button><button class="btn mkdef">Start from the default week</button>` : `<button class="btn primary mkdef">Make schedule</button>`}</div>
+      </div>
+      <div class="dbtns"><button class="btn cancel">Close</button></div>`;
+    this._openDialog(html, (d) => {
+      if (ed.wide) d.querySelector(".dbox").classList.add("wide");
+      this._wireRoomChips(d);
+      const open = (week) => {
+        ed.days = weekBlocks(week);
+        ed.empty = false;
+        this._renderEd();
+      };
+      const last = d.querySelector(".mklast");
+      if (last) last.addEventListener("click", () => open(this._state(ed.entity).attributes.schedule));
+      d.querySelector(".mkdef").addEventListener("click", () => { if (kept) ed.orig = ""; open(defaultWeek()); });
+      d.querySelector(".cancel").addEventListener("click", () => this._closeDialog());
+    });
+  }
+
   // Rooms the editor can switch to: the ones with a schedule (2.0.1).
   // Every room of the integration, also with scheduling off or no schedule
   // yet, and also the ones a `thermostats` list leaves out (2.0.2).
@@ -1466,7 +1496,7 @@ class HeatingControlCard extends HTMLElement {
     const along = cur && cur.attributes.drives_heat_source === false
       ? `<div class="hint along" style="margin-top:6px"><ha-icon icon="mdi:radiator" style="--mdc-icon-size:14px;vertical-align:-2px"></ha-icon> ${esc(ALONG_TEXT)}</div>` : "";
     const note = along + (ed.fresh
-      ? `<div class="hint" style="margin-top:6px">${esc(ed.label)} has no week yet: this is the default week. Save starts it.</div>`
+      ? `<div class="hint" style="margin-top:6px">${esc(ed.label)} has no schedule yet: this is the default week. Save starts it.</div>`
       : ed.wasOff ? `<div class="hint" style="margin-top:6px">Scheduling is off for ${esc(ed.label)}: Save turns it on with this week.</div>` : "");
     const ask = ed.switchTo ? `<div class="warnline" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">Unsaved changes in ${esc(ed.label)}.
         <button class="btn swsave" style="flex:none">Save and switch</button><button class="btn swdrop" style="flex:none">Discard</button><button class="btn swstay" style="flex:none">Stay</button></div>` : "";
