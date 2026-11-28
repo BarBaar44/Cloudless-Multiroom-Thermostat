@@ -87,9 +87,10 @@ Released 2026-11-27, and in the Marketplace catalog. Milestone [v2.0.0](https://
 Small updates on v2.0 before v2.1, mostly the schedule editor: more drag and drop, fewer taps. Milestone [v2.0.x](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/milestone/8).
 
 - **Easier to start** (v2.0.1, v2.0.2): a new schedule starts with Eco, Warm from 07:00 to 22:00, Eco; switch rooms inside the editor with a room dropdown; tap a room in the Today view to open its schedule; tap a copied day again to undo; rooms that only heat along are labelled so.
-- **Drag to edit** ([#191](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/191), [#192](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/192)): grips on every switch point, drag a whole block, tap twice to split, and paint a preset by dragging, also down over more days.
-- **Copy by dragging** ([#193](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/193)): drag a day's name onto other days.
-- **Undo and redo** ([#194](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/194)) in the editor.
+- **Drag to edit** (v2.0.3, [#191](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/191), [#192](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/192)): grips on every switch point, drag a whole block, tap twice to split, and paint a preset by dragging, also down over more days.
+- **Copy by dragging** (v2.0.3, [#193](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/193)): drag a day's name onto other days.
+- **Undo and redo** (v2.0.3, [#194](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/194)) in the editor.
+- **A switch point to Off asks for no heat** (v2.0.3, [#196](https://github.com/BarBaar44/Cloudless-Multiroom-Thermostat/pull/196)): the CH switch goes off and a night can start, without an automation that switches rooms off; below the off temperature a room still heats (frost protection).
 
 ### v2.1: warm when you need it, live learning data
 

@@ -62,7 +62,7 @@
  * Originally https://github.com/BarBaar44/Heating-Control-Card  (MIT)
  */
 
-const VERSION = "2.0.2";
+const VERSION = "2.0.3";
 
 const INTEGRATION = "cloudless_multiroom_thermostat";
 // Room roles the integration sets (attribute `role`, thermostat v1.1.0+).
