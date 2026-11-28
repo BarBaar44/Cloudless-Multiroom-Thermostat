@@ -194,6 +194,37 @@ function paint(blocks, from, to, preset) {
   return merge(out);
 }
 
+// Move switch point k (the start of block k) to minute `to`. It can go as far
+// as the far edge of either neighbour; a block that shrinks to nothing goes.
+function moveBoundary(blocks, k, to) {
+  const out = blocks.map((b) => b.slice());
+  if (k <= 0 || k >= out.length) return out;
+  const v = Math.min(Math.max(to, out[k - 1][0]), out[k][1]);
+  out[k - 1][1] = v;
+  out[k][0] = v;
+  return merge(out);
+}
+
+// Move block i whole to start at `start`, keeping its length. The time it
+// leaves goes to the block before it (the one after, for the first block),
+// like Remove block; then it is painted at its new place.
+function moveBlock(blocks, i, start) {
+  const [a, e, p] = blocks[i];
+  const len = e - a;
+  const from = Math.min(Math.max(start, 0), 1440 - len);
+  const base = blocks.map((b) => b.slice());
+  if (base.length > 1) base[i][2] = i > 0 ? base[i - 1][2] : base[i + 1][2];
+  return paint(merge(base), from, from + len, p);
+}
+
+// Split block i at minute m: from m on it gets `other`. Both parts keep at least 15 minutes.
+function splitAt(blocks, i, m, other) {
+  const [a, e] = blocks[i];
+  if (e - a < 2 * SNAP) return blocks.map((b) => b.slice());
+  const at = Math.min(e - SNAP, Math.max(a + SNAP, snap(m)));
+  return paint(blocks, at, e, other);
+}
+
 // The easy start (2.0.1): Eco, Warm 07:00 to 22:00, Eco, every day. Two
 // switch points, so the editor has handles to drag right away.
 const DEFAULT_DAY = [{ time: "00:00", preset: "eco" }, { time: "07:00", preset: "warm" }, { time: "22:00", preset: "eco" }];
@@ -347,7 +378,10 @@ ${Object.values(COLORS).map(([v, d]) => `    ${v}: ${d};`).join("\n")}
   .bar { position: relative; height: 30px; border-radius: 8px; overflow: hidden; background: var(--hc-soft); cursor: pointer; touch-action: none; }
   .bar b { position: absolute; top: 0; bottom: 0; box-sizing: border-box; border-right: 2px solid var(--card-background-color, #1c1c1c); font-size: 11px; font-weight: 600; display: flex; align-items: center; padding-left: 8px; overflow: hidden; white-space: nowrap; }
   .bar b.sel { outline: 3px solid var(--primary-text-color); outline-offset: -3px; z-index: 1; border-radius: 6px; }
-  .bar .h { position: absolute; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 2; touch-action: none; }
+  .bar.ed { height: 38px; }
+  .bar .g { position: absolute; top: 3px; bottom: 3px; width: 8px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); z-index: 2; cursor: ew-resize; pointer-events: none; }
+  .bar.ed b { cursor: grab; }
+  .bar.dragging, .bar.dragging b { cursor: grabbing; }
   .bar .bubble { position: absolute; top: 0; transform: translate(-50%, 0); background: var(--primary-text-color); color: var(--card-background-color, #1c1c1c); font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 6px; z-index: 3; pointer-events: none; }
   .ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--secondary-text-color); margin-left: 46px; font-variant-numeric: tabular-nums; }
   .hint { font-size: 11px; color: var(--secondary-text-color); line-height: 1.4; }
@@ -1459,10 +1493,8 @@ class HeatingControlCard extends HTMLElement {
           <div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">Add a block: tap a preset, then tap a day</span>
             ${palette.map((k) => `<button class="chip${ed.tool === k ? " pick" : ""}" data-tool="${esc(k)}" aria-pressed="${ed.tool === k}"><i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${esc(this._presetColor(P, k))}"></i>${esc(P[k].name)}</button>`).join("")}</div>
           <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>
-          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar" data-d="${d}">${this._bars(blocks, P)}</div></div>`).join("")}</div>
-          <div class="hint" style="margin-top:8px">${whole
-            ? "This day is one block: Split block on the right, or tap a preset above and then the day, to add a switch point."
-            : "Tap a block to select it, then drag one of its handles: switch points snap to 15 minutes. Exact times are on the right."}</div>
+          <div class="lanes">${ed.days.map((blocks, d) => `<div class="lane" data-d="${d}"><span>${DAY_NAMES[d]}</span><div class="bar ed" data-d="${d}">${this._edBar(blocks, d)}</div></div>`).join("")}</div>
+          <div class="hint" style="margin-top:8px">Drag a white switch point to change its time, or drag a block to move it. Tap a block to select it; tap it again to split it there. Everything snaps to 15 minutes.</div>
         </div>
         <div class="panel">
           <div class="dsub">Selected block</div>
@@ -1481,36 +1513,8 @@ class HeatingControlCard extends HTMLElement {
     this._openDialog(html, (d) => {
       d.querySelector(".dbox").classList.add("wide");
       if (keepCopy) d.querySelector(".copyto").style.display = "";
-      const bars = [...d.querySelectorAll(".bar")];
-      bars.forEach((bar) => {
-        const day = Number(bar.dataset.d);
-        bar.querySelectorAll("b").forEach((el) => el.classList.toggle("sel", day === sd && Number(el.dataset.i) === si));
-        bar.addEventListener("click", (ev) => {
-          if (this._dragging) return;
-          const m = this._minuteAt(bar, ev.clientX);
-          if (ed.tool) {
-            const from = Math.min(snap(m), 1440 - 60);
-            ed.days[day] = paint(ed.days[day], from, from + 60, ed.tool);
-            ed.sel = [day, ed.days[day].findIndex(([a, e]) => a <= from && from < e)];
-            ed.tool = null; // one block per tap on a preset, so the next tap selects again
-          } else {
-            ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, e]) => a <= m && m < e))];
-          }
-          this._renderWide();
-        });
-      });
-      // Handles on the selected block
-      const bar = bars[sd];
-      const blocks = ed.days[sd];
-      [[0, si > 0], [1, si < blocks.length - 1]].forEach(([edge, ok]) => {
-        if (!ok) return;
-        const h = document.createElement("button");
-        h.className = "h";
-        h.setAttribute("aria-label", `Drag ${edge ? "end" : "start"}, now ${hm(blocks[si][edge])}`);
-        h.style.left = `${(blocks[si][edge] / 1440) * 100}%`;
-        h.addEventListener("pointerdown", (ev) => this._dragStart(ev, bar, h, edge));
-        h.addEventListener("click", (ev) => ev.stopPropagation());
-        bar.appendChild(h);
+      d.querySelectorAll(".bar.ed").forEach((bar) => {
+        bar.addEventListener("pointerdown", (ev) => this._barDown(ev, bar, Number(bar.dataset.d)));
       });
       d.querySelectorAll("[data-tool]").forEach((c) => c.addEventListener("click", () => {
         ed.tool = ed.tool === c.dataset.tool ? null : c.dataset.tool;
@@ -1532,7 +1536,7 @@ class HeatingControlCard extends HTMLElement {
         const [a, e, p] = bl[si];
         const at = Math.min(e - SNAP, Math.max(a + SNAP, snap((a + e) / 2)));
         const other = palette.find((k) => k !== p && k !== "off") || "off";
-        ed.days[sd] = paint(bl, at, e, other);
+        ed.days[sd] = splitAt(bl, si, (a + e) / 2, other);
         ed.sel = [sd, ed.days[sd].findIndex(([x, y]) => x <= at && at < y)];
         this._renderWide();
       });
@@ -1593,37 +1597,97 @@ class HeatingControlCard extends HTMLElement {
     }
   }
 
-  _dragStart(ev, bar, handle, edge) {
-    ev.preventDefault();
-    ev.stopPropagation();
-    this._dragging = true;
-    if (handle.setPointerCapture && ev.pointerId !== undefined) handle.setPointerCapture(ev.pointerId);
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bar.appendChild(bubble);
-    const move = (e) => {
-      const m = snap(this._minuteAt(bar, e.clientX));
-      this._shift(edge, 0, m);
-      const v = this._ed.days[this._ed.sel[0]][this._ed.sel[1]][edge];
-      handle.style.left = bubble.style.left = `${(v / 1440) * 100}%`;
-      bubble.textContent = hm(v);
-      const blocks = this._ed.days[this._ed.sel[0]];
-      bar.querySelectorAll("b").forEach((el, i) => {
-        if (!blocks[i]) return;
-        el.style.left = `${(blocks[i][0] / 1440) * 100}%`;
-        el.style.width = `${((blocks[i][1] - blocks[i][0]) / 1440) * 100}%`;
-      });
+  // A day's blocks with a white grip on every switch point; the selected
+  // block outlined (2.0.3).
+  _edBar(blocks, day) {
+    const ed = this._ed;
+    const sel = ed.sel[0] === day ? ed.sel[1] : -1;
+    const bars = this._bars(blocks, ed.P).replace(/<b data-i="(\d+)"/g, (all, i) => (Number(i) === sel ? `<b class="sel" data-i="${i}"` : all));
+    const grips = blocks.slice(1).map(([a], k) => `<i class="g" data-k="${k + 1}" style="left:${(a / 1440) * 100}%"></i>`).join("");
+    return bars + grips;
+  }
+
+  // One pointer model for the week grid: press near a switch point drags it,
+  // press on a block and move drags the block, press and release taps
+  // (select, or split a block that is already selected). A palette preset
+  // tapped first makes a tap add an hour of it (2.0.3).
+  _barDown(ev, bar, day) {
+    if (ev.button !== undefined && ev.button > 0) return;
+    const ed = this._ed;
+    const rect = bar.getBoundingClientRect();
+    const width = rect.width || 1;
+    const perPx = 1440 / width;
+    const m0 = this._minuteAt(bar, ev.clientX);
+    const start = ed.days[day].map((b) => b.slice());
+    // Nearest switch point within reach (16 px either side)
+    let k = -1;
+    let best = 16 * perPx;
+    start.forEach(([a], i) => {
+      if (i > 0 && Math.abs(a - m0) <= best) { best = Math.abs(a - m0); k = i; }
+    });
+    const i0 = Math.max(0, start.findIndex(([a, e]) => a <= m0 && m0 < e));
+    const mode = ed.tool ? "tool" : k > 0 ? "point" : "block";
+    const x0 = ev.clientX;
+    let moved = false;
+    let bubble = null;
+    if (ev.preventDefault) ev.preventDefault();
+    if (bar.setPointerCapture && ev.pointerId !== undefined) { try { bar.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable */ } }
+    const show = (blocks, at) => {
+      bar.innerHTML = this._edBar(blocks, day);
+      bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.style.left = `${(at / 1440) * 100}%`;
+      bubble.textContent = hm(at);
+      bar.appendChild(bubble);
     };
-    const up = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
-      handle.removeEventListener("pointercancel", up);
-      setTimeout(() => { this._dragging = false; }, 0);
+    const move = (e) => {
+      if (!moved && Math.abs(e.clientX - x0) < 6) return;
+      moved = true;
+      bar.classList.add("dragging");
+      const m = this._minuteAt(bar, e.clientX);
+      if (mode === "point") {
+        const v = snap(m);
+        ed.days[day] = moveBoundary(start, k, v);
+        show(ed.days[day], Math.min(Math.max(v, start[k - 1][0]), start[k][1]));
+      } else if (mode === "block") {
+        const [a, , p] = start[i0];
+        const to = Math.min(Math.max(snap(a + (m - m0)), 0), 1440 - (start[i0][1] - a));
+        ed.days[day] = moveBlock(start, i0, to);
+        ed.sel = [day, Math.max(0, ed.days[day].findIndex(([x, y, q]) => x <= to && to < y && q === p))];
+        show(ed.days[day], to);
+      }
+    };
+    const up = (e) => {
+      bar.removeEventListener("pointermove", move);
+      bar.removeEventListener("pointerup", up);
+      bar.removeEventListener("pointercancel", up);
+      bar.classList.remove("dragging");
+      if (!moved && e.type === "pointerup") this._barTap(day, m0, i0);
       this._renderWide();
     };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", up);
+    bar.addEventListener("pointermove", move);
+    bar.addEventListener("pointerup", up);
+    bar.addEventListener("pointercancel", up);
+  }
+
+  _barTap(day, m, i) {
+    const ed = this._ed;
+    const blocks = ed.days[day];
+    if (ed.tool) {
+      const from = Math.min(snap(m), 1440 - 60);
+      ed.days[day] = paint(blocks, from, from + 60, ed.tool);
+      ed.sel = [day, ed.days[day].findIndex(([a, e]) => a <= from && from < e)];
+      ed.tool = null; // one block per tap on a preset, so the next tap selects again
+    } else if (ed.sel[0] === day && ed.sel[1] === i) {
+      // A second tap on the selected block splits it there
+      const p = blocks[i][2];
+      const other = Object.keys(ed.P).filter((x) => x !== "off").find((x) => x !== p) || "off";
+      ed.days[day] = splitAt(blocks, i, m, other);
+      const at = Math.min(blocks[i][1] - SNAP, Math.max(blocks[i][0] + SNAP, snap(m)));
+      ed.sel = [day, Math.max(0, ed.days[day].findIndex(([a, e]) => a <= at && at < e))];
+    } else {
+      ed.sel = [day, i];
+    }
   }
 
   // Phone: one day as a list of switch points.

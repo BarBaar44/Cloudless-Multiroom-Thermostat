@@ -461,6 +461,16 @@ test("today: tap a room to open its schedule (2.0.1)", () => {
   assert.strictEqual(c._ed.sel[0], (new Date().getDay() + 6) % 7);
 });
 
+// Week grid pointer helpers: a bar 1440 px wide, so clientX is the minute.
+const edBar = (c, day) => {
+  const bar = c.shadowRoot.querySelectorAll(".dlg .bar.ed")[day];
+  bar.getBoundingClientRect = () => ({ left: 0, width: 1440, top: 0, height: 38 });
+  return bar;
+};
+const ptr = (el, type, x) => el.dispatchEvent(new w.MouseEvent(type, { bubbles: true, clientX: x, button: 0 }));
+const tapBar = (c, day, x) => { const b = edBar(c, day); ptr(b, "pointerdown", x); ptr(b, "pointerup", x); };
+const dragBar = (c, day, from, to) => { const b = edBar(c, day); ptr(b, "pointerdown", from); ptr(b, "pointermove", (from + to) / 2); ptr(b, "pointermove", to); ptr(b, "pointerup", to); };
+
 const pickRoom = (c, id) => {
   const sel = c.shadowRoot.querySelector(".dlg .edroom");
   sel.value = id;
@@ -546,6 +556,37 @@ test("a room that doesn't drive the heat source is labelled heats along only (2.
   assert(c._el.weekv.querySelector(".along"));
 });
 
+test("week grid: drag a switch point, drag a block, tap twice to split (2.0.3)", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  same(c._ed.days[0], [[0, 420, "eco"], [420, 1320, "warm"], [1320, 1440, "eco"]]);
+  // Every switch point has a grip, also on days that are not selected
+  assert.strictEqual(c.shadowRoot.querySelectorAll(".dlg .bar.ed")[3].querySelectorAll(".g").length, 2);
+  // Press near 07:00 (within 16 px) and drag: the switch point moves, snapped
+  dragBar(c, 0, 425, 482);
+  same(c._ed.days[0], [[0, 480, "eco"], [480, 1320, "warm"], [1320, 1440, "eco"]]);
+  // Press in the middle of Warm and drag: the whole block moves an hour later
+  dragBar(c, 0, 900, 960);
+  same(c._ed.days[0], [[0, 540, "eco"], [540, 1380, "warm"], [1380, 1440, "eco"]]);
+  // A switch point dragged onto the next one removes the block in between
+  dragBar(c, 0, 1380, 1440);
+  same(c._ed.days[0], [[0, 540, "eco"], [540, 1440, "warm"]]);
+  // Tap selects, a second tap on the same block splits it there
+  tapBar(c, 1, 900);
+  same(c._ed.sel, [1, 1]);
+  tapBar(c, 1, 900);
+  same(c._ed.days[1], [[0, 420, "eco"], [420, 900, "warm"], [900, 1440, "eco"]]); // the Eco half joins the Eco after it
+});
+
+test("week grid: moving the first block hands its time to the next one", () => {
+  const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched()) });
+  const c = render(h);
+  c._editor(LIVING, 0);
+  dragBar(c, 0, 200, 260);
+  same(c._ed.days[0], [[0, 60, "warm"], [60, 480, "eco"], [480, 1320, "warm"], [1320, 1440, "eco"]]);
+});
+
 test("editor: split a whole day block, tool off after one block, drag to midnight (2.0.1)", () => {
   const allDay = Array.from({ length: 7 }, () => [{ time: "00:00", preset: "warm" }]);
   const h = intHass({ [LIVING]: room("Living Room", 20, 19, sched({ schedule: allDay })) });
@@ -554,9 +595,9 @@ test("editor: split a whole day block, tool off after one block, drag to midnigh
   assert(!c.shadowRoot.querySelector(".trow"), "no steppers that can't move");
   c.shadowRoot.querySelector(".split").click();
   same(c._ed.days[0], [[0, 720, "warm"], [720, 1440, "eco"]]);
-  assert(c.shadowRoot.querySelectorAll(".dlg .bar .h").length === 1, "a handle to drag");
+  assert(c.shadowRoot.querySelectorAll(".dlg .bar.ed")[0].querySelectorAll(".g").length === 1, "a switch point to drag");
   c.shadowRoot.querySelector('[data-tool="off"]').click();
-  c.shadowRoot.querySelectorAll(".dlg .bar")[1].dispatchEvent(new w.MouseEvent("click", { bubbles: true, clientX: 0 }));
+  tapBar(c, 1, 0);
   assert.strictEqual(c._ed.tool, null);
   // The Warm block's end dragged all the way: the Eco block goes, Warm runs to 24:00
   c._ed.sel = [0, 0];
@@ -676,7 +717,7 @@ test("wide editor: palette paints a block, copy day, remove block", async () => 
   const c = render(h);
   c._editor(LIVING, 0);
   c.shadowRoot.querySelector('[data-tool="off"]').click();
-  c.shadowRoot.querySelectorAll(".dlg .bar")[0].dispatchEvent(new w.MouseEvent("click", { bubbles: true, clientX: 0 }));
+  tapBar(c, 0, 0);
   assert.strictEqual(c._ed.days[0][0][2], "off");
   c.shadowRoot.querySelector(".copyday").click();
   c.shadowRoot.querySelector('[data-also="6"]').click();
