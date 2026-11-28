@@ -976,6 +976,40 @@ test("presets dialog: change a temperature, add a preset, not used, save in one 
   assert(!c.shadowRoot.querySelector(".dlg"));
 });
 
+test("presets dialog: type a temperature, clamped and snapped to the step", () => {
+  const c = render(intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }));
+  c._presetsDialog();
+  const d = () => c.shadowRoot.querySelector(".dlg");
+  d().querySelector(`.cell[data-e="${LIVING}"][data-p="eco"]`).click();
+  const inp = d().querySelector(".cval input");
+  inp.value = "21,3";
+  inp.dispatchEvent(new w.Event("change"));
+  assert.strictEqual(inp.value, "21.5");
+  assert.strictEqual(d().querySelector(".cell.sel").textContent, "21.5°");
+  inp.value = "99";
+  inp.dispatchEvent(new w.Event("change"));
+  assert.strictEqual(inp.value, "30.0");
+  inp.value = "abc";
+  inp.dispatchEvent(new w.Event("change"));
+  assert.strictEqual(inp.value, "30.0");
+});
+
+test("presets dialog: holding + keeps raising until released", async () => {
+  const c = render(intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }));
+  c._presetsDialog();
+  const d = () => c.shadowRoot.querySelector(".dlg");
+  d().querySelector(`.cell[data-e="${LIVING}"][data-p="eco"]`).click();
+  const start = Number(d().querySelector(".cval input").value);
+  const up = d().querySelector(".cup");
+  up.dispatchEvent(new w.Event("pointerdown", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 800));
+  w.dispatchEvent(new w.Event("pointerup"));
+  const held = Number(d().querySelector(".cval input").value);
+  assert(held >= start + 1.5, `held ${held} from ${start}`);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.strictEqual(Number(d().querySelector(".cval input").value), held, "stops on release");
+});
+
 test("presets dialog: Eco and Warm can't be removed, others can", () => {
   const c = render(intHass({ [LIVING]: room("Living Room", 20, 19, sched()) }));
   c._presetsDialog();
